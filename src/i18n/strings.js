@@ -1,0 +1,65 @@
+export const STRINGS={
+en:{
+ 'hud.stylist':'Stylist','hud.client':'Client','hud.stage':'Stage','hud.match':'Match',
+ 'hud.foot':'served {0} · queue {1}','hud.last':'Last: {0} {1}% by {2} in {3} min',
+ 'stage.free':'free','stage.consult':'consult','stage.seating':'seating','stage.reveal':'reveal','stage.colour':'colour','stage.wave':'perm','stage.cut':'cut','stage.dry':'dry',
+ 'st.free':'Free','st.walk':'Walking in','st.auto':'Consult · auto in {0}s','st.wait':'Waiting for your plan','st.reveal':'Reveal',
+ 'doing.colour':'Colouring','doing.wave':'Perming','doing.cut':'Cutting','doing.dry':'Blow-dry',
+ 'op.colour':'colour','op.wave':'wave','op.cut':'cut','op.dry':'dry',
+ 'tab.ladder':'Ladder','chair':'Chair {0}','chairPct':'Chair {0}: {1}%',
+ 'lad.stylist':'Stylist','lad.style':'Style','lad.done':'Done','lad.avg':'Avg match','lad.earn':'Takings',
+ 'lad.help':'Mia cuts precisely but slowly. Jun is fast, a little rough and cuts short. Rosa is a colourist who mixes tubes finely. The ladder is ranked by average match.',
+ 'free.next':'Free. Next from the queue: {0}.','free.nobody':'nobody yet',
+ 'free.help':'Tap a chair or a client in the salon to open their station. With Auto on, stylists plan and start by themselves. Open a chair during the consult to take over.',
+ 'order.wants':'{0} wants','fig.order':'Order','fig.now':'Now','fig.plan':'Plan',
+ 'p.cut':'Cut','p.length':'length','p.colour':'Colour','p.bleach':'bleach','p.tubeA':'tube A','p.tubeB':'tube B','p.mix':'mix A↔B','p.wave':'Wave','p.autoplan':'Auto plan','p.start':'Start ▶',
+ 'p.lv':'cut {0} cm → looks ~{1} cm','p.oneTube':'one tube','p.result':'result','p.bleachOnly':' (bleach only)',
+ 'b.predicted':'Predicted (before hand error)','b.result':'Result','b.live':'Live match','b.cut':'Cut','b.colour':'Colour','b.wave':'Wave','b.match':'Match','b.damage':'Damage −{0}%',
+ 'noSeats':'No seats!','tooSlow':'Too slow!','w0':'Love it!','w1':'Looks great','w2':"It's fine",'w3':'Hmm…','w4':'Not what I asked!',
+ 'shape.Blunt':'Blunt','shape.Layered':'Layered','shape.A-line':'A-line','shape.Undercut':'Undercut',
+ 'wave.Straight':'Straight','wave.Wavy':'Wavy','wave.Curly':'Curly','wave.Coily':'Coily',
+ 'len.pixie':'pixie','len.chin':'chin','len.shoulder':'shoulder','len.midback':'mid-back','len.long':'long','naturalOf':'Natural {0}',
+ 'style.Precise':'Precise','style.Speedy':'Speedy','style.Colourist':'Colourist',
+ 'time.auto':'☀ Auto','time.day':'☀ Day','time.dusk':'☀ Dusk','time.night':'☾ Night',
+ 'wx.auto':'☁ Auto','wx.clear':'☀ Clear','wx.rain':'☂ Rain','ctl.auto':'Auto','ctl.lang':'한국어',
+ 'tt.rotL':'Rotate left (Q)','tt.rotR':'Rotate right (E)','tt.time':'Time of day','tt.wx':'Weather','tt.spd':'Speed','tt.auto':'Stylists plan and start on their own','tt.help':'How to play','tt.lang':'Change language',
+ 'm.sub':'Run a tiny hair salon','m.lang':'Language','m.mode':'Mode','m.auto':'Auto','m.manual':'Manual',
+ 'm.autoD':'Stylists plan and start on their own. Step in any time during a consult.','m.manualD':'Every client waits for you to make the plan and press Start.',
+ 'm.start':'▶ Start game','m.how':'How to play','m.opts':'Settings','m.back':'Back','m.resume':'Back to game',
+ 'm.time':'Time','m.wx':'Weather','m.speed':'Speed','m.t.auto':'Real clock','m.t.day':'Day','m.t.dusk':'Dusk','m.t.night':'Night','m.w.auto':'Random','m.w.clear':'Clear','m.w.rain':'Rain'
+},
+ko:{
+ 'hud.stylist':'담당','hud.client':'손님','hud.stage':'단계','hud.match':'일치',
+ 'hud.foot':'완료 {0} · 대기 {1}','hud.last':'최근: {0} {1}% · {2} · {3}분',
+ 'stage.free':'빈자리','stage.consult':'상담','stage.seating':'이동','stage.reveal':'공개','stage.colour':'염색','stage.wave':'펌','stage.cut':'커트','stage.dry':'드라이',
+ 'st.free':'비어 있음','st.walk':'자리로 이동 중','st.auto':'상담 · {0}초 후 자동 시작','st.wait':'플랜을 기다리는 중','st.reveal':'공개',
+ 'doing.colour':'염색 중','doing.wave':'펌 중','doing.cut':'커트 중','doing.dry':'드라이 중',
+ 'op.colour':'염색','op.wave':'펌','op.cut':'커트','op.dry':'드라이',
+ 'tab.ladder':'순위','chair':'{0}번 의자','chairPct':'{0}번 의자: {1}%',
+ 'lad.stylist':'담당','lad.style':'스타일','lad.done':'완료','lad.avg':'평균 일치','lad.earn':'매출',
+ 'lad.help':'미아는 정확하지만 느려요. 준은 빠르지만 조금 거칠고 짧게 자르는 편이에요. 로사는 튜브를 섬세하게 섞는 컬러리스트예요. 순위는 평균 일치율 기준이에요.',
+ 'free.next':'비어 있어요. 다음 대기 손님: {0}','free.nobody':'아직 없음',
+ 'free.help':'미용실의 의자나 손님을 누르면 해당 자리가 열려요. 자동 모드에서는 스타일리스트가 알아서 플랜을 짜고 시작해요. 상담 중에 플랜을 건드리면 직접 맡을 수 있어요.',
+ 'order.wants':'{0} 손님 요청:','fig.order':'요청','fig.now':'현재','fig.plan':'플랜',
+ 'p.cut':'커트','p.length':'길이','p.colour':'염색','p.bleach':'탈색','p.tubeA':'튜브 A','p.tubeB':'튜브 B','p.mix':'혼합 A↔B','p.wave':'웨이브','p.autoplan':'자동 플랜','p.start':'시작 ▶',
+ 'p.lv':'커트 {0} cm → 보이는 길이 약 {1} cm','p.oneTube':'튜브 1개','p.result':'결과','p.bleachOnly':' (탈색만)',
+ 'b.predicted':'예상 (손기술 오차 제외)','b.result':'결과','b.live':'실시간 일치율','b.cut':'커트','b.colour':'염색','b.wave':'웨이브','b.match':'일치','b.damage':'손상 −{0}%',
+ 'noSeats':'자리가 없어요!','tooSlow':'너무 오래 기다렸어요!','w0':'완전 마음에 들어요!','w1':'아주 좋아요','w2':'괜찮네요','w3':'음…','w4':'이건 제가 말한 게 아닌데요!',
+ 'shape.Blunt':'일자컷','shape.Layered':'레이어드','shape.A-line':'A라인','shape.Undercut':'언더컷',
+ 'wave.Straight':'스트레이트','wave.Wavy':'웨이브','wave.Curly':'컬','wave.Coily':'강한 곱슬',
+ 'len.pixie':'픽시','len.chin':'턱선','len.shoulder':'어깨선','len.midback':'등 중간','len.long':'긴 머리','naturalOf':'자연 {0}',
+ 'style.Precise':'정밀파','style.Speedy':'스피드파','style.Colourist':'컬러리스트',
+ 'time.auto':'☀ 자동','time.day':'☀ 낮','time.dusk':'☀ 저녁','time.night':'☾ 밤',
+ 'wx.auto':'☁ 자동','wx.clear':'☀ 맑음','wx.rain':'☂ 비','ctl.auto':'자동','ctl.lang':'EN',
+ 'tt.rotL':'왼쪽으로 회전 (Q)','tt.rotR':'오른쪽으로 회전 (E)','tt.time':'시간대','tt.wx':'날씨','tt.spd':'속도','tt.auto':'스타일리스트가 알아서 플랜을 짜고 시작','tt.help':'게임 방법','tt.lang':'언어 변경',
+ 'm.sub':'작은 미용실을 운영해 보세요','m.lang':'언어','m.mode':'모드','m.auto':'자동','m.manual':'직접',
+ 'm.autoD':'스타일리스트가 알아서 플랜을 짜고 시작해요. 상담 중에 언제든 끼어들 수 있어요.','m.manualD':'손님마다 직접 플랜을 짜고 시작 버튼을 눌러야 해요.',
+ 'm.start':'▶ 게임 시작','m.how':'게임 방법','m.opts':'설정','m.back':'뒤로','m.resume':'게임으로 돌아가기',
+ 'm.time':'시간대','m.wx':'날씨','m.speed':'속도','m.t.auto':'실제 시각','m.t.day':'낮','m.t.dusk':'저녁','m.t.night':'밤','m.w.auto':'랜덤','m.w.clear':'맑음','m.w.rain':'비'
+}};
+
+export const NAME_KO={Lia:'리아',Vacant:'공석',Ava:'에이바',Leo:'레오',Mina:'미나',Oscar:'오스카',Hana:'하나',Theo:'테오',Zara:'자라',Kai:'카이',Ruby:'루비',Jae:'재',Nora:'노라',Ivy:'아이비',Sam:'샘',Lena:'레나',Omar:'오마르',Yuna:'유나',Felix:'펠릭스',Maya:'마야',Eli:'일라이',Sora:'소라',Priya:'프리야',Tom:'톰',Isla:'아일라',Ben:'벤',Ari:'아리',June:'쥰',Noah:'노아',Chloe:'클로이',Mia:'미아',Jun:'준',Rosa:'로사'};
+export const DYE_KO=['제트 블랙','다크 브라운','체스트넛','캐러멜','코퍼','오번','골든','애쉬','플래티넘','실버','로즈','바이올렛','오션','틸','체리','라일락'];
+export const WANT_KO=['블랙','다크 브라운','체스트넛','캐러멜','코퍼','오번','골든 블론드','애쉬 블론드','플래티넘','실버','로즈 핑크','라일락','바이올렛','오션 블루','틸','체리 레드'];
+export const NAT_KO=['검정','짙은 갈색','갈색','밝은 갈색','짙은 금발','금발','붉은색','회색'];
+
