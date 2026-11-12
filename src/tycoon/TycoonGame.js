@@ -10,7 +10,6 @@ import { StaffManager } from '../employees/StaffManager.js';
 import { CustomerFactory } from '../customers/CustomerFactory.js';
 import { ServiceEvaluator } from '../customers/ServiceEvaluator.js';
 import { SalonLayout } from '../building/SalonLayout.js';
-import { CHAIR_PRICE } from '../building/FurnitureCatalog.js';
 import { rand } from '../core/math.js';
 
 const PRICE_MULTIPLIER = [.8, 1, 1.5], PRICE_DEMAND = [1.3, 1, .7];
@@ -27,7 +26,7 @@ export class TycoonGame {
     this.reputation = new Reputation();
     this.progression = new Progression(this.bus);
     this.staff = new StaffManager(this.economy);
-    this.layout = new SalonLayout();
+    this.layout = new SalonLayout(); this.layout.resetToDefault();
     this.franchise = new Franchise(this.economy);
     this.operatingCosts = new OperatingCosts(this.economy, this.staff, this.layout, this.progression);
     this.customers = new CustomerFactory();
@@ -37,13 +36,14 @@ export class TycoonGame {
     this.repAtDayStart = 0; this.report = null;
   }
   get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned }; }
-  get expectedClients() { return Math.round((4 + this.staff.hired.length * 3 + this.reputation.value / 20) * PRICE_DEMAND[this.priceLevel]); }
+  /** Roughly how many clients want to come today. There is no cap: seats and chairs decide how many can be served. */
+  get dailyDemand() { return Math.round((5 + this.reputation.value * .25 + this.comfort * .2) * PRICE_DEMAND[this.priceLevel]); }
   /** Furniture comfort plus a tidy floor while the assistant is employed. */
   get comfort() { return this.layout.comfort + (this.staff.hasSupport('tidy') ? 2 : 0); }
   get averageSatisfaction() { return this.served ? this.satisfactionSum / this.served : 0; }
   updateProgress() { this.progression.update(this.context); }
   isUnlocked(feature) { return this.progression.isUnlocked(feature); }
-  nextArrival() { return rand(.8, 1.2) * this.clock.dayLength / this.expectedClients; }
+  nextArrival() { return rand(.8, 1.2) * this.clock.dayLength / this.dailyDemand; }
   newCustomer(usedNames) {
     return this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
@@ -64,13 +64,12 @@ export class TycoonGame {
   }
   receivePayment(amount) { this.economy.earn('services', amount); this.updateProgress(); }
   customerGaveUp() { this.reputation.add(-.6); }
-  buyChair() { const l = this.layout; if (!this.isUnlocked('chairs') || l.chairs >= l.maxChairs || !this.economy.spend('equipment', CHAIR_PRICE)) return false; l.chairs++; return true; }
-  expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; return true; }
+  expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 3) this.layout.addAnnexPlants(); return true; }
   tick(dt) { this.clock.tick(dt); this.operatingCosts.accrue(this.clock.workedFraction); }
   startDay() { this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(); this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.report = null; this.clock.startDay(); }
   nextDay() { this.clock.day++; this.startDay(); }
   closeDay() {
-    const e = this.economy, sales = this.layout.dailySales, branches = this.franchise.dailyIncome(this.reputation.value);
+    const e = this.economy, sales = this.layout.dailySales, branches = this.franchise.collectDay();
     if (sales) e.earn('products', sales); if (branches) e.earn('branches', branches);
     this.operatingCosts.accrue(1);
     [this.staff.owner, ...this.staff.hired].forEach(e => { if (e.gainExperience(5)) this.bus.emit('staff:levelup', e); });
@@ -84,6 +83,6 @@ export class TycoonGame {
     this.served = d.served; this.satisfactionSum = d.satisfactionSum; this.priceLevel = d.priceLevel; this.franchise.restore(d.franchise);
     d.staff.forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     (d.support || []).forEach(s => this.staff.find(s.id)?.restore(s));
-    this.layout.chairs = d.layout.chairs; this.layout.tier = d.layout.tier;
+    this.layout.restore(d.layout);
   }
 }
