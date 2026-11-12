@@ -67,10 +67,18 @@ export class SalonLayout {
   get dailySales() { return this.#sum(f => f.dailySales); }
   get speedBonus() { return 1 + this.#sum(f => f.speedBonus); }
   get staffRestRate() { return this.items.some(it => FURNITURE[it.id].staffRest) ? 2 : 1; }
+  /** A salon always needs a reception desk and at least one styling chair; put back missing ones at their default spots. */
+  #ensureEssentials() {
+    for (const id of ['desk', 'station']) {
+      if (this.items.some(it => it.id === id)) continue;
+      const [, x, z, r] = DEFAULT_LAYOUT.find(d => d[0] === id), cells = this.footprint(id, x, z, r);
+      if (cells && this.canOccupy(id, cells)) this.add(id, x, z, r);
+    }
+  }
   toJSON() { return { version: 2, tier: this.tier, items: this.items.map(({ id, x, z, rotation }) => ({ id, x, z, rotation })) }; }
   restore(data) {
     this.tier = data.tier;
-    if (data.version === 2) { this.items = []; data.items.forEach(it => { if (FURNITURE[it.id] && this.footprint(it.id, it.x, it.z, it.rotation)) this.add(it.id, it.x, it.z, it.rotation); }); return; }
+    if (data.version === 2) { this.items = []; data.items.forEach(it => { if (FURNITURE[it.id] && this.footprint(it.id, it.x, it.z, it.rotation)) this.add(it.id, it.x, it.z, it.rotation); }); this.#ensureEssentials(); return; }
     // Saves from before furniture could move: start from the default salon and add what was bought.
     this.resetToDefault();
     for (let k = 1; k < (data.chairs || 1); k++) this.add('station', ...EXTRA_STATIONS[k - 1], 0);

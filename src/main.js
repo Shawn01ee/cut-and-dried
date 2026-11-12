@@ -563,7 +563,7 @@ function syncCtrl(){$('#bTime').textContent=tx('time.'+timeMode);$('#bSpd').text
   $('#bAuto').textContent=tx('ctl.auto');$('#bAuto').classList.toggle('on',autoOn);$('#bLang').textContent=tx('ctl.lang');$('#bSound').textContent=tx('ctl.sound');$('#bSound').classList.toggle('on',!audio.muted);
   [['bRotL','rotL'],['bRotR','rotR'],['bTime','time'],['bSpd','spd'],['bAuto','auto'],['bHelp','help'],['bLang','lang'],['bSound','sound']].forEach(([i,k])=>$('#'+i).title=tx('tt.'+k));}
 function setAuto(on){autoOn=on;syncCtrl();renderPanel(true);}
-function setLang(l){i18n.lang=l;document.documentElement.lang=l;try{localStorage.setItem('cd-lang',l);}catch(e){}syncCtrl();updateHud();renderPanel(true);if(!$('#menu').classList.contains('hide'))renderMenu();}
+function setLang(l){i18n.lang=l;document.documentElement.lang=l;try{localStorage.setItem('cd-lang',l);}catch(e){}syncCtrl();updateHud();renderPanel(true);renderSites();if(!$('#menu').classList.contains('hide'))renderMenu();}
 $('#bTime').onclick=()=>{timeMode=TM[(TM.indexOf(timeMode)+1)%4];syncCtrl();};
 $('#bSpd').onclick=()=>{speed=speed===1?3:1;syncCtrl();};
 $('#bAuto').onclick=()=>setAuto(!autoOn);
