@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { FURNITURE } from '../building/FurnitureCatalog.js';
+import { FURNITURE, SEAT_APPROACH } from '../building/FurnitureCatalog.js';
 import { FURNITURE_MODELS } from './furnitureModels.js';
-import { V, fwd, rgt } from '../core/math.js';
+import { V } from '../core/math.js';
 
 const box = new THREE.BoxGeometry(1, 1, 1), noRay = () => {};
 
@@ -11,37 +11,53 @@ export class FurnitureView {
   #ghostOk = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .6, depthWrite: false });
   #ghostBad = new THREE.MeshLambertMaterial({ color: 0xd8314a, transparent: true, opacity: .6, depthWrite: false });
 
-  constructor(world, Builder, seats, cellCount) {
-    Object.assign(this, { world, Builder, seats });
-    this.#grid = new THREE.InstancedMesh(box, new THREE.MeshBasicMaterial({ color: 0x8fc25a, transparent: true, opacity: .32, depthWrite: false }), cellCount);
+  constructor(world, Builder, seats, layout, glow) {
+    Object.assign(this, { world, Builder, seats, layout, glow });
+    this.#grid = new THREE.InstancedMesh(box, new THREE.MeshBasicMaterial({ color: 0x8fc25a, transparent: true, opacity: .32, depthWrite: false }), layout.cells.length);
     this.#grid.frustumCulled = false; this.#grid.raycast = noRay; this.#grid.visible = false; world.add(this.#grid);
   }
-  #build(id) {
+  #build(id, pickable) {
     const group = new THREE.Group(), builder = new this.Builder();
-    FURNITURE_MODELS[id](builder); builder.build(group);
-    group.traverse(o => { o.raycast = noRay; }); this.world.add(group); return group;
+    const fx = { glow: (sx, sy, sz, x, y, z) => { const m = new THREE.Mesh(box, this.glow); m.scale.set(sx, sy, sz); m.position.set(x, y, z); group.add(m); } };
+    FURNITURE_MODELS[id](builder, fx); builder.build(group);
+    if (!pickable) group.traverse(o => { o.raycast = noRay; });
+    return group;
   }
-  #pose(group, cells, rotation) {
-    const x = cells.reduce((a, c) => a + c.x, 0) / cells.length, z = cells.reduce((a, c) => a + c.z, 0) / cells.length;
-    group.position.set(x, 0, z); group.rotation.y = rotation * Math.PI / 2; return V(x, 0, z);
-  }
+  #place(group, x, z, rotation) { group.position.set(x, 0, z); group.rotation.y = rotation * Math.PI / 2; }
+  /** A fixed copy for a branch salon. */
+  buildStatic(id, x, z, rotation, parent) { const g = this.#build(id, false); this.#place(g, x, z, rotation); parent.add(g); return g; }
   spawn(item) {
-    const group = this.#build(item.id), center = this.#pose(group, item.cells, item.rotation), seats = [];
-    if (FURNITURE[item.id].seats) {
-      const yaw = item.rotation * Math.PI / 2;
-      [-.24, .24].forEach(offset => { const pos = center.clone().addScaledVector(rgt(yaw), offset); seats.push({ pos, yaw, h: .46, app: [pos.clone().addScaledVector(fwd(yaw), .7)], occ: null }); });
-      this.seats.push(...seats);
-    }
+    const group = this.#build(item.id, true), f = FURNITURE[item.id];
+    this.#place(group, item.x, item.z, item.rotation); group.userData.item = item; this.world.add(group);
+    const seats = (f.seats || []).map(([lx, lz]) => {
+      const p = this.layout.toWorld(item, lx, lz), a = this.layout.toWorld(item, lx, lz + SEAT_APPROACH);
+      return { pos: V(p.x, 0, p.z), yaw: item.rotation * Math.PI / 2, h: f.seatH || .46, app: [V(a.x, 0, a.z)], occ: null };
+    });
+    this.seats.push(...seats);
     this.#entries.set(item, { group, seats });
   }
   despawn(item) {
-    const entry = this.#entries.get(item); this.world.remove(entry.group);
-    entry.seats.forEach(s => this.seats.splice(this.seats.indexOf(s), 1)); this.#entries.delete(item);
+    const entry = this.#entries.get(item); if (!entry) return;
+    this.world.remove(entry.group); entry.seats.forEach(s => this.seats.splice(this.seats.indexOf(s), 1)); this.#entries.delete(item);
   }
-  setVisible(item, visible) { this.#entries.get(item).group.visible = visible; }
-  isOccupied(item) { return this.#entries.get(item).seats.some(s => s.occ); }
-  showGhost(id) { this.clearGhost(); this.#ghost = this.#build(id); this.#ghost.visible = false; }
-  poseGhost(cells, rotation, ok) { this.#ghost.visible = true; this.#pose(this.#ghost, cells, rotation); this.#ghost.traverse(o => { if (o.isMesh) { o.material = ok ? this.#ghostOk : this.#ghostBad; o.castShadow = false; } }); }
+  has(item) { return this.#entries.has(item); }
+  /** Removes drawings of pieces no longer in the layout. */
+  prune(items) { [...this.#entries.keys()].filter(it => !items.includes(it)).forEach(it => this.despawn(it)); }
+  clear() { this.prune([]); }
+  setVisible(item, visible) { const e = this.#entries.get(item); if (e) e.group.visible = visible; }
+  isOccupied(item) { const e = this.#entries.get(item); return !!e && e.seats.some(s => s.occ); }
+  /** The piece of furniture under a pointer ray, if any. */
+  pick(raycaster) {
+    const groups = [...this.#entries.values()].filter(e => e.group.visible).map(e => e.group);
+    const hit = raycaster.intersectObjects(groups, true)[0];
+    let o = hit && hit.object; while (o && !o.userData.item) o = o.parent;
+    return o ? o.userData.item : null;
+  }
+  showGhost(id) { this.clearGhost(); this.#ghost = this.#build(id, false); this.#ghost.visible = false; this.world.add(this.#ghost); }
+  poseGhost(x, z, rotation, ok) {
+    this.#ghost.visible = true; this.#place(this.#ghost, x, z, rotation);
+    this.#ghost.traverse(o => { if (o.isMesh) { o.material = ok ? this.#ghostOk : this.#ghostBad; o.castShadow = false; } });
+  }
   hideGhost() { if (this.#ghost) this.#ghost.visible = false; }
   clearGhost() { if (this.#ghost) { this.world.remove(this.#ghost); this.#ghost = null; } }
   showGrid(cells) {

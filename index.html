@@ -115,6 +115,14 @@ html[lang=ko] .hsec li,html[lang=ko] .hsec p{font-size:13px}
 @media (min-width:880px){html[lang=ko] #hud{font-size:13px}html[lang=ko] #hud h1{font-size:13px}}
 @media (max-width:420px){#hud{font-size:14px;min-width:0}#hud h1{font-size:12px}#ctrl{max-width:150px}#ctrl button{font-size:15px;padding:3px 5px}}
 body.closeup #hud,body.closeup #ctrl{display:none}
+#sites{position:fixed;left:50%;top:8px;transform:translateX(-50%);display:none;gap:3px;padding:3px}
+#sites.show{display:flex}
+#sites button.sel{background:#45404f;border-color:#ffd98a;color:#ffd98a}
+#branchCard{position:fixed;left:50%;top:54px;transform:translateX(-50%);display:none;padding:6px 10px;font-size:17px;text-align:center;white-space:nowrap}
+#branchCard.show{display:block}
+body.inmenu #sites,body.closeup #sites,body.inmenu #branchCard,body.closeup #branchCard{display:none}
+@media (max-width:760px){#sites{left:auto;right:8px;top:96px;transform:none;flex-direction:column}#branchCard{left:auto;right:8px;top:auto;bottom:calc(47vh + 20px);transform:none;white-space:normal;max-width:60vw}}
+html[lang=ko] #branchCard{font-size:13px;line-height:1.5}
 .bsec{margin:0 0 9px;padding-bottom:7px;border-bottom:1px solid #45404f}
 .bsec:last-child{border-bottom:0}
 .bsec h4{font-family:var(--ft);font-weight:400;font-size:13px;color:#ffd98a;margin:0 0 3px}
@@ -173,6 +181,7 @@ html[lang=ko] .brow button{font-size:12px}
   <button id="bSpd" title="Speed">×1</button><button id="bAuto" class="on" title="Stylists plan and start on their own">Auto</button>
   <button id="bZo">−</button><button id="bZi">+</button><button id="bSound"></button><button id="bLang"></button><button id="bHelp">?</button>
 </div>
+<div id="sites" class="card"></div><div id="branchCard" class="card"></div>
 <div id="panel" class="card"><div id="tabs"></div><div id="pbody"></div></div>
 
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>

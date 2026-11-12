@@ -12,6 +12,10 @@ import { TycoonGame } from './tycoon/TycoonGame.js';
 import { BuildMode } from './building/BuildMode.js';
 import { FurnitureView } from './rendering/FurnitureView.js';
 import { TycoonUI } from './ui/TycoonUI.js';
+import { BranchScene } from './rendering/BranchScene.js';
+import { NavGrid } from './building/NavGrid.js';
+import { paintSign } from './rendering/pixelFont.js';
+import { DEFAULT_LAYOUT, EXTRA_STATIONS } from './building/SalonLayout.js';
 import { AudioManager } from './audio/AudioManager.js';
 
 const game = new TycoonGame(), i18n = new I18n(window.__lang), audio = new AudioManager(game.bus);
@@ -54,10 +58,10 @@ function resize(){
 /* ================= camera ================= */
 const cam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,80);
 let camK=0,camAz=Math.PI/4,zoom=1;const EL=Math.atan(1/Math.SQRT2);const camTarget=V(0,.55,1.2);
-let camBlend=0,viewScale=1;const camHome=V(0,.55,1.2),camClose=V();
+let camBlend=0,viewScale=1;const camHome=V(0,.55,1.2),camClose=V(),camPan=V(0,.55,1.2);
 function updateCam(dt){
   const goal=Math.PI/4+camK*Math.PI/2;camAz+=(goal-camAz)*Math.min(1,dt*9);if(Math.abs(goal-camAz)<1e-3)camAz=goal;
-  camBlend+=((styling?1:0)-camBlend)*Math.min(1,dt*6);if(Math.abs((styling?1:0)-camBlend)<.002)camBlend=styling?1:0;camTarget.copy(camHome).lerp(camClose,camBlend);
+  camBlend+=((styling?1:0)-camBlend)*Math.min(1,dt*6);if(Math.abs((styling?1:0)-camBlend)<.002)camBlend=styling?1:0;camPan.lerp(camHome,Math.min(1,dt*4));camTarget.copy(camPan).lerp(camClose,camBlend);
   const a=W/H,vh=lerp(Math.max(10.8,12.8/a)*viewScale/zoom,Math.max(2.6,1.7/a),camBlend);
   cam.left=-vh*a/2;cam.right=vh*a/2;cam.top=vh/2;cam.bottom=-vh/2;cam.updateProjectionMatrix();
   cam.position.copy(camTarget).add(V(Math.sin(camAz)*Math.cos(EL),Math.sin(EL),Math.cos(camAz)*Math.cos(EL)).multiplyScalar(40));
@@ -92,7 +96,7 @@ const inLights=[V(-1.6,2.4,-0.6),V(2,2.4,0.6)].map(p=>{const l=new THREE.PointLi
 const spots=[[V(-3.7,3.3,4.5),V(-1.8,0,3.4)],[V(4.3,3.3,3.7),V(2.6,0,4.7)],[V(-3.7,3.3,4.5),V(-.2,0,5)]].map(([p,t])=>{const s=new THREE.SpotLight(0xfff1c4,0,11,0.5,0,1);s.position.copy(p);s.target.position.copy(t);world.add(s);world.add(s.target);return s;});
 
 /* ================= build world ================= */
-const S=new SB();
+const S=new SB(),extras=[];
 // base slab and the pavement in front of the door
 S.box(9.0,.5,9.6,0x45404f,0,-.27,1.4);
 S.box(9,.06,3,0xb7a99a,0,-.02,4.7);S.box(9,.1,.18,0x7d7884,0,0,6.11);
@@ -100,42 +104,17 @@ S.box(9,.06,3,0xb7a99a,0,-.02,4.7);S.box(9,.1,.18,0x7d7884,0,0,6.11);
 S.box(8,.06,6,0xdcd9dc,0,-.02,0);
 /** A flat tiled surface drawn as a pixel texture, so joints stay crisp one-pixel lines. */
 function tiledSurface(w,d,fill,joint,x,z,parent=world){const P=16,tex=canvasTex(w*P,d*P,g=>{g.fillStyle=fill;g.fillRect(0,0,w*P,d*P);g.fillStyle=joint;for(let i=0;i<=w;i++)g.fillRect(Math.min(i*P,w*P-1),0,1,d*P);for(let j=0;j<=d;j++)g.fillRect(0,Math.min(j*P,d*P-1),w*P,1);});
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;parent.add(m);}
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;parent.add(m);return m;}
 tiledSurface(8,6,'#dcd9dc','#bdb9c0',0,0);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7);
-// stations
-const STX=[-2.4,-0.4,1.6,5.2,7.2];
-const stationGroups=STX.map(()=>{const g=new THREE.Group();world.add(g);return g;});
-STX.forEach((x,i)=>{const S=new SB();
-  S.box(1.4,.85,.4,0xf6f3ee,x,.425,-2.75).box(1.42,.04,.42,0x3a2618,x,.87,-2.75);
-  S.box(.95,1.15,.04,0x3a2618,x,1.55,-2.98).box(.85,1.05,.03,0xb6d2ec,x,1.55,-2.955);
-  S.box(.12,.12,.15,0x2f6fd6,x-.4,.95,-2.75).box(.08,.18,.08,0xe25c8f,x+.45,.98,-2.8).box(.1,.1,.1,0xffd98a,x+.25,.94,-2.72);
-  S.box(.42,.08,.42,0x45404f,x,.04,-1.8).box(.12,.4,.12,0xbdb9c0,x,.28,-1.8).box(.52,.12,.5,0x1d1a26,x,.55,-1.8).box(.5,.3,.08,0x1d1a26,x,.76,-1.53);
-  S.box(.06,.06,.42,0x1d1a26,x-.26,.72,-1.8).box(.06,.06,.42,0x1d1a26,x+.26,.72,-1.8).box(.4,.04,.16,0xbdb9c0,x,.14,-2.25).box(.03,.42,.03,0xbdb9c0,x,.35,-2.1);
-  S.box(.32,.04,.32,0x5f5a68,x+.72,.62,-1.85).box(.32,.04,.32,0x5f5a68,x+.72,.32,-1.85).box(.04,.62,.04,0xbdb9c0,x+.72,.31,-1.85).box(.1,.06,.1,0x8a4fc2,x+.66,.67,-1.85).box(.1,.06,.1,0xc8642a,x+.79,.67,-1.8);
-  S.build(stationGroups[i]);
-});
-// basin, dryer, desk, bench, shelves, plants, rug
-S.box(.7,.85,.7,0xdcd9dc,3.65,.425,-1.6).box(.6,.12,.55,0xbdb9c0,3.6,.91,-1.6).box(.5,.08,.45,0x7d7884,3.6,.96,-1.6).box(.06,.25,.06,0xbdb9c0,3.85,1.08,-1.6);
-S.box(.5,.1,.6,0x1d1a26,3.05,.5,-1.6).box(.12,.5,.6,0x1d1a26,3.3,.72,-1.6,0).box(.3,.45,.3,0x45404f,3.0,.22,-1.6);
-S.box(.55,.1,.55,0xd8314a,-3.45,.5,-2.3).box(.55,.5,.08,0xd8314a,-3.45,.78,-2.56).box(.12,.45,.12,0xbdb9c0,-3.45,.25,-2.3).box(.12,1.2,.12,0xbdb9c0,-3.72,1.0,-2.62).box(.56,.42,.56,0xf2a0c0,-3.45,1.55,-2.3);
-S.box(.6,1.05,1.5,0x8a6040,-3.15,.525,1.0).box(.66,.05,1.56,0x3a2618,-3.15,1.07,1.0).box(.2,.06,.2,0x45404f,-3.25,1.12,.6).box(.08,.25,.06,0x2f6fd6,-3.3,1.2,1.3);
-S.box(.3,.06,.3,0x1d1a26,-3.6,.72,1.0).box(.06,.72,.06,0xbdb9c0,-3.6,.36,1.0);
-S.box(1.9,.08,.46,0x5e3d24,2.6,.44,2.5).box(1.9,.5,.08,0x5e3d24,2.6,.75,2.76);[1.75,3.45].forEach(x=>S.box(.08,.42,.4,0x3a2618,x,.21,2.5));
-S.box(1.8,.02,1.1,0xc24a46,2.4,.015,1.6).box(1.5,.02,.8,0xffb15a,2.4,.02,1.6);
-for(let k=0;k<3;k++){S.box(.25,.04,.9,0x8a6040,-3.85,.9+k*.45,2.45);for(let i=0;i<4;i++)S.box(.12,.2,.12,pick([0x2f6fd6,0xe25c8f,0x1fa39a,0xffd98a,0xd8314a,0xf6f3ee]),-3.82,1.02+k*.45,2.1+i*.22);}
-[[3.7,2.7],[-1.4,-2.75],[0.6,-2.75],[0.6,2.75]].forEach(([x,z])=>{S.box(.32,.38,.32,0xb88a5a,x,.19,z);S.box(.36,.5,.36,0x3a7a3a,x,.62,z).box(.24,.3,.24,0x5f9e45,x,.98,z);});
-S.box(.9,.02,.5,0x1fa39a,-2,.015,2.55);
 // lamp posts
 [[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{S.box(.14,3.3,.14,0x1d1a26,x,1.65,z).box(.3,.08,.3,0x1d1a26,x,3.32,z);});
-// side bench, clock post and barber pole base
-S.box(.46,.08,1.2,0x5e3d24,3.55,.44,1.6).box(.08,.5,1.2,0x5e3d24,3.82,.75,1.6);[1.08,2.12].forEach(z=>S.box(.4,.42,.08,0x3a2618,3.55,.21,z));
+// clock post and barber pole base
 S.box(.12,2.6,.12,0x1d1a26,2.7,1.3,5.7).box(.5,.5,.2,0x1d1a26,2.7,2.85,5.7);
 S.box(.24,.16,.24,0x45404f,-1.2,.08,3.4).box(.18,.12,.18,0xbdb9c0,-1.2,1.72,3.4).box(.18,.12,.18,0xbdb9c0,-1.2,.2,3.4);
-S.build();
+const salonMesh=S.build();
 
 // lamp heads (emissive)
-[[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{const m=new THREE.Mesh(BOX,LAMP);m.scale.set(.22,.12,.22);m.position.set(x,3.22,z);world.add(m);});
-STX.forEach((x,i)=>{const m=new THREE.Mesh(BOX,LAMP);m.scale.set(.85,.05,.05);m.position.set(x,2.12,-2.94);stationGroups[i].add(m);});
+[[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{const m=new THREE.Mesh(BOX,LAMP);m.scale.set(.22,.12,.22);m.position.set(x,3.22,z);world.add(m);extras.push(m);});
 
 /* walls with cutaway */
 const WALLC=0xf1dfae,SKIRT=0x8a6040;
@@ -161,15 +140,14 @@ const walls=[
 // annex: a second room to the right, opened by the last expansion
 const annexGroup=new THREE.Group();annexGroup.visible=false;world.add(annexGroup);
 {const A=new SB();A.box(4.1,.5,9.6,0x45404f,6.55,-.27,1.4).box(4.16,.06,6,0xdcd9dc,6.08,-.02,0).box(4.1,.06,3,0xb7a99a,6.55,-.02,4.7).box(4.1,.1,.18,0x7d7884,6.55,0,6.11);
- [[6.2,-2.75],[7.7,2.7]].forEach(([x,z])=>A.box(.32,.38,.32,0xb88a5a,x,.19,z).box(.36,.5,.36,0x3a7a3a,x,.62,z).box(.24,.3,.24,0x5f9e45,x,.98,z));
  A.build(annexGroup);tiledSurface(4,6,'#dcd9dc','#bdb9c0',6,0,annexGroup);tiledSurface(4,3,'#b7a99a','#9a8f84',6.5,4.7,annexGroup);
  const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(6,2.4,0);annexGroup.add(light);inLights.push(light);}
 const annexWalls=[makeWall('x',-3.08,[[4.16,8.24,'s']],V(0,0,-1)),makeWall('x',3.08,[[4.16,5,'s'],[5,7.4,'w'],[7.4,8.24,'s']],V(0,0,1)),makeWall('z',8.16,[[-3,-.8,'s'],[-.8,1.2,'w'],[1.2,3,'s']],V(1,0,0))];
 annexWalls.forEach(w=>{w.off=true;walls.push(w);});
 // sign on back wall
-const signTex=canvasTex(96,16,g=>{g.fillStyle='#1d1a26';g.fillRect(0,0,96,16);g.fillStyle='#ffd98a';g.font='bold 11px monospace';g.textAlign='center';g.textBaseline='middle';g.fillText('CIEL GROUND',48,9);g.fillStyle='#e25c8f';g.fillRect(2,2,92,1);g.fillRect(2,13,92,1);});
-{const sb=new SB();sb.box(3.4,.7,.12,0x1d1a26,0,2.95,-3.08);sb.box(.08,.4,.08,0x1d1a26,-1.2,2.6,-3.08).box(.08,.4,.08,0x1d1a26,1.2,2.6,-3.08);sb.build(walls[0].full);
- const p=new THREE.Mesh(new THREE.PlaneGeometry(3.3,.6),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(0,2.95,-3.01);walls[0].full.add(p);
+const signTex=canvasTex(140,22,g=>paintSign(g,140,22,'CIEL GROUND'));
+{const sb=new SB();sb.box(4.5,.82,.12,0x1d1a26,0,2.95,-3.08);sb.box(.08,.4,.08,0x1d1a26,-1.8,2.6,-3.08).box(.08,.4,.08,0x1d1a26,1.8,2.6,-3.08);sb.build(walls[0].full);
+ const p=new THREE.Mesh(new THREE.PlaneGeometry(4.4,.69),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(0,2.95,-3.01);walls[0].full.add(p);
  }
 // awning on front wall
 const awning=new THREE.Group();awning.position.set(1.4,2.42,3.16);walls[1].full.add(awning);
@@ -184,11 +162,11 @@ function drawClock(){const g=clockTex.userData.g;const d=new Date();g.fillStyle=
   const h=d.getHours()%12+d.getMinutes()/60,mi=d.getMinutes()+d.getSeconds()/60;
   hand(h/12*Math.PI*2,4.2,'#1d1a26');hand(mi/60*Math.PI*2,6.6,'#1d1a26');hand(d.getSeconds()/60*Math.PI*2,6.8,'#c24a46');clockTex.needsUpdate=true;}
 drawClock();
-[0,Math.PI].forEach(r=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(.44,.44),new THREE.MeshBasicMaterial({map:clockTex}));p.position.set(2.7,2.85,5.7+(r?-.105:.105));p.rotation.y=r;world.add(p);});
+[0,Math.PI].forEach(r=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(.44,.44),new THREE.MeshBasicMaterial({map:clockTex}));p.position.set(2.7,2.85,5.7+(r?-.105:.105));p.rotation.y=r;world.add(p);extras.push(p);});
 // barber pole
 const poleTex=canvasTex(8,16,g=>{for(let y=0;y<16;y++)for(let x=0;x<8;x++){const k=((x+y)%12);g.fillStyle=k<4?'#d8314a':k<6?'#f6f3ee':k<10?'#2f6fd6':'#f6f3ee';g.fillRect(x,y,1,1);}});
 poleTex.wrapS=poleTex.wrapT=THREE.RepeatWrapping;poleTex.repeat.set(1,2);
-{const p=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,1.4,6),new THREE.MeshLambertMaterial({map:poleTex}));p.position.set(-1.2,.96,3.4);p.castShadow=true;world.add(p);}
+{const p=new THREE.Mesh(new THREE.CylinderGeometry(.08,.08,1.4,6),new THREE.MeshLambertMaterial({map:poleTex}));p.position.set(-1.2,.96,3.4);p.castShadow=true;world.add(p);extras.push(p);}
 // selection marker
 const marker=new THREE.Mesh(new THREE.ConeGeometry(.16,.32,4),M(0xffd98a));marker.rotation.x=Math.PI;world.add(marker);marker.raycast=noRay;
 
@@ -290,22 +268,30 @@ const SKINS=[0x6b3e2a,0x9c6644,0xc98e66,0xe7b892,0xf6d6bd,0x3b2219];
 const SHIRTS=[0xd8314a,0x2f6fd6,0x1fa39a,0xffb15a,0x8a4fc2,0x5f9e45,0xf2a0c0,0x7fb6f0,0xc24a46,0xe8c27a,0xdcd9dc];
 const PANTS=[0x1d1a26,0x2a4478,0x45404f,0x5e3d24,0x16264e];
 const STY=game.staff.candidates,OWNER=game.staff.owner;
-const stations=STX.map((x,i)=>({i,x,chair:V(x,0,-1.8),stand:V(x,0,-1.2),sty:STY[i],cust:null,state:'free',plan:null,ops:[],opi:0,timer:0,touched:false}));
-stations.forEach(st=>{const s=st.sty;s.fig=new Fig({skin:pick(SKINS),shirt:0x45404f,pants:0x2e2a38,apron:s.apron,staffHair:s.hair,long:s.long});s.fig.pos.copy(st.stand);s.fig.yaw=Math.PI;});
+const stations=[];
+STY.forEach(s=>{s.fig=new Fig({skin:pick(SKINS),shirt:0x45404f,pants:0x2e2a38,apron:s.apron,staffHair:s.hair,long:s.long});});
 OWNER.fig=new Fig({skin:0xf6d6bd,shirt:0xdcd9dc,pants:0x1d1a26,staffHair:OWNER.hair,bob:true,sleeveless:true});
 const VAC={name:'Vacant',style:'Vacant',apron:0x5f5a68,spd:1,stats:{served:0,sum:0,earn:0}},OWNER_IDLE=V(-1.2,0,.4);
 STY.forEach(s=>{s.fig.root.visible=false;});
-stations.forEach((st,i)=>{if(i===0){st.sty=OWNER;OWNER.fig.pos.copy(st.stand);OWNER.fig.yaw=Math.PI;}else{st.sty=VAC;st.vacant=true;st.state='vacant';}});
+OWNER.floating=false;
+const ownerStation=()=>stations.find(s=>s.sty===OWNER);
+/** A styling chair's anchor points in the world, worked out from its furniture item. */
+function frameStation(st){const it=st.item,yaw=it.rotation*Math.PI/2,at=(lx,lz)=>{const p=game.layout.toWorld(it,lx,lz);return V(p.x,0,p.z);};
+  Object.assign(st,{yaw,face:yaw+Math.PI,at,rot:v=>v.clone().applyAxisAngle(UP,yaw),chair:at(0,.45),stand:at(0,1.05),approach:at(0,1.35)});}
+function makeStation(item){const st={item,sty:VAC,vacant:true,cust:null,state:'vacant',plan:null,ops:[],opi:0,timer:0,touched:false};frameStation(st);return st;}
 const recep=new Fig({skin:0xc98e66,shirt:0x8a4fc2,pants:0x1d1a26,staffHair:0x2e1d14,bun:true});recep.pos.set(-3.6,0,1.0);recep.yaw=Math.PI/2;recep.mode='sit';recep.seatH=.72;recep.footY=.3;
 const jr={fig:new Fig({skin:0xe7b892,shirt:0xffb15a,pants:0x2a4478,apron:0x5f9e45,staffHair:0x8f5a2e}),task:null,idle:V(3.6,0,-0.85)};jr.fig.pos.copy(jr.idle);jr.fig.yaw=Math.PI;
 const friends=[];
-const bench=[1.95,2.6,3.25].map(x=>({pos:V(x,0,2.45),yaw:Math.PI,h:.44,app:[V(x,0,1.8)],occ:null}));
-const terr=[1.3,1.9].map(z=>({pos:V(3.55,0,z),yaw:-Math.PI/2,h:.44,app:[V(2.9,0,z)],occ:null}));
+const bench=[];
+const terr=[];
 const DOOR_IN=V(-2,0,2.45),DOOR_OUT=V(-2,0,3.6);
 const STREET=V(4.1,0,4.7),STREET_DOOR=V(-2,0,4.4);
 const ROUTE_IN=[STREET_DOOR,DOOR_OUT,DOOR_IN];
 const ROUTE_OUT=[DOOR_IN,DOOR_OUT,STREET_DOOR,STREET];
-const furnitureView=new FurnitureView(world,SB,terr,game.layout.cells.length),build=new BuildMode(game.layout,game.economy,furnitureView);
+const furnitureView=new FurnitureView(world,SB,terr,game.layout,LAMP),nav=new NavGrid(game.layout);
+const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex)=>nav.wouldConnect(c,ex),canModify:it=>canModify(it),canSell:it=>canSell(it),onChange:()=>{syncFurniture();renderPanel(true);}});
+/** A walk to `to` that goes around the furniture. */
+function route(from,to){return [...nav.path(from,to).map(p=>V(p.x,0,p.z)),to.clone()];}
 const custs=[],queue=[];
 
 function lenDesc(L){return tx('len.'+(L<8?'pixie':L<18?'chin':L<28?'shoulder':L<40?'midback':'long'));}
@@ -313,32 +299,30 @@ const natName=i=>i18n.lang==='ko'?NAT_KO[i]:NATURAL[i][0], wantName=i=>i18n.lang
 const colName=o=>o.col.t==='nat'?tx('naturalOf',natName(o.col.i)):wantName(o.col.i);
 function orderText(o){return `${tx('shape.'+o.shape)} · ${o.L} cm (${lenDesc(o.L)}) · ${colName(o)} · ${tx('wave.'+WAVES[o.wave])}`;}
 function spawnCustomer(){
-  if(custs.filter(c=>c.state!=='gone').length>=10)return;
+  if(custs.filter(c=>c.state!=='gone').length>=40)return;
   const c=game.newCustomer(new Set(custs.map(q=>q.name))),fig=new Fig({skin:pick(SKINS),shirt:pick(SHIRTS),pants:pick(PANTS)});
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(STREET);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag';c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');
   fig.walkTo(ROUTE_IN,()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');const seat=bench.find(s=>!s.occ)||terr.find(s=>!s.occ);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');leave(c,'full');return;}
-    seat.occ=c;c.seat=seat;fig.walkTo([...seat.app,seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);});});
+    seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);});});
 }
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
 function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos;let pts;
-  pts=(p.x>-4.1&&p.x<(game.layout.tier>=3?8.1:4.1)&&Math.abs(p.z)<3.1)?[V(Math.min(p.x,2.9),0,Math.min(p.z,1.9)),...ROUTE_OUT]:[STREET_DOOR,STREET];
+  pts=(p.x>-4.1&&p.x<(game.layout.tier>=3?8.1:4.1)&&Math.abs(p.z)<3.1)?[...route(p,DOOR_IN),DOOR_OUT,STREET_DOOR,STREET]:[STREET_DOOR,STREET];
   if(why==='full')pts=[DOOR_OUT,STREET_DOOR,STREET];
   f.walkTo(pts,()=>{c.state='gone';c.fadeOut=1;});}
 function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=c;st.state='await';st.touched=false;st.byOwner=false;st.worker=null;const f=c.fig;
   const from=f.pos.clone();let pts=[];
-  pts=seat?[seat.app[0]]:[V(from.x,0,1.8)];
-  if(st.x>4)pts.push(V(2.7,0,.6),V(st.x,0,.6));else pts.push(V(st.x,0,1.8));
-  pts.push(V(st.x,0,-.9),st.chair.clone());
-  f.walkTo(pts,()=>{f.mode='sit';f.pos.copy(st.chair);f.yaw=Math.PI;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);});
+  pts=[...(seat?[seat.app[0]]:[]),...route(seat?seat.app[0]:from,st.approach),st.chair.clone()];
+  f.walkTo(pts,()=>{f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);});
   if(sel===st.i)renderPanel(true);}
 function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OWNER:st.sty;if(worker===OWNER&&ownerBusy())return;if(styling&&styling.station===st)closeStyling(true);st.worker=worker;const p=st.plan,ops=[];
   if(hasColour(p))ops.push({type:'colour',dur:13});
   if(p.doWave&&Math.abs(p.wave-st.cust.hair.wave)>.05)ops.push({type:'wave',dur:10});
   if(p.doCut)ops.push({type:'cut',dur:9});
-  ops.push({type:'dry',dur:3.5});const prof=game.serviceProfileOf(worker);ops.forEach(o=>o.dur/=prof.spd);game.chargeMaterials(ops);if(worker!==st.sty)st.sty.fig.walkTo([V(st.x-.8,0,-.7)]);
+  ops.push({type:'dry',dur:3.5});const prof=game.serviceProfileOf(worker);ops.forEach(o=>o.dur/=prof.spd);game.chargeMaterials(ops);if(worker!==st.sty)st.sty.fig.walkTo(route(st.sty.fig.pos,st.at(-.8,1.55)));
   st.ops=ops;st.opi=0;st.state='work';beginOp(st);renderPanel(true);}
 const TOOLS={colour:'brush',wave:'comb',cut:'scissors',dry:'dryer'};
 function beginOp(st){const op=st.ops[st.opi],h=st.cust.hair,s=game.serviceProfileOf(st.worker);op.t=0;op.from=cloneHair(h);op.acc=new Array(NS).fill(0);
@@ -353,23 +337,23 @@ function runOps(st,dt){const op=st.ops[st.opi],c=st.cust,h=c.hair,sf=st.worker.f
   c.fig.head.updateMatrixWorld(true);const hp=c.fig.head.getWorldPosition(V());const mx=Math.max(...h.len)*(1-.12*h.wave)*.011;
   let sx=0;
   if(op.type==='cut'){sx=Math.sin(t*1.3)*.18;const dy=-.05-(.5+.5*Math.sin(t*.7))*Math.min(.55,mx);const snip=Math.sin(t*22)*.012;
-    sf.handR=hp.clone().add(V(sx,dy+snip,.2));sf.handL=hp.clone().add(V(sx+.09,dy+.06,.17));}
-  else if(op.type==='colour'){sx=Math.sin(t*.8)*.12;sf.handR=hp.clone().add(V(sx+Math.sin(t*2.5)*.06,.1+Math.sin(t*3.1)*.05,.17));sf.handL=hp.clone().add(V(-.18,-.28,.32));}
-  else if(op.type==='wave'){sf.handR=hp.clone().add(V(-.17,-.06+Math.sin(t*4)*.07,.06));sf.handL=hp.clone().add(V(.17,-.06+Math.cos(t*4)*.07,.06));}
-  else{sx=Math.sin(t*1.5)*.15;sf.handR=hp.clone().add(V(sx*1.6,.14,.32));sf.handL=hp.clone().add(V(-sx*.6,.13,.14));}
-  sf.pos.x=lerp(sf.pos.x,st.x+sx*.8,Math.min(1,dt*4));sf.pos.z=st.stand.z;sf.yaw=Math.PI;
+    sf.handR=hp.clone().add(st.rot(V(sx,dy+snip,.2)));sf.handL=hp.clone().add(st.rot(V(sx+.09,dy+.06,.17)));}
+  else if(op.type==='colour'){sx=Math.sin(t*.8)*.12;sf.handR=hp.clone().add(st.rot(V(sx+Math.sin(t*2.5)*.06,.1+Math.sin(t*3.1)*.05,.17)));sf.handL=hp.clone().add(st.rot(V(-.18,-.28,.32)));}
+  else if(op.type==='wave'){sf.handR=hp.clone().add(st.rot(V(-.17,-.06+Math.sin(t*4)*.07,.06)));sf.handL=hp.clone().add(st.rot(V(.17,-.06+Math.cos(t*4)*.07,.06)));}
+  else{sx=Math.sin(t*1.5)*.15;sf.handR=hp.clone().add(st.rot(V(sx*1.6,.14,.32)));sf.handL=hp.clone().add(st.rot(V(-sx*.6,.13,.14)));}
+  {const k=Math.min(1,dt*4),tg=st.stand.clone().add(st.rot(V(sx*.8,0,0)));sf.pos.x=lerp(sf.pos.x,tg.x,k);sf.pos.z=lerp(sf.pos.z,tg.z,k);sf.yaw=st.face;}
   if(op.t>=op.dur){Object.assign(h,cloneHair(op.to));c.tint=0;c.hm.dirty=true;st.opi++;if(st.opi>=st.ops.length)reveal(st);else beginOp(st);if(sel===st.i)renderPanel(true);}}
 const WORDS=[[.9,'w0'],[.75,'w1'],[.55,'w2'],[.35,'w3'],[0,'w4']];
 let last=null;
 function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.setTool(null);sf.handL=sf.handR=null;
   const sc=game.completeService(c,s,st.byOwner);c.result=sc;const pay=sc.payment;
   last={name:c.name,sty:s.name,all:sc.all,mins:(simT-c.tStart)/60};
-  sf.walkTo([V(st.x-.55,0,-1.1)],()=>{sf.yaw=Math.PI*.8;});
-  c.fig.walkTo([V(st.x+.55,0,-1.05)],()=>{c.fig.yaw=Math.PI;audio.play(sc.all>=.6?'happy':'sad');
+  sf.walkTo([st.at(-.55,1.15)],()=>{sf.yaw=st.face-Math.PI*.2;});
+  c.fig.walkTo([st.at(.55,1.2)],()=>{c.fig.yaw=st.face;audio.play(sc.all>=.6?'happy':'sad');
     popup(`${Math.round(sc.all*100)}% · ${tx(WORDS.find(w=>sc.all>=w[0])[1])}`,c.fig.head,'big');
-    later(.6,()=>{c.fig.yaw=Math.PI*.15;clapAll(sc.all);popup(tx('chairPct',st.i+1,Math.round(sc.all*100)),recep.head,'');});
-    later(2.8,()=>{st.state='free';st.cust=null;sf.walkTo([s===st.sty?st.stand:(stations[0].sty===OWNER?stations[0].stand:OWNER_IDLE)],()=>sf.yaw=Math.PI);if(sel===st.i)renderPanel(true);
-      c.fig.walkTo([V(st.x+.55,0,.2),V(-2.35,0,1.0)],()=>{c.fig.yaw=-Math.PI/2;later(1.3,()=>{game.receivePayment(pay);audio.play('cash');popup('+$'+pay,c.fig.head,'big');c.state='paid';leave(c);});});});});
+    later(.6,()=>{c.fig.yaw=st.face-Math.PI*.85;clapAll(sc.all);popup(tx('chairPct',st.i+1,Math.round(sc.all*100)),recep.head,'');});
+    later(2.8,()=>{st.state='free';st.cust=null;{const home=s===st.sty?st:ownerStation();sf.walkTo(route(sf.pos,home?home.stand:OWNER_IDLE),()=>sf.yaw=home?home.face:Math.PI);}if(sel===st.i)renderPanel(true);
+      c.fig.walkTo(route(c.fig.pos,deskInfo.pay),()=>{c.fig.yaw=deskInfo.payYaw;later(1.3,()=>{game.receivePayment(pay);audio.play('cash');popup('+$'+pay,c.fig.head,'big');c.state='paid';leave(c);});});});});
   if(sel===st.i)renderPanel(true);}
 function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,jr.fig,...friends,...STY.map(s=>s.fig),...custs.filter(c=>c.state==='wait').map(c=>c.fig)];who.forEach(f=>{if(n||Math.random()<.3)f.clapT=rand(1.2,1.8);});}
 
@@ -377,35 +361,50 @@ function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,jr.fig
 function jrUpdate(dt){const f=jr.fig,T=jr.task;if(!f.root.visible)return;
   if(T){if(T.phase==='work'){T.t-=dt;f.toolAim=V(T.aim.x+Math.sin(simT*5)*.35,0,T.aim.z+Math.cos(simT*2.5)*.12);f.handR=f.pos.clone().add(V(0,1.02,0)).addScaledVector(fwd(f.yaw),.22).addScaledVector(rgt(f.yaw),.1);f.handL=f.handR.clone().add(V(0,-.22,0)).addScaledVector(fwd(f.yaw),.05);
       if(T.t<=0){T.done();jr.task=null;f.handL=f.handR=null;f.toolAim=null;f.setTool(null);}}return;}
-  const go=(standAt,aim,tool,dur,done)=>{jr.task={phase:'walk',aim,done};f.handL=f.handR=null;f.walkTo([standAt],()=>{jr.task.phase='work';jr.task.t=dur;f.setTool(tool);f.yaw=Math.atan2(aim.x-f.pos.x,aim.z-f.pos.z);});};
+  const go=(standAt,aim,tool,dur,done)=>{jr.task={phase:'walk',aim,done};f.handL=f.handR=null;f.walkTo(route(f.pos,standAt),()=>{jr.task.phase='work';jr.task.t=dur;f.setTool(tool);f.yaw=Math.atan2(aim.x-f.pos.x,aim.z-f.pos.z);});};
   const landed=clips.filter(c=>c.alive&&c.landed);
   if(landed.length>24){const a=landed[0].p.clone();a.y=0;const sa=a.clone().add(V(.5,0,.45));sa.x=clamp(sa.x,-3.6,3.6);sa.z=clamp(sa.z,-2.2,2.2);
     go(sa,a,'broom',3.2,()=>{clips.forEach(c=>{if(c.alive&&c.landed&&Math.hypot(c.p.x-a.x,c.p.z-a.z)<1.0)c.alive=false;});});return;}
-  if(!f.path.length&&f.pos.distanceTo(jr.idle)>.05){f.handL=f.handR=null;f.walkTo([jr.idle],()=>f.yaw=Math.PI);}
-  if(f.pos.distanceTo(jr.idle)<.06&&!f.path.length){f.handR=V(3.5,1.0+Math.sin(simT*3)*.04,-1.32);f.handL=V(3.75,1.0+Math.cos(simT*3)*.04,-1.32);}else if(!f.path.length){f.handL=f.handR=null;}
+  if(!f.path.length&&f.pos.distanceTo(jr.idle)>.05){f.handL=f.handR=null;f.walkTo(route(f.pos,jr.idle),()=>f.yaw=basinInfo?basinInfo.yaw:Math.PI);}
+  if(f.pos.distanceTo(jr.idle)<.06&&!f.path.length){if(basinInfo){const [a,b]=basinInfo.hands;f.handR=V(a.x,1.0+Math.sin(simT*3)*.04,a.z);f.handL=V(b.x,1.0+Math.cos(simT*3)*.04,b.z);}}else if(!f.path.length){f.handL=f.handR=null;}
 }
 
 /* ================= time, weather, timers ================= */
 let started=false,paused=false,booted=false,styling=null,savedCamK=0,lastChair=0;
 const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
-const openChair=()=>stations.find(x=>x.vacant&&x.i<game.layout.chairs)||(stations[0].sty===OWNER&&stations[0].state==='free'&&!styling?stations[0]:null);
+const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
 function syncSupport(){recep.root.visible=game.staff.find('sophie').hired;jr.fig.root.visible=game.staff.find('max').hired;}
-function syncChairs(){stationGroups.forEach((g,i)=>{g.visible=i<game.layout.chairs;});const big=game.layout.tier>=3;annexGroup.visible=big;walls[3].off=big;annexWalls.forEach(w=>{w.off=!big;});camHome.set(big?2.05:0,.55,1.2);viewScale=big?1.3:1;}
-function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=Math.PI;if(wasOwner)OWNER.fig.walkTo([OWNER_IDLE],()=>OWNER.fig.yaw=Math.PI);}
+function syncChairs(){const big=game.layout.tier>=3;annexGroup.visible=big;walls[3].off=big;annexWalls.forEach(w=>{w.off=!big;});if(site<0){camHome.set(big?2.05:0,.55,1.2);viewScale=big?1.3:1;}}
+function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
-function fireStaff(e){const st=stations.find(x=>x.sty===e);if(!st||st.state!=='free'||!game.staff.fire(e))return;e.fig.root.visible=false;if(st.i===0&&!stations.some(x=>x.sty===OWNER)){st.sty=OWNER;OWNER.fig.walkTo([st.stand],()=>OWNER.fig.yaw=Math.PI);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
-function restoreGame(){const d=game.saves.load();if(!d)return;game.restore(d);
-  d.layout.items.forEach(x=>{const cell=game.layout.cells.find(c=>Math.abs(c.x-x.x)<.01&&Math.abs(c.z-x.z)<.01),cells=cell&&game.layout.footprint(x.id,cell,x.rotation);if(cells)furnitureView.spawn(game.layout.add(x.id,cells,x.rotation));});
+function fireStaff(e){const st=stations.find(x=>x.sty===e);if(!st||st.state!=='free'||!game.staff.fire(e))return;e.fig.root.visible=false;if(OWNER.floating){OWNER.floating=false;st.sty=OWNER;OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
+function restoreGame(){const d=game.saves.load();if(!d)return;furnitureView.clear();stations.length=0;game.restore(d);syncFurniture();
   game.staff.hired.forEach(e=>{const st=openChair();if(st)placeStaff(e,st);else e.hired=false;});}
+/** Keeps stations, seats, the desk and the basin in step with the furniture layout. */
+function syncFurniture(){game.layout.items.forEach(it=>{if(!furnitureView.has(it))furnitureView.spawn(it);});furnitureView.prune(game.layout.items);syncStations();syncAnchors();}
+function syncStations(){const items=game.layout.items.filter(it=>it.id==='station');
+  for(let i=stations.length-1;i>=0;i--)if(!items.includes(stations[i].item))stations.splice(i,1);
+  items.forEach(it=>{let st=stations.find(s=>s.item===it);
+    if(!st){st=makeStation(it);stations.push(st);if(!OWNER.floating&&!ownerStation()){st.sty=OWNER;st.vacant=false;st.state='free';if(!started){OWNER.fig.pos.copy(st.stand);OWNER.fig.yaw=st.face;}else OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}return;}
+    frameStation(st);const f=st.sty.fig;if(f&&!st.cust&&(st.state==='free'||st.state==='vacant'))f.walkTo(route(f.pos,st.stand),()=>f.yaw=st.face);});
+  stations.forEach((s,i)=>{s.i=i;});}
+let deskInfo=null,basinInfo=null;
+function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z);return V(p.x,0,p.z);},desk=L.items.find(it=>it.id==='desk'),basin=L.items.find(it=>it.id==='basin');
+  if(desk){const yaw=desk.rotation*Math.PI/2;deskInfo={seat:w(desk,0,-.1),seatYaw:yaw,pay:w(desk,0,1.15),payYaw:yaw+Math.PI};recep.pos.copy(deskInfo.seat);recep.yaw=yaw;}
+  basinInfo=basin?{idle:w(basin,.1,.75),yaw:basin.rotation*Math.PI/2+Math.PI,hands:[w(basin,0,.18),w(basin,.25,.18)]}:null;jr.idle=basinInfo?basinInfo.idle:V(3.6,0,-.85);}
+function canModify(it){if(it.id!=='station')return !furnitureView.isOccupied(it);const st=stations.find(s=>s.item===it);return !!st&&!st.cust&&(st.state==='free'||st.state==='vacant')&&!(styling&&styling.station===st);}
+function canSell(it){if(!canModify(it))return false;return it.id!=='station'||stations.find(s=>s.item===it).vacant;}
+/** The camera quarter-turn that looks at a client's back, so the mirror never blocks the view. */
+function bestCamK(st){const base=Math.round(camK);let best=base,bd=-2;[0,-1,1,-2,2].forEach(o=>{const k=base+o,a=Math.PI/4+k*Math.PI/2,d=Math.sin(a)*Math.sin(st.yaw)+Math.cos(a)*Math.cos(st.yaw);if(d>bd+1e-6){bd=d;best=k;}});return best;}
 function finishDay(){game.closeDay();audio.play('dayEnd');paused=true;openMenu('day','day');}
 function dayTick(dt){if(game.report)return;game.tick(dt);if(!game.clock.isOpen&&queue.length)queue.slice().forEach(c=>leave(c));if(!game.clock.isOpen&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
 game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');queue.slice().forEach(c=>leave(c));});
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
 game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');renderPanel(true);});
-function openStyling(st){if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=Math.round(camK/4)*4;document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
+function openStyling(st){if(site>=0)focusSite(-1);if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=bestCamK(st);document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
 function closeStyling(confirmed){const s=styling;if(!s)return;styling=null;document.body.classList.remove('closeup');pixScale=1;resize();camK=savedCamK;s.station.sty.fig.root.visible=true;const c=s.customer;c.previewHair=null;c.hm.dirty=true;c.fig.yaw=Math.PI;if(!confirmed){const st=s.station;st.byOwner=false;if(autoOn||st.sty!==OWNER){st.plan=aiPlan(c,st.sty);st.playerPlan=false;st.touched=false;st.timer=2;}}renderPanel(true);}
-function stylingTick(dt){if(!styling)return;const c=styling.customer;c.fig.yaw=angLerp(c.fig.yaw,styling.targetYaw(Math.PI*1.25),Math.min(1,dt*10));c.fig.look=0;}
+function stylingTick(dt){if(!styling)return;const c=styling.customer;c.fig.yaw=angLerp(c.fig.yaw,styling.targetYaw(Math.PI/4+camK*Math.PI/2+Math.PI),Math.min(1,dt*10));c.fig.look=0;}
 let simT=0,speed=1,autoOn=true,timeMode='auto',spawnTimer=1.5;
 const timers=[];const later=(s,fn)=>timers.push({t:s,fn});
 const PRE={day:{sky:0x7ea2d0,sun:0xfff1c4,si:2.8,sp:V(6,12,5),hs:0xb6d2ec,hg:0xb7a99a,hi:1.1,inI:0,spI:0,glow:0},
@@ -418,7 +417,7 @@ function updateLights(dt){const P=PRE[phaseNow()],k=Math.min(1,dt*1.5);
   _ca.set(P.sky);L.sky.lerp(_ca,k);
   L.sun.lerp(_ca.set(P.sun),k);L.si=lerp(L.si,P.si,k);L.sp.lerp(P.sp,k);L.hs.lerp(_ca.set(P.hs),k);L.hg.lerp(_ca.set(P.hg),k);
   L.hi=lerp(L.hi,P.hi,k);L.inI=lerp(L.inI,P.inI,k);L.spI=lerp(L.spI,P.spI+(P===PRE.day?0:0),k);L.glow=lerp(L.glow,P.glow,k);
-  scene.background.copy(L.sky);sun.color.copy(L.sun);sun.intensity=L.si;sun.position.copy(L.sp).normalize().multiplyScalar(30);hemi.color.copy(L.hs);hemi.groundColor.copy(L.hg);hemi.intensity=L.hi;
+  scene.background.copy(L.sky);sun.color.copy(L.sun);sun.intensity=L.si;sun.position.copy(L.sp).normalize().multiplyScalar(30).add(camTarget);sun.target.position.copy(camTarget);hemi.color.copy(L.hs);hemi.groundColor.copy(L.hg);hemi.intensity=L.hi;
   inLights.forEach(l=>l.intensity=L.inI);spots.forEach(s=>s.intensity=L.spI);GLASS.emissiveIntensity=L.glow*.6;LAMP.emissiveIntensity=L.glow*1.2+.05;}
 
 /* ================= popups ================= */
@@ -444,14 +443,15 @@ function simStep(dt){simT+=dt;
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
-      if(!sf.path.length&&sf.pos.distanceTo(st.stand)>.05)sf.walkTo([st.stand],()=>sf.yaw=Math.PI);
-      if(st.state==='consult'&&st.cust){const hp=st.cust.fig.head.getWorldPosition(V());sf.handR=hp.clone().add(V(Math.sin(simT*2)*.08,.05,.22));}}});
+      if(!sf.path.length&&sf.pos.distanceTo(st.stand)>.05)sf.walkTo(route(sf.pos,st.stand),()=>sf.yaw=st.face);
+      if(st.state==='consult'&&st.cust){const hp=st.cust.fig.head.getWorldPosition(V());sf.handR=hp.clone().add(st.rot(V(Math.sin(simT*2)*.08,.05,.22)));}}});
   jrUpdate(dt);
   // receptionist watches the latest reveal / door
   const rv=stations.find(s=>s.state==='reveal');{const tgt=rv?rv.chair:DOOR_IN;const a=Math.atan2(tgt.x-recep.pos.x,tgt.z-recep.pos.z)-recep.yaw;recep.look=angLerp(recep.look,clamp(((a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI,-1,1),Math.min(1,dt*3));}
   // spectators look at reveals
   custs.forEach(c=>{if(c.state==='wait'){c.fig.look=rv?angLerp(c.fig.look,.4*Math.sin(simT*.3),.02):Math.sin(simT*.4+c.id)*.3;}
     else if(c.state==='chair'&&!(styling&&styling.customer===c))c.fig.look=Math.sin(simT*.5+c.id)*.15;else c.fig.look=0;});
+  branchScenes.forEach(s=>s.update(dt,simT));
   // figures
   figs.forEach(f=>f.update(dt));
   custs.slice().forEach(c=>{if(c.fadeIn<1){c.fadeIn=Math.min(1,c.fadeIn+dt*2.5);setFade(c.fig,Math.max(.01,c.fadeIn));}
@@ -471,7 +471,7 @@ function envStep(dt,t){
   // cutaway walls facing the camera
   const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{if(w.off){w.full.visible=w.low.visible=false;return;}const front=w.n.dot(v)>.2;w.full.visible=!front;w.low.visible=front;});
   // selection marker
-  if(started&&typeof sel==='number'){const st=stations[sel];marker.visible=true;marker.position.set(st.x,2.35+Math.abs(Math.sin(t*3))*.15,-1.8);}else marker.visible=false;
+  if(started&&typeof sel==='number'){const st=stations[sel];marker.visible=true;marker.position.set(st.chair.x,2.35+Math.abs(Math.sin(t*3))*.15,st.chair.z);}else marker.visible=false;
 }
 
 /* ================= UI ================= */
@@ -485,12 +485,11 @@ function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['bui
   $('#bMin').onclick=()=>{$('#panel').classList.toggle('min');renderTabs();};}
 function swatches(k,cur){return `<button class="sw none ${cur<0?'sel':''}" data-${k}="-1" title="-"></button>`+DYES.map((d,i)=>`<button class="sw ${cur===i?'sel':''}" data-${k}="${i}" title="${dyeName(i)}" style="background:${hexCss(d.h)}"></button>`).join('');}
 function seg(k,list,cur,lab=n=>n){return `<span class="seg">${list.map((n,i)=>`<button data-${k}="${typeof cur==='string'?n:i}" class="${(typeof cur==='string'?n===cur:i===cur)?'sel':''}">${lab(n)}</button>`).join('')}</span>`;}
-function renderPanel(force){
+function renderPanel(force){if(typeof sel==='number'&&!stations[sel])sel=lastChair=0;
   const key=typeof sel==='number'?(()=>{const st=stations[sel];return [sel,st.state,st.sty.name,st.cust&&st.cust.id,st.opi,game.layout.chairs,!!styling,i18n.lang].join('|');})():ui.key(sel);
   if(!force&&key===panelKey){refreshDynamic();return;}panelKey=key;renderTabs();
   if(typeof sel!=='number'){pbody.innerHTML=ui.render(sel);return;}
   const st=stations[sel],c=st.cust,chairRow=`<div class="seg" style="margin-bottom:4px">${stations.map(x=>`<button data-do="chair-tab:${x.i}" class="${x.i===sel?'sel':''}">${x.i+1}·${nm(x.sty.name)}</button>`).join('')}</div>`;
-  if(st.i>=game.layout.chairs){pbody.innerHTML=chairRow+`<div class="dim">${tx('vac.noChair')}</div>`;return;}
   if(st.vacant){pbody.innerHTML=chairRow+`<div class="dim">${tx('vac.note')}</div>`;return;}
   let h=chairRow+`<div class="ph"><b>${tx('chair',st.i+1)}</b> · <span style="color:${hexCss(st.sty.apron)}">${nm(st.sty.name)}</span> <span class="dim">(${tx('style.'+st.sty.style)})</span> · <span id="stl">${stLabel(st)}</span></div>`;
   if(!c){pbody.innerHTML=h+`<div class="dim">${tx('free.next',queue.length?queue.map(q=>nm(q.name)).join(', '):tx('free.nobody'))}</div><div id="help">${tx('free.help')}</div>`;return;}
@@ -549,8 +548,8 @@ function updateHud(){const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?'seating':'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
   $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)} ${g.clock.timeText}</span></h1>
-  <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.cust',`${g.servedToday} / ${g.expectedClients}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
-  <table class="foot">${stations.filter(st=>st.i<g.layout.chairs).map(st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td>${nm(st.sty.name)}</td><td>${st.cust?(st.cust.vip?'★':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`).join('')}</table>
+  <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length} / ${stations.length+terr.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
+  <table class="foot">${stations.map(st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td>${nm(st.sty.name)}</td><td>${st.cust?(st.cust.vip?'★':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`).join('')}</table>
   ${last?`<div class="dim">${tx('hud.last',nm(last.name),Math.round(last.all*100),nm(last.sty),last.mins.toFixed(1))}</div>`:''}`;}
 
 /* controls */
@@ -581,18 +580,46 @@ canvas.addEventListener('pointerup',endP);canvas.addEventListener('pointercancel
 const ray=new THREE.Raycaster();
 const groundPlane=new THREE.Plane(UP,0),_gp=V();
 function groundAt(x,y){const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);return ray.ray.intersectPlane(groundPlane,_gp)?{x:_gp.x,z:_gp.z}:null;}
-function pickAt(x,y){if(build.isActive){const q=groundAt(x,y);if(q){const ok=build.commit(q);audio.play(ok?'place':'deny');if(ok)renderPanel(true);}return;}if(styling)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);
+function pickAt(x,y){if(site>=0)return;if(build.isActive){const q=groundAt(x,y);if(q){const ok=build.commit(q);audio.play(ok?'place':'deny');if(ok)renderPanel(true);}return;}if(styling)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);
+  if(sel==='build'){const it=furnitureView.pick(ray);if(it&&build.start(it.id,it))renderPanel(true);return;}
   const hits=ray.intersectObjects(world.children,true).filter(h=>h.object.visible&&h.object.parent.visible);if(!hits.length)return;
   const h=hits[0],f=h.object.userData.fig;
   if(f){const st=stations.find(s=>s.sty.fig===f||(s.cust&&s.cust.fig===f));if(st){sel=st.i;lastChair=st.i;$('#panel').classList.remove('min');renderPanel(true);return;}
     const c=custs.find(c=>c.fig===f);if(c){popup(`${nm(c.name)}: ${orderText(c.order)}`,c.fig.head,'');return;}}
-  const p=h.point;let best=null,bd=.9;stations.forEach(s=>{const d=Math.hypot(p.x-s.x,p.z-s.chair.z);if(d<bd){bd=d;best=s;}});
+  const p=h.point;let best=null,bd=.9;stations.forEach(s=>{const d=Math.hypot(p.x-s.chair.x,p.z-s.chair.z);if(d<bd){bd=d;best=s;}});
   if(best){sel=best.i;$('#panel').classList.remove('min');renderPanel(true);}}
 
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs,syncSupport});
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});
+
+/* ================= branches: separate salons beside the main one ================= */
+const BRANCH_X=[20,36,52,68],BRANCH_SIGN={downtown:'CIEL DOWNTOWN',premium:'CIEL PREMIUM',barber:'CIEL BARBER',colour:'CIEL COLOUR'};
+const BRANCH_FLOOR={downtown:['#dcd9dc','#bdb9c0'],premium:['#f1dfae','#e8c27a'],barber:['#5f5a68','#45404f'],colour:['#f6d6bd','#f2a0c0']};
+const branchScenes=new Map();let site=-1;
+const branchDeps={
+  makeFig:kind=>kind==='client'?new Fig({skin:pick(SKINS),shirt:pick(SHIRTS),pants:pick(PANTS)})
+    :new Fig({skin:pick(SKINS),shirt:kind==='desk'?pick(SHIRTS):0x45404f,pants:0x2e2a38,apron:kind==='desk'?undefined:pick([0x2f6fd6,0x1fa39a,0xe25c8f,0x8a4fc2,0xffb15a]),staffHair:pick([0x16110f,0x2e1d14,0x6e4428,0xc8642a,0xe8c27a]),long:Math.random()<.4}),
+  makeHair:fig=>new Hair(fig.head,fig),newCustomer:()=>game.newCustomer(new Set()),isOpen:()=>game.clock.isOpen,
+  record:(b,sat)=>game.franchise.recordClient(b,sat,game.reputation.value)};
+function signTexture(text){const w=Math.max(140,text.length*12+8);return canvasTex(w,22,g=>paintSign(g,w,22,text));}
+/** Builds a copy of the original salon at a branch's plot, with its own sign and floor. */
+function buildBranch(b,i){const root=new THREE.Group();root.position.set(BRANCH_X[i],0,0);world.add(root);
+  const copy=o=>{const c=o.clone();c.visible=true;root.add(c);return c;},mainWalls=walls.slice(0,4),sign=signTexture(BRANCH_SIGN[b.id]);
+  copy(salonMesh);extras.forEach(copy);
+  [...DEFAULT_LAYOUT,...EXTRA_STATIONS.slice(0,2).map(([x,z])=>['station',x,z,0])].forEach(([id,x,z,r])=>furnitureView.buildStatic(id,x,z,r,root));
+  tiledSurface(8,6,...BRANCH_FLOOR[b.id],0,0,root);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7,root);
+  mainWalls.forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});walls.push({n:w.n,full,low,off:false});});
+  const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(0,2.4,0);root.add(light);inLights.push(light);
+  return new BranchScene(b,V(BRANCH_X[i],0,0),branchDeps);}
+function syncBranches(){game.franchise.branches.forEach((b,i)=>{if(b.open&&!branchScenes.has(b.id))branchScenes.set(b.id,buildBranch(b,i));});renderSites();}
+function focusSite(i){site=i;build.cancel();if(i<0)syncChairs();else{camHome.set(BRANCH_X[i],.55,1.2);viewScale=1;}renderSites();renderPanel(true);}
+function renderSites(){const open=game.franchise.branches.map((b,i)=>[b,i]).filter(([b])=>b.open),el=$('#sites');el.classList.toggle('show',open.length>0);
+  el.innerHTML=[`<button data-site="-1" class="${site<0?'sel':''}">${tx('site.main')}</button>`,...open.map(([b,i])=>`<button data-site="${i}" class="${site===i?'sel':''}">${tx('bs.'+b.id)}</button>`)].join('');updateBranchCard();}
+function updateBranchCard(){const el=$('#branchCard');if(site<0){el.classList.remove('show');return;}const b=game.franchise.branches[site];el.classList.add('show');
+  el.innerHTML=`<b class="gold">${tx('bn.'+b.id)}</b><br>${tx('branch.today',b.clientsToday,b.clientsToday?Math.round(b.satisfactionSum/b.clientsToday*100):0,b.revenueToday)}<br><span class="dim">${tx('branch.note')}</span>`;}
+$('#sites').addEventListener('click',e=>{const b=e.target.closest('[data-site]');if(b)focusSite(+b.dataset.site);});
 
 /* ================= start menu ================= */
 let menuScreen='main',menuFrom='main';
@@ -618,7 +645,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
 function openMenu(s,from){menuScreen=s;menuFrom=from;mbox.scrollTop=0;$('#menu').classList.remove('hide');renderMenu();mbox.scrollTop=0;}
 function closeMenu(){$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
-function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();openDay();game.updateProgress();updateHud();renderPanel(true);}
+function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();syncBranches();openDay();game.updateProgress();updateHud();renderPanel(true);}
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
@@ -635,14 +662,13 @@ syncCtrl();
 
 /* ================= main loop ================= */
 resize();addEventListener('resize',resize);
-renderPanel(true);updateHud();
-syncChairs();
+syncFurniture();syncChairs();renderPanel(true);updateHud();
 let lastT=performance.now(),hudT=0,clockT=0,realT=0;
 function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)/1000);lastT=now;realT+=dt;
   if(started&&!paused)simStep(dt*(styling?1:speed));else figs.forEach(f=>f.pose(0));
   stylingTick(dt);
   updateLights(dt);updateCam(dt);envStep(dt,realT);updatePops(dt);
-  if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);}}
+  if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}}
   if((clockT+=dt)>1){clockT=0;drawClock();}
   renderer.setRenderTarget(rt);renderer.render(scene,cam);
   renderer.setRenderTarget(null);renderer.render(post,postCam);
