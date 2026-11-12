@@ -1,4 +1,6 @@
+const OPERATING = new Set(['rent', 'wages', 'utilities', 'maintenance', 'materials']);
 const blankDay = () => ({ revenue: {}, expenses: {} });
+const pickCosts = (expenses, wanted) => Object.fromEntries(Object.entries(expenses).filter(([k]) => OPERATING.has(k) === wanted));
 
 /** The salon's money: current cash, lifetime earnings and a categorised ledger for the day. */
 export class Economy {
@@ -11,9 +13,11 @@ export class Economy {
   charge(category, amount) { this.cash -= amount; this.today.expenses[category] = (this.today.expenses[category] || 0) + amount; }
   #sum(group) { return Object.values(group).reduce((a, b) => a + b, 0); }
   get dailyRevenue() { return this.#sum(this.today.revenue); }
-  get dailyExpenses() { return this.#sum(this.today.expenses); }
-  get dailyProfit() { return this.dailyRevenue - this.dailyExpenses; }
-  closeDay() { const report = { revenue: { ...this.today.revenue }, expenses: { ...this.today.expenses }, totalRevenue: this.dailyRevenue, totalExpenses: this.dailyExpenses, profit: this.dailyProfit }; return report; }
+  get dailyOperatingCost() { return this.#sum(pickCosts(this.today.expenses, true)); }
+  get dailyInvestment() { return this.#sum(pickCosts(this.today.expenses, false)); }
+  /** Operating profit: purchases such as furniture or a new branch are investments, not running costs. */
+  get dailyProfit() { return this.dailyRevenue - this.dailyOperatingCost; }
+  closeDay() { return { revenue: { ...this.today.revenue }, operating: pickCosts(this.today.expenses, true), investment: pickCosts(this.today.expenses, false), totalRevenue: this.dailyRevenue, totalOperating: this.dailyOperatingCost, totalInvestment: this.dailyInvestment, profit: this.dailyProfit }; }
   startDay() { this.today = blankDay(); }
   toJSON() { return { cash: this.cash, totalEarned: this.totalEarned }; }
   restore(data) { this.cash = data.cash; this.totalEarned = data.totalEarned; }

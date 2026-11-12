@@ -5,6 +5,7 @@ import { Economy } from './Economy.js';
 import { Reputation } from './Reputation.js';
 import { Progression } from './Progression.js';
 import { Franchise } from './Franchise.js';
+import { OperatingCosts } from './OperatingCosts.js';
 import { StaffManager } from '../employees/StaffManager.js';
 import { CustomerFactory } from '../customers/CustomerFactory.js';
 import { ServiceEvaluator } from '../customers/ServiceEvaluator.js';
@@ -12,7 +13,7 @@ import { SalonLayout } from '../building/SalonLayout.js';
 import { CHAIR_PRICE } from '../building/FurnitureCatalog.js';
 import { rand } from '../core/math.js';
 
-const RENT = [0, 80, 110, 160, 240, 320], PRICE_MULTIPLIER = [.8, 1, 1.5], PRICE_DEMAND = [1.3, 1, .7];
+const PRICE_MULTIPLIER = [.8, 1, 1.5], PRICE_DEMAND = [1.3, 1, .7];
 export const STARTING_CASH = 2000;
 
 /** Composition root of the business simulation. Knows nothing about Three.js. */
@@ -26,6 +27,7 @@ export class TycoonGame {
     this.staff = new StaffManager(this.economy);
     this.layout = new SalonLayout();
     this.franchise = new Franchise(this.economy);
+    this.operatingCosts = new OperatingCosts(this.economy, this.staff, this.layout, this.progression);
     this.customers = new CustomerFactory();
     this.evaluator = new ServiceEvaluator();
     this.saves = new SaveManager('cut-and-dried-career-v2');
@@ -37,7 +39,7 @@ export class TycoonGame {
   get averageSatisfaction() { return this.served ? this.satisfactionSum / this.served : 0; }
   updateProgress() { this.progression.update(this.context); }
   isUnlocked(feature) { return this.progression.isUnlocked(feature); }
-  nextArrival(rain) { return rand(.8, 1.2) * this.clock.dayLength / this.expectedClients * (1 + .4 * rain); }
+  nextArrival() { return rand(.8, 1.2) * this.clock.dayLength / this.expectedClients; }
   newCustomer(usedNames) {
     return this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
@@ -60,13 +62,13 @@ export class TycoonGame {
   customerGaveUp() { this.reputation.add(-.6); }
   buyChair() { const l = this.layout; if (!this.isUnlocked('chairs') || l.chairs >= l.maxChairs || !this.economy.spend('equipment', CHAIR_PRICE)) return false; l.chairs++; return true; }
   expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; return true; }
-  startDay() { this.economy.startDay(); this.staff.startDay(); this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.report = null; this.clock.startDay(); }
+  tick(dt) { this.clock.tick(dt); this.operatingCosts.accrue(this.clock.workedFraction); }
+  startDay() { this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(); this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.report = null; this.clock.startDay(); }
   nextDay() { this.clock.day++; this.startDay(); }
   closeDay() {
     const e = this.economy, sales = this.layout.dailySales, branches = this.franchise.dailyIncome(this.reputation.value);
     if (sales) e.earn('products', sales); if (branches) e.earn('branches', branches);
-    if (this.staff.payroll) e.charge('wages', this.staff.payroll);
-    e.charge('rent', RENT[this.progression.level]);
+    this.operatingCosts.accrue(1);
     this.report = { day: this.clock.day, ...e.closeDay(), reputation: this.reputation.value - this.repAtDayStart };
     this.updateProgress(); this.save(); return this.report;
   }
