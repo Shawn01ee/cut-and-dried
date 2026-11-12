@@ -12,4 +12,4 @@ export const FURNITURE = {
 };
 export const FURNITURE_IDS = Object.keys(FURNITURE);
 export const CHAIR_PRICE = 300;
-export const EXPANSIONS = [{ cost: 1500, requires: 'chairs' }, { cost: 4000, requires: 'expansion' }];
+export const EXPANSIONS = [{ cost: 1500, requires: 'chairs' }, { cost: 4000, requires: 'expansion' }, { cost: 9000, requires: 'annex' }];

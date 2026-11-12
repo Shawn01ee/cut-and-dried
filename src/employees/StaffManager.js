@@ -2,7 +2,9 @@ import { Employee } from './Employee.js';
 
 const DEFINITIONS = [
   { id: 'mia', name: 'Mia', role: 'Senior Stylist', style: 'CutSpecialist', specialty: 'cut', skills: { cutting: 80, colouring: 62, perming: 55, speed: 48, customerService: 80 }, salary: 220, hireCost: 1800, apron: 0x2f6fd6, hair: 0xf1dfae },
-  { id: 'sean', name: 'Sean', role: 'Junior Stylist', style: 'PermSpecialist', specialty: 'perm', skills: { cutting: 45, colouring: 40, perming: 72, speed: 90, customerService: 60 }, salary: 120, hireCost: 600, bias: -1.2, single: true, apron: 0x1fa39a, hair: 0x16110f },
+  { id: 'shawn', name: 'Shawn', role: 'Junior Stylist', style: 'PermSpecialist', specialty: 'perm', skills: { cutting: 45, colouring: 40, perming: 72, speed: 90, customerService: 60 }, salary: 120, hireCost: 600, bias: -1.2, single: true, apron: 0x1fa39a, hair: 0x16110f },
+  { id: 'ethan', name: 'Ethan', role: 'Barber', style: 'CutSpecialist', specialty: 'cut', skills: { cutting: 76, colouring: 45, perming: 40, speed: 75, customerService: 70 }, salary: 180, hireCost: 1400, apron: 0x2a4478, hair: 0x6e4428 },
+  { id: 'yuri', name: 'Yuri', role: 'Senior Designer', style: 'AllRounder', skills: { cutting: 78, colouring: 78, perming: 78, speed: 60, customerService: 85 }, salary: 280, hireCost: 2500, fine: true, apron: 0xffb15a, hair: 0x16110f, long: true },
   { id: 'rosa', name: 'Rosa', role: 'Colourist', style: 'ColourSpecialist', specialty: 'colour', skills: { cutting: 55, colouring: 90, perming: 44, speed: 60, customerService: 70 }, salary: 200, hireCost: 1500, bias: .6, fine: true, apron: 0xe25c8f, hair: 0xc8642a, long: true },
 ];
 
