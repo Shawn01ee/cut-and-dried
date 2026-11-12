@@ -1,5 +1,6 @@
 import { score, profile } from '../hair/rules.js';
 import { clamp, rand } from '../core/math.js';
+import { SPECIALTY_SATISFACTION } from '../employees/Employee.js';
 
 /** Turns a finished service into the five result metrics and a payment. */
 export class ServiceEvaluator {
@@ -15,9 +16,9 @@ export class ServiceEvaluator {
     const wait = clamp(customer.pat / customer.maxPat);
     const priceFit = clamp(1 - Math.max(0, customer.price - customer.budget) / customer.budget * 2);
     const environment = clamp(.4 + comfort * .06);
-    const expectation = customer.vip ? .05 : 0;
-    const satisfaction = clamp(.62 * match.all + .12 * quality + .1 * wait + .08 * priceFit + .08 * environment - expectation);
+    const expectation = customer.vip ? .05 : 0, specialist = worker.handles(customer);
+    const satisfaction = clamp(.62 * match.all + .12 * quality + .1 * wait + .08 * priceFit + .08 * environment - expectation + (specialist ? SPECIALTY_SATISFACTION : 0));
     const tip = satisfaction > .85 ? rand(5, 20) * (customer.vip ? 3 : 1) : 0;
-    return { ...match, length, style, colour: match.col, quality, satisfaction, all: satisfaction, payment: Math.round(customer.price * (.35 + .65 * satisfaction) + tip) };
+    return { ...match, specialist, length, style, colour: match.col, quality, satisfaction, all: satisfaction, payment: Math.round(customer.price * (.35 + .65 * satisfaction) + tip) };
   }
 }

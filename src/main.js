@@ -24,7 +24,7 @@ renderer.setPixelRatio(1);
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.BasicShadowMap;
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x7ea2d0);
 const world=new THREE.Group();scene.add(world);
-let W=320,H=240,PIX=3,rt=null;
+let W=320,H=240,PIX=3,rt=null,pixScale=1;
 const postMat=new THREE.ShaderMaterial({
   uniforms:{tColor:{value:null},tDepth:{value:null},res:{value:new THREE.Vector2()},palLab:{value:PAL_LAB},palRgb:{value:PAL_RGB},edge:{value:0.0028}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}`,
@@ -42,7 +42,7 @@ const postCam=new THREE.Camera();
 
 function resize(){
   const vw=innerWidth,vh=innerHeight;
-  PIX=Math.max(2,Math.round(Math.min(vw,vh)/250));
+  PIX=Math.max(1,Math.round(Math.max(2,Math.round(Math.min(vw,vh)/250))*pixScale));
   W=Math.floor(vw/PIX);H=Math.floor(vh/PIX);
   renderer.setSize(W*PIX,H*PIX);
   rt&&rt.dispose();
@@ -312,7 +312,7 @@ function spawnCustomer(){
   custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');
   fig.walkTo(ROUTE_IN,()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');const seat=bench.find(s=>!s.occ)||terr.find(s=>!s.occ);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');leave(c,'full');return;}
-    seat.occ=c;c.seat=seat;fig.walkTo([...seat.app,seat.pos],()=>{fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);});});
+    seat.occ=c;c.seat=seat;fig.walkTo([...seat.app,seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);});});
 }
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
 function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos;let pts;
@@ -365,7 +365,7 @@ function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.se
 function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,jr.fig,...friends,...STY.map(s=>s.fig),...custs.filter(c=>c.state==='wait').map(c=>c.fig)];who.forEach(f=>{if(n||Math.random()<.3)f.clapT=rand(1.2,1.8);});}
 
 /* junior: sweeps up the clippings */
-function jrUpdate(dt){const f=jr.fig,T=jr.task;
+function jrUpdate(dt){const f=jr.fig,T=jr.task;if(!f.root.visible)return;
   if(T){if(T.phase==='work'){T.t-=dt;f.toolAim=V(T.aim.x+Math.sin(simT*5)*.35,0,T.aim.z+Math.cos(simT*2.5)*.12);f.handR=f.pos.clone().add(V(0,1.02,0)).addScaledVector(fwd(f.yaw),.22).addScaledVector(rgt(f.yaw),.1);f.handL=f.handR.clone().add(V(0,-.22,0)).addScaledVector(fwd(f.yaw),.05);
       if(T.t<=0){T.done();jr.task=null;f.handL=f.handR=null;f.toolAim=null;f.setTool(null);}}return;}
   const go=(standAt,aim,tool,dur,done)=>{jr.task={phase:'walk',aim,done};f.handL=f.handR=null;f.walkTo([standAt],()=>{jr.task.phase='work';jr.task.t=dur;f.setTool(tool);f.yaw=Math.atan2(aim.x-f.pos.x,aim.z-f.pos.z);});};
@@ -381,6 +381,7 @@ let started=false,paused=false,booted=false,styling=null,savedCamK=0,lastChair=0
 const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant&&x.i<game.layout.chairs)||(stations[0].sty===OWNER&&stations[0].state==='free'&&!styling?stations[0]:null);
+function syncSupport(){recep.root.visible=game.staff.find('sophie').hired;jr.fig.root.visible=game.staff.find('max').hired;}
 function syncChairs(){stationGroups.forEach((g,i)=>{g.visible=i<game.layout.chairs;});}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=Math.PI;if(wasOwner)OWNER.fig.walkTo([OWNER_IDLE],()=>OWNER.fig.yaw=Math.PI);}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
@@ -389,12 +390,13 @@ function restoreGame(){const d=game.saves.load();if(!d)return;game.restore(d);
   d.layout.items.forEach(x=>{const cell=game.layout.cells.find(c=>Math.abs(c.x-x.x)<.01&&Math.abs(c.z-x.z)<.01),cells=cell&&game.layout.footprint(x.id,cell,x.rotation);if(cells)furnitureView.spawn(game.layout.add(x.id,cells,x.rotation));});
   game.staff.hired.forEach(e=>{const st=openChair();if(st)placeStaff(e,st);else e.hired=false;});}
 function finishDay(){game.closeDay();audio.play('dayEnd');paused=true;openMenu('day','day');}
-function dayTick(dt){if(game.report)return;game.tick(dt);if(!game.clock.isOpen&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
+function dayTick(dt){if(game.report)return;game.tick(dt);if(!game.clock.isOpen&&queue.length)queue.slice().forEach(c=>leave(c));if(!game.clock.isOpen&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
 game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');queue.slice().forEach(c=>leave(c));});
+game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
 game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');renderPanel(true);});
-function openStyling(st){if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=Math.round(camK/4)*4;document.body.classList.add('closeup');audio.play('swish');renderPanel(true);}
-function closeStyling(confirmed){const s=styling;if(!s)return;styling=null;document.body.classList.remove('closeup');camK=savedCamK;s.station.sty.fig.root.visible=true;const c=s.customer;c.previewHair=null;c.hm.dirty=true;c.fig.yaw=Math.PI;if(!confirmed){const st=s.station;st.byOwner=false;if(autoOn||st.sty!==OWNER){st.plan=aiPlan(c,st.sty);st.playerPlan=false;st.touched=false;st.timer=2;}}renderPanel(true);}
-function stylingTick(dt){if(!styling)return;const c=styling.customer;c.fig.yaw=angLerp(c.fig.yaw,styling.targetYaw(Math.PI*1.25),Math.min(1,dt*10));c.fig.look=0;const hp=c.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);}
+function openStyling(st){if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=Math.round(camK/4)*4;document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
+function closeStyling(confirmed){const s=styling;if(!s)return;styling=null;document.body.classList.remove('closeup');pixScale=1;resize();camK=savedCamK;s.station.sty.fig.root.visible=true;const c=s.customer;c.previewHair=null;c.hm.dirty=true;c.fig.yaw=Math.PI;if(!confirmed){const st=s.station;st.byOwner=false;if(autoOn||st.sty!==OWNER){st.plan=aiPlan(c,st.sty);st.playerPlan=false;st.touched=false;st.timer=2;}}renderPanel(true);}
+function stylingTick(dt){if(!styling)return;const c=styling.customer;c.fig.yaw=angLerp(c.fig.yaw,styling.targetYaw(Math.PI*1.25),Math.min(1,dt*10));c.fig.look=0;}
 let simT=0,speed=1,autoOn=true,timeMode='auto',spawnTimer=1.5;
 const timers=[];const later=(s,fn)=>timers.push({t:s,fn});
 const PRE={day:{sky:0x7ea2d0,sun:0xfff1c4,si:2.8,sp:V(6,12,5),hs:0xb6d2ec,hg:0xb7a99a,hi:1.1,inI:0,spI:0,glow:0},
@@ -429,7 +431,7 @@ function simStep(dt){simT+=dt;
   // stations
   stations.forEach(st=>{
     if(st.vacant)return;
-    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen)return;const c=queue.find(c=>c.state==='wait');if(c)assign(st,c);}
+    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen)return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),c=waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
@@ -440,7 +442,7 @@ function simStep(dt){simT+=dt;
   const rv=stations.find(s=>s.state==='reveal');{const tgt=rv?rv.chair:DOOR_IN;const a=Math.atan2(tgt.x-recep.pos.x,tgt.z-recep.pos.z)-recep.yaw;recep.look=angLerp(recep.look,clamp(((a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI,-1,1),Math.min(1,dt*3));}
   // spectators look at reveals
   custs.forEach(c=>{if(c.state==='wait'){c.fig.look=rv?angLerp(c.fig.look,.4*Math.sin(simT*.3),.02):Math.sin(simT*.4+c.id)*.3;}
-    else if(c.state==='chair')c.fig.look=Math.sin(simT*.5+c.id)*.15;else c.fig.look=0;});
+    else if(c.state==='chair'&&!(styling&&styling.customer===c))c.fig.look=Math.sin(simT*.5+c.id)*.15;else c.fig.look=0;});
   // figures
   figs.forEach(f=>f.update(dt));
   custs.slice().forEach(c=>{if(c.fadeIn<1){c.fadeIn=Math.min(1,c.fadeIn+dt*2.5);setFade(c.fig,Math.max(.01,c.fadeIn));}
@@ -514,7 +516,7 @@ function renderPanel(force){
     $('#bStart').onclick=()=>startWork(st);}
   refreshDynamic();}
 function bars(sc,label){return `<div class="dim" style="font-size:.9em">${label}</div>`+[[tx('b.cut'),sc.cut,`±${sc.mad.toFixed(1)}cm`],[tx('b.colour'),sc.col,`ΔE ${sc.dE.toFixed(0)}`],[tx('b.wave'),sc.wav,''],[tx('b.match'),sc.all,'']].map(([n,v,x])=>`<div class="bar"><span>${n}</span><div class="tr"><div class="fl" style="width:${Math.round(v*100)}%;background:${v>.75?'#8fc25a':v>.5?'#ffb15a':'#d8314a'}"></div></div><b>${Math.round(v*100)}% <span class="dim">${x}</span></b></div>`).join('')+(sc.dmg>0?`<div class="bad" style="font-size:.9em">${tx('b.damage',Math.round(sc.dmg*100))}</div>`:'');}
-function resultBars(r){return `<div class="dim" style="font-size:.9em">${tx('r.title')}</div>`+[['r.length',r.length],['r.style',r.style],['r.colour',r.colour],['r.quality',r.quality],['r.satisfaction',r.satisfaction]].map(([k,v])=>`<div class="bar"><span>${tx(k)}</span><div class="tr"><div class="fl" style="width:${Math.round(v*100)}%;background:${v>.75?'#8fc25a':v>.5?'#ffb15a':'#d8314a'}"></div></div><b>${Math.round(v*100)}%</b></div>`).join('');}
+function resultBars(r){return `<div class="dim" style="font-size:.9em">${tx('r.title')}</div>`+[['r.length',r.length],['r.style',r.style],['r.colour',r.colour],['r.quality',r.quality],['r.satisfaction',r.satisfaction]].map(([k,v])=>`<div class="bar"><span>${tx(k)}</span><div class="tr"><div class="fl" style="width:${Math.round(v*100)}%;background:${v>.75?'#8fc25a':v>.5?'#ffb15a':'#d8314a'}"></div></div><b>${Math.round(v*100)}%</b></div>`).join('')+(r.specialist?`<div class="good">${tx('r.specialty',5)}</div>`:'');}
 function refreshDynamic(){if(typeof sel!=='number')return;const st=stations[sel],c=st.cust;const e=$('#stl');if(e)e.innerHTML=stLabel(st);if(!c)return;
   const skin=hexCss(c.fig.o.skin);const o={len:profile(c.order.shape,c.order.L).map(v=>v/(1-.12*c.order.wave)),lab:c.order.lab,wave:c.order.wave};
   drawPV($('#pvO'),o,skin);drawPV($('#pvN'),c.hair,skin,c.tint);
@@ -525,13 +527,15 @@ function refreshDynamic(){if(typeof sel!=='number')return;const st=stations[sel]
   else{$('#bars').innerHTML=c.result?resultBars(c.result):bars(score(c.hair,c.order),tx('b.live'));}
   const ops=$('#ops');if(ops&&st.ops.length)ops.innerHTML=st.ops.map((o,i)=>`<span class="${i===st.opi?'gold':i<st.opi?'good':''}">${i<st.opi?'✓ ':''}${tx('op.'+o.type)}</span>`).join(' → ');}
 function drawPV(cv,h,skin,tint=0){if(!cv)return;const g=cv.getContext('2d');g.imageSmoothingEnabled=false;g.fillStyle='#1d1a26';g.fillRect(0,0,48,56);
-  const lab=tint>0?labMix(h.lab,FOIL,tint):h.lab;
-  g.fillStyle='#5f5a68';g.fillRect(7,41,34,15);g.fillStyle=skin;g.fillRect(20,32,8,10);g.fillRect(15,10,18,22);
-  const w=h.wave,side=(h.len[7]+h.len[8]+h.len[9]+h.len[10])/4,capW=side<4?14:20;
+  const lab=tint>0?labMix(h.lab,FOIL,tint):h.lab,w=h.wave;
+  const strand=(j,width,shade)=>{const s=STR[j],x0=Math.round(24-s.p.x*75*(s.p.z>.05?1.2:1)),y0=s.z===3?12:s.z===2?13:16,Lp=Math.round(h.len[j]*(1-.12*w)*.62);
+    g.fillStyle=labCss(lab,shade);for(let y=0;y<Lp;y++){const off=Math.round(Math.sin(y*(.35+.12*w)+j)*w*1.1);g.fillRect(x0-(width>>1)+off,y0+y,width,1);}};
+  g.fillStyle='#5f5a68';g.fillRect(7,41,34,15);
+  [0,1,2,3,4,5,6].forEach(j=>strand(j,5,.78)); // hair behind the head shows around the neck and shoulders, never across the face
+  g.fillStyle=skin;g.fillRect(20,32,8,10);g.fillRect(15,10,18,22);
+  const side=(h.len[7]+h.len[8]+h.len[9]+h.len[10])/4,capW=side<4?14:20;
   g.fillStyle=labCss(lab,.93);g.fillRect(24-capW/2,7,capW,13);g.fillRect(24-capW/2+1,6,capW-2,1);
-  const order=[11,12,7,8,9,10,5,6,0,1,2,3,4];
-  order.forEach(j=>{const s=STR[j],x0=Math.round(24-s.p.x*75*(s.p.z>.05?1.2:1)),y0=s.z===3?12:s.z===2?13:16,vis=h.len[j]*(1-.12*w),Lp=Math.round(vis*.62);
-    g.fillStyle=labCss(lab,s.z===0?1:.86);for(let y=0;y<Lp;y++){const off=Math.round(Math.sin(y*(.35+.12*w)+j)*w*1.1);g.fillRect(x0-1+off,y0+y,3,1);}});}
+  [7,8,9,10,11,12].forEach(j=>strand(j,3,.86));}
 function updateHud(){const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?'seating':'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
@@ -576,7 +580,7 @@ function pickAt(x,y){if(build.isActive){const q=groundAt(x,y);if(q){const ok=bui
   const p=h.point;let best=null,bd=.9;stations.forEach(s=>{const d=Math.hypot(p.x-s.x,p.z-s.chair.z);if(d<bd){bd=d;best=s;}});
   if(best){sel=best.i;$('#panel').classList.remove('min');renderPanel(true);}}
 
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs});
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs,syncSupport});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});
@@ -605,7 +609,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
 function openMenu(s,from){menuScreen=s;menuFrom=from;mbox.scrollTop=0;$('#menu').classList.remove('hide');renderMenu();mbox.scrollTop=0;}
 function closeMenu(){$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
-function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();openDay();game.updateProgress();updateHud();renderPanel(true);}
+function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();openDay();game.updateProgress();updateHud();renderPanel(true);}
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
