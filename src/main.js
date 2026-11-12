@@ -559,13 +559,13 @@ addEventListener('keydown',e=>{const K=e.key.toLowerCase();
   if(build.isActive){if(K==='r'){build.rotate();renderPanel(true);}if(K==='escape'){build.cancel();renderPanel(true);}return;}
   if(K==='q')camK--;if(K==='e')camK++;});
 const TM=['auto','day','dusk','night'];
-function syncCtrl(){$('#bTime').textContent=tx('time.'+timeMode);$('#bSpd').textContent='×'+speed;$('#bSpd').classList.toggle('on',speed===3);
+function syncCtrl(){$('#bTime').textContent=tx('time.'+timeMode);$('#bSpd').textContent='×'+speed;$('#bSpd').classList.toggle('on',speed>1);
   $('#bAuto').textContent=tx('ctl.auto');$('#bAuto').classList.toggle('on',autoOn);$('#bLang').textContent=tx('ctl.lang');$('#bSound').textContent=tx('ctl.sound');$('#bSound').classList.toggle('on',!audio.muted);
   [['bRotL','rotL'],['bRotR','rotR'],['bTime','time'],['bSpd','spd'],['bAuto','auto'],['bHelp','help'],['bLang','lang'],['bSound','sound']].forEach(([i,k])=>$('#'+i).title=tx('tt.'+k));}
 function setAuto(on){autoOn=on;syncCtrl();renderPanel(true);}
 function setLang(l){i18n.lang=l;document.documentElement.lang=l;try{localStorage.setItem('cd-lang',l);}catch(e){}syncCtrl();updateHud();renderPanel(true);renderSites();if(!$('#menu').classList.contains('hide'))renderMenu();}
 $('#bTime').onclick=()=>{timeMode=TM[(TM.indexOf(timeMode)+1)%4];syncCtrl();};
-$('#bSpd').onclick=()=>{speed=speed===1?3:1;syncCtrl();};
+$('#bSpd').onclick=()=>{speed={1:3,3:5,5:1}[speed]||1;syncCtrl();};
 $('#bAuto').onclick=()=>setAuto(!autoOn);
 $('#bLang').onclick=()=>setLang(i18n.lang==='ko'?'en':'ko');
 $('#bSound').onclick=()=>{audio.toggleMute();syncCtrl();};
@@ -637,7 +637,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}</table><div class="mbtns"><button class="go big" data-act="nextday">${tx('day.next')}</button></div>`;}
   else h=`<div class="mhead">${tx('m.opts')}</div>${langRow()}
     <div class="mrow"><label>${tx('m.time')}</label>${mSeg('time',TM.map(v=>[v,tx('m.t.'+v)]),timeMode)}</div>
-    <div class="mrow"><label>${tx('m.speed')}</label>${mSeg('spd',[[1,'×1'],[3,'×3']],speed)}</div>
+    <div class="mrow"><label>${tx('m.speed')}</label>${mSeg('spd',[[1,'×1'],[3,'×3'],[5,'×5']],speed)}</div>
     <div class="mrow"><label>${tx('m.music')}</label><input type="range" min="0" max="100" value="${Math.round(audio.musicVolume*100)}" data-vol="music"></div>
     <div class="mrow"><label>${tx('m.sfx')}</label><input type="range" min="0" max="100" value="${Math.round(audio.sfxVolume*100)}" data-vol="sfx"></div>
     <div class="mbtns side">${backBtn}</div>`;
@@ -665,7 +665,8 @@ resize();addEventListener('resize',resize);
 syncFurniture();syncChairs();renderPanel(true);updateHud();
 let lastT=performance.now(),hudT=0,clockT=0,realT=0;
 function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)/1000);lastT=now;realT+=dt;
-  if(started&&!paused)simStep(dt*(styling?1:speed));else figs.forEach(f=>f.pose(0));
+  // Fast speeds run the simulation in small steps so walking and services stay smooth.
+  if(started&&!paused){const total=dt*(styling?1:speed),steps=Math.ceil(total/.06);for(let i=0;i<steps;i++)simStep(total/steps);}else figs.forEach(f=>f.pose(0));
   stylingTick(dt);
   updateLights(dt);updateCam(dt);envStep(dt,realT);updatePops(dt);
   if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}}
