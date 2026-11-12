@@ -1,4 +1,4 @@
-import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE } from '../building/FurnitureCatalog.js';
+import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS } from '../building/FurnitureCatalog.js';
 import { hexCss } from '../rendering/color.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION } from '../employees/Employee.js';
 
@@ -37,7 +37,7 @@ export class TycoonUI {
     const furniture = FURNITURE_IDS.map(id => { const f = FURNITURE[id], locked = f.requires && !g.isUnlocked(f.requires); return `<div class="brow"><span>${t('f.' + id)}</span><span class="dim">${t('fd.' + id)}</span><span class="sp"></span><button class="go" data-do="buy:${id}" ${locked || !g.economy.canAfford(f.price) ? 'disabled' : ''}>${locked ? t('build.lockedAt') : '$' + f.price}</button></div>`; }).join('');
     const placed = l.items.length ? l.items.map((it, i) => `<div class="brow"><span>${t('f.' + it.id)}</span><span class="sp"></span><button data-do="move:${i}">${t('build.move')}</button><button data-do="sell:${i}">${t('build.sell', Math.floor(FURNITURE[it.id].price / 2))}</button></div>`).join('') : `<div class="dim">${t('build.none')}</div>`;
     return `<div class="bsec"><h4>${t('build.chairs')}</h4><div class="brow"><span>${t('build.chairLine', l.chairs, l.maxChairs)}</span><span class="sp"></span><button class="go" data-do="chair" ${!g.isUnlocked('chairs') || l.chairs >= l.maxChairs || !g.economy.canAfford(CHAIR_PRICE) ? 'disabled' : ''}>${g.isUnlocked('chairs') ? t('build.chairBuy', CHAIR_PRICE) : t('build.lockedAt')}</button></div></div>
-    <div class="bsec"><h4>${t('build.expand')}</h4><div class="brow"><span>${t('build.expandLine', l.tier + 1)}</span><span class="sp"></span>${expand}</div></div>
+    <div class="bsec"><h4>${t('build.expand')}</h4><div class="brow"><span>${t('build.expandLine', l.tier + 1, EXPANSIONS.length + 1)}</span><span class="sp"></span>${expand}</div>${l.tier === 2 ? `<div class="dim">${t('build.annex')}</div>` : ''}</div>
     <div class="bsec"><h4>${t('build.furniture')}</h4><div class="dim">${t('build.help')}</div>${furniture}</div><div class="bsec"><h4>${t('build.placed')}</h4>${placed}</div>`;
   }
   #business() {
@@ -62,7 +62,7 @@ export class TycoonUI {
       shire: () => { if (g.staff.hire(e)) this.hooks.syncSupport(); }, sfire: () => { if (g.staff.fire(e)) this.hooks.syncSupport(); }, train: () => { if (g.staff.train(e)) g.bus.emit('staff:levelup', e); },
       rest: () => { e.restUntil = this.hooks.now() + 20; e.rest(50); },
       price: () => { g.priceLevel = +value; }, branch: () => g.franchise.open(g.franchise.branches[+value]),
-      chair: () => { if (g.buyChair()) this.hooks.syncChairs(); }, expand: () => g.expand(),
+      chair: () => { if (g.buyChair()) this.hooks.syncChairs(); }, expand: () => { if (g.expand()) this.hooks.syncChairs(); },
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
     }[action];

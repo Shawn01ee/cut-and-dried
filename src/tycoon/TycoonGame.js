@@ -15,6 +15,8 @@ import { rand } from '../core/math.js';
 
 const PRICE_MULTIPLIER = [.8, 1, 1.5], PRICE_DEMAND = [1.3, 1, .7];
 export const STARTING_CASH = 2000;
+// Earlier saves used these ids for the stylist now called Shawn.
+const LEGACY_IDS = { jun: 'shawn', sean: 'shawn' };
 
 /** Composition root of the business simulation. Knows nothing about Three.js. */
 export class TycoonGame {
@@ -80,7 +82,7 @@ export class TycoonGame {
   restore(d) {
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
     this.served = d.served; this.satisfactionSum = d.satisfactionSum; this.priceLevel = d.priceLevel; this.franchise.restore(d.franchise);
-    d.staff.forEach(s => this.staff.find(s.id === 'jun' ? 'sean' : s.id)?.restore(s));
+    d.staff.forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     (d.support || []).forEach(s => this.staff.find(s.id)?.restore(s));
     this.layout.chairs = d.layout.chairs; this.layout.tier = d.layout.tier;
   }

@@ -54,11 +54,11 @@ function resize(){
 /* ================= camera ================= */
 const cam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,80);
 let camK=0,camAz=Math.PI/4,zoom=1;const EL=Math.atan(1/Math.SQRT2);const camTarget=V(0,.55,1.2);
-let camBlend=0;const camHome=V(0,.55,1.2),camClose=V();
+let camBlend=0,viewScale=1;const camHome=V(0,.55,1.2),camClose=V();
 function updateCam(dt){
   const goal=Math.PI/4+camK*Math.PI/2;camAz+=(goal-camAz)*Math.min(1,dt*9);if(Math.abs(goal-camAz)<1e-3)camAz=goal;
   camBlend+=((styling?1:0)-camBlend)*Math.min(1,dt*6);if(Math.abs((styling?1:0)-camBlend)<.002)camBlend=styling?1:0;camTarget.copy(camHome).lerp(camClose,camBlend);
-  const a=W/H,vh=lerp(Math.max(10.8,12.8/a)/zoom,Math.max(2.6,1.7/a),camBlend);
+  const a=W/H,vh=lerp(Math.max(10.8,12.8/a)*viewScale/zoom,Math.max(2.6,1.7/a),camBlend);
   cam.left=-vh*a/2;cam.right=vh*a/2;cam.top=vh/2;cam.bottom=-vh/2;cam.updateProjectionMatrix();
   cam.position.copy(camTarget).add(V(Math.sin(camAz)*Math.cos(EL),Math.sin(EL),Math.cos(camAz)*Math.cos(EL)).multiplyScalar(40));
   cam.lookAt(camTarget);cam.updateMatrixWorld();
@@ -99,11 +99,11 @@ S.box(9,.06,3,0xb7a99a,0,-.02,4.7);S.box(9,.1,.18,0x7d7884,0,0,6.11);
 // salon floor: large pale stone tiles with thin joints
 S.box(8,.06,6,0xdcd9dc,0,-.02,0);
 /** A flat tiled surface drawn as a pixel texture, so joints stay crisp one-pixel lines. */
-function tiledSurface(w,d,fill,joint,x,z){const P=16,tex=canvasTex(w*P,d*P,g=>{g.fillStyle=fill;g.fillRect(0,0,w*P,d*P);g.fillStyle=joint;for(let i=0;i<=w;i++)g.fillRect(Math.min(i*P,w*P-1),0,1,d*P);for(let j=0;j<=d;j++)g.fillRect(0,Math.min(j*P,d*P-1),w*P,1);});
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;world.add(m);}
+function tiledSurface(w,d,fill,joint,x,z,parent=world){const P=16,tex=canvasTex(w*P,d*P,g=>{g.fillStyle=fill;g.fillRect(0,0,w*P,d*P);g.fillStyle=joint;for(let i=0;i<=w;i++)g.fillRect(Math.min(i*P,w*P-1),0,1,d*P);for(let j=0;j<=d;j++)g.fillRect(0,Math.min(j*P,d*P-1),w*P,1);});
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;parent.add(m);}
 tiledSurface(8,6,'#dcd9dc','#bdb9c0',0,0);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7);
 // stations
-const STX=[-2.4,-0.4,1.6];
+const STX=[-2.4,-0.4,1.6,5.2,7.2];
 const stationGroups=STX.map(()=>{const g=new THREE.Group();world.add(g);return g;});
 STX.forEach((x,i)=>{const S=new SB();
   S.box(1.4,.85,.4,0xf6f3ee,x,.425,-2.75).box(1.42,.04,.42,0x3a2618,x,.87,-2.75);
@@ -121,14 +121,14 @@ S.box(.55,.1,.55,0xd8314a,-3.45,.5,-2.3).box(.55,.5,.08,0xd8314a,-3.45,.78,-2.56
 S.box(.6,1.05,1.5,0x8a6040,-3.15,.525,1.0).box(.66,.05,1.56,0x3a2618,-3.15,1.07,1.0).box(.2,.06,.2,0x45404f,-3.25,1.12,.6).box(.08,.25,.06,0x2f6fd6,-3.3,1.2,1.3);
 S.box(.3,.06,.3,0x1d1a26,-3.6,.72,1.0).box(.06,.72,.06,0xbdb9c0,-3.6,.36,1.0);
 S.box(1.9,.08,.46,0x5e3d24,2.6,.44,2.5).box(1.9,.5,.08,0x5e3d24,2.6,.75,2.76);[1.75,3.45].forEach(x=>S.box(.08,.42,.4,0x3a2618,x,.21,2.5));
-S.box(2.2,.02,1.1,0xc24a46,2.6,.015,1.55).box(1.9,.02,.8,0xffb15a,2.6,.02,1.55);
+S.box(1.8,.02,1.1,0xc24a46,2.4,.015,1.6).box(1.5,.02,.8,0xffb15a,2.4,.02,1.6);
 for(let k=0;k<3;k++){S.box(.25,.04,.9,0x8a6040,-3.85,.9+k*.45,2.45);for(let i=0;i<4;i++)S.box(.12,.2,.12,pick([0x2f6fd6,0xe25c8f,0x1fa39a,0xffd98a,0xd8314a,0xf6f3ee]),-3.82,1.02+k*.45,2.1+i*.22);}
-[[3.7,2.7],[-0.9,-2.75],[0.6,2.75]].forEach(([x,z])=>{S.box(.32,.38,.32,0xb88a5a,x,.19,z);S.box(.36,.5,.36,0x3a7a3a,x,.62,z).box(.24,.3,.24,0x5f9e45,x,.98,z);});
+[[3.7,2.7],[-1.4,-2.75],[0.6,-2.75],[0.6,2.75]].forEach(([x,z])=>{S.box(.32,.38,.32,0xb88a5a,x,.19,z);S.box(.36,.5,.36,0x3a7a3a,x,.62,z).box(.24,.3,.24,0x5f9e45,x,.98,z);});
 S.box(.9,.02,.5,0x1fa39a,-2,.015,2.55);
 // lamp posts
 [[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{S.box(.14,3.3,.14,0x1d1a26,x,1.65,z).box(.3,.08,.3,0x1d1a26,x,3.32,z);});
 // side bench, clock post and barber pole base
-S.box(.46,.08,1.4,0x5e3d24,3.55,.44,.475).box(.08,.5,1.4,0x5e3d24,3.82,.75,.475);[-.15,1.1].forEach(z=>S.box(.4,.42,.08,0x3a2618,3.55,.21,z));
+S.box(.46,.08,1.2,0x5e3d24,3.55,.44,1.6).box(.08,.5,1.2,0x5e3d24,3.82,.75,1.6);[1.08,2.12].forEach(z=>S.box(.4,.42,.08,0x3a2618,3.55,.21,z));
 S.box(.12,2.6,.12,0x1d1a26,2.7,1.3,5.7).box(.5,.5,.2,0x1d1a26,2.7,2.85,5.7);
 S.box(.24,.16,.24,0x45404f,-1.2,.08,3.4).box(.18,.12,.18,0xbdb9c0,-1.2,1.72,3.4).box(.18,.12,.18,0xbdb9c0,-1.2,.2,3.4);
 S.build();
@@ -158,6 +158,14 @@ const walls=[
   makeWall('z',-4.08,[[-3,-1.6,'s'],[-1.6,0.2,'w'],[0.2,3,'s']],V(-1,0,0)),
   makeWall('z',4.08,[[-3,-0.4,'s'],[-0.4,1.6,'w'],[1.6,3,'s']],V(1,0,0)),
 ];
+// annex: a second room to the right, opened by the last expansion
+const annexGroup=new THREE.Group();annexGroup.visible=false;world.add(annexGroup);
+{const A=new SB();A.box(4.1,.5,9.6,0x45404f,6.55,-.27,1.4).box(4.16,.06,6,0xdcd9dc,6.08,-.02,0).box(4.1,.06,3,0xb7a99a,6.55,-.02,4.7).box(4.1,.1,.18,0x7d7884,6.55,0,6.11);
+ [[6.2,-2.75],[7.7,2.7]].forEach(([x,z])=>A.box(.32,.38,.32,0xb88a5a,x,.19,z).box(.36,.5,.36,0x3a7a3a,x,.62,z).box(.24,.3,.24,0x5f9e45,x,.98,z));
+ A.build(annexGroup);tiledSurface(4,6,'#dcd9dc','#bdb9c0',6,0,annexGroup);tiledSurface(4,3,'#b7a99a','#9a8f84',6.5,4.7,annexGroup);
+ const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(6,2.4,0);annexGroup.add(light);inLights.push(light);}
+const annexWalls=[makeWall('x',-3.08,[[4.16,8.24,'s']],V(0,0,-1)),makeWall('x',3.08,[[4.16,5,'s'],[5,7.4,'w'],[7.4,8.24,'s']],V(0,0,1)),makeWall('z',8.16,[[-3,-.8,'s'],[-.8,1.2,'w'],[1.2,3,'s']],V(1,0,0))];
+annexWalls.forEach(w=>{w.off=true;walls.push(w);});
 // sign on back wall
 const signTex=canvasTex(96,16,g=>{g.fillStyle='#1d1a26';g.fillRect(0,0,96,16);g.fillStyle='#ffd98a';g.font='bold 11px monospace';g.textAlign='center';g.textBaseline='middle';g.fillText('CIEL GROUND',48,9);g.fillStyle='#e25c8f';g.fillRect(2,2,92,1);g.fillRect(2,13,92,1);});
 {const sb=new SB();sb.box(3.4,.7,.12,0x1d1a26,0,2.95,-3.08);sb.box(.08,.4,.08,0x1d1a26,-1.2,2.6,-3.08).box(.08,.4,.08,0x1d1a26,1.2,2.6,-3.08);sb.build(walls[0].full);
@@ -292,7 +300,7 @@ const recep=new Fig({skin:0xc98e66,shirt:0x8a4fc2,pants:0x1d1a26,staffHair:0x2e1
 const jr={fig:new Fig({skin:0xe7b892,shirt:0xffb15a,pants:0x2a4478,apron:0x5f9e45,staffHair:0x8f5a2e}),task:null,idle:V(3.6,0,-0.85)};jr.fig.pos.copy(jr.idle);jr.fig.yaw=Math.PI;
 const friends=[];
 const bench=[1.95,2.6,3.25].map(x=>({pos:V(x,0,2.45),yaw:Math.PI,h:.44,app:[V(x,0,1.8)],occ:null}));
-const terr=[.15,.8].map(z=>({pos:V(3.55,0,z),yaw:-Math.PI/2,h:.44,app:[V(2.9,0,z)],occ:null}));
+const terr=[1.3,1.9].map(z=>({pos:V(3.55,0,z),yaw:-Math.PI/2,h:.44,app:[V(2.9,0,z)],occ:null}));
 const DOOR_IN=V(-2,0,2.45),DOOR_OUT=V(-2,0,3.6);
 const STREET=V(4.1,0,4.7),STREET_DOOR=V(-2,0,4.4);
 const ROUTE_IN=[STREET_DOOR,DOOR_OUT,DOOR_IN];
@@ -316,13 +324,14 @@ function spawnCustomer(){
 }
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
 function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos;let pts;
-  pts=(Math.abs(p.x)<4.1&&Math.abs(p.z)<3.1)?[V(Math.min(p.x,2.9),0,Math.min(p.z,1.9)),...ROUTE_OUT]:[STREET_DOOR,STREET];
+  pts=(p.x>-4.1&&p.x<(game.layout.tier>=3?8.1:4.1)&&Math.abs(p.z)<3.1)?[V(Math.min(p.x,2.9),0,Math.min(p.z,1.9)),...ROUTE_OUT]:[STREET_DOOR,STREET];
   if(why==='full')pts=[DOOR_OUT,STREET_DOOR,STREET];
   f.walkTo(pts,()=>{c.state='gone';c.fadeOut=1;});}
 function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=c;st.state='await';st.touched=false;st.byOwner=false;st.worker=null;const f=c.fig;
   const from=f.pos.clone();let pts=[];
   pts=seat?[seat.app[0]]:[V(from.x,0,1.8)];
-  pts.push(V(st.x,0,1.8),V(st.x,0,-.9),st.chair.clone());
+  if(st.x>4)pts.push(V(2.7,0,.6),V(st.x,0,.6));else pts.push(V(st.x,0,1.8));
+  pts.push(V(st.x,0,-.9),st.chair.clone());
   f.walkTo(pts,()=>{f.mode='sit';f.pos.copy(st.chair);f.yaw=Math.PI;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);});
   if(sel===st.i)renderPanel(true);}
 function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OWNER:st.sty;if(worker===OWNER&&ownerBusy())return;if(styling&&styling.station===st)closeStyling(true);st.worker=worker;const p=st.plan,ops=[];
@@ -382,7 +391,7 @@ const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant&&x.i<game.layout.chairs)||(stations[0].sty===OWNER&&stations[0].state==='free'&&!styling?stations[0]:null);
 function syncSupport(){recep.root.visible=game.staff.find('sophie').hired;jr.fig.root.visible=game.staff.find('max').hired;}
-function syncChairs(){stationGroups.forEach((g,i)=>{g.visible=i<game.layout.chairs;});}
+function syncChairs(){stationGroups.forEach((g,i)=>{g.visible=i<game.layout.chairs;});const big=game.layout.tier>=3;annexGroup.visible=big;walls[3].off=big;annexWalls.forEach(w=>{w.off=!big;});camHome.set(big?2.05:0,.55,1.2);viewScale=big?1.3:1;}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=Math.PI;if(wasOwner)OWNER.fig.walkTo([OWNER_IDLE],()=>OWNER.fig.yaw=Math.PI);}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
 function fireStaff(e){const st=stations.find(x=>x.sty===e);if(!st||st.state!=='free'||!game.staff.fire(e))return;e.fig.root.visible=false;if(st.i===0&&!stations.some(x=>x.sty===OWNER)){st.sty=OWNER;OWNER.fig.walkTo([st.stand],()=>OWNER.fig.yaw=Math.PI);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
@@ -460,7 +469,7 @@ const FOIL={L:.8,a:-.002,b:-.006};
 function envStep(dt,t){
   poleTex.offset.y=(t*.4)%1;
   // cutaway walls facing the camera
-  const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{const front=w.n.dot(v)>.2;w.full.visible=!front;w.low.visible=front;});
+  const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{if(w.off){w.full.visible=w.low.visible=false;return;}const front=w.n.dot(v)>.2;w.full.visible=!front;w.low.visible=front;});
   // selection marker
   if(started&&typeof sel==='number'){const st=stations[sel];marker.visible=true;marker.position.set(st.x,2.35+Math.abs(Math.sin(t*3))*.15,-1.8);}else marker.visible=false;
 }
