@@ -21,12 +21,12 @@ en:{
  'len.pixie':'pixie','len.chin':'chin','len.shoulder':'shoulder','len.midback':'mid-back','len.long':'long','naturalOf':'Natural {0}',
  'style.Precise':'Precise','style.Speedy':'Speedy','style.Colourist':'Colourist',
  'time.auto':'☀ Auto','time.day':'☀ Day','time.dusk':'☀ Dusk','time.night':'☾ Night',
- 'wx.auto':'☁ Auto','wx.clear':'☀ Clear','wx.rain':'☂ Rain','ctl.auto':'Auto','ctl.lang':'한국어',
- 'tt.rotL':'Rotate left (Q)','tt.rotR':'Rotate right (E)','tt.time':'Time of day','tt.wx':'Weather','tt.spd':'Speed','tt.auto':'Stylists plan and start on their own','tt.help':'How to play','tt.lang':'Change language',
+ 'ctl.auto':'Auto','ctl.lang':'한국어',
+ 'tt.rotL':'Rotate left (Q)','tt.rotR':'Rotate right (E)','tt.time':'Time of day','tt.spd':'Speed','tt.auto':'Stylists plan and start on their own','tt.help':'How to play','tt.lang':'Change language',
  'm.sub':'Run a tiny hair salon','m.lang':'Language','m.mode':'Mode','m.auto':'Auto','m.manual':'Manual',
  'm.autoD':'Stylists plan and start on their own. Step in any time during a consult.','m.manualD':'Every client waits for you to make the plan and press Start.',
  'm.start':'▶ Start game','m.how':'How to play','m.opts':'Settings','m.back':'Back','m.resume':'Back to game',
- 'm.time':'Time','m.wx':'Weather','m.speed':'Speed','m.t.auto':'Real clock','m.t.day':'Day','m.t.dusk':'Dusk','m.t.night':'Night','m.w.auto':'Random','m.w.clear':'Clear','m.w.rain':'Rain'
+ 'm.time':'Time','m.speed':'Speed','m.t.auto':'Real clock','m.t.day':'Day','m.t.dusk':'Dusk','m.t.night':'Night',
 },
 ko:{
  'hud.stylist':'담당','hud.client':'손님','hud.stage':'단계','hud.match':'일치',
@@ -50,12 +50,12 @@ ko:{
  'len.pixie':'픽시','len.chin':'턱선','len.shoulder':'어깨선','len.midback':'등 중간','len.long':'긴 머리','naturalOf':'자연 {0}',
  'style.Precise':'정밀파','style.Speedy':'스피드파','style.Colourist':'컬러리스트',
  'time.auto':'☀ 자동','time.day':'☀ 낮','time.dusk':'☀ 저녁','time.night':'☾ 밤',
- 'wx.auto':'☁ 자동','wx.clear':'☀ 맑음','wx.rain':'☂ 비','ctl.auto':'자동','ctl.lang':'EN',
- 'tt.rotL':'왼쪽으로 회전 (Q)','tt.rotR':'오른쪽으로 회전 (E)','tt.time':'시간대','tt.wx':'날씨','tt.spd':'속도','tt.auto':'스타일리스트가 알아서 플랜을 짜고 시작','tt.help':'게임 방법','tt.lang':'언어 변경',
+ 'ctl.auto':'자동','ctl.lang':'EN',
+ 'tt.rotL':'왼쪽으로 회전 (Q)','tt.rotR':'오른쪽으로 회전 (E)','tt.time':'시간대','tt.spd':'속도','tt.auto':'스타일리스트가 알아서 플랜을 짜고 시작','tt.help':'게임 방법','tt.lang':'언어 변경',
  'm.sub':'작은 미용실을 운영해 보세요','m.lang':'언어','m.mode':'모드','m.auto':'자동','m.manual':'직접',
  'm.autoD':'스타일리스트가 알아서 플랜을 짜고 시작해요. 상담 중에 언제든 끼어들 수 있어요.','m.manualD':'손님마다 직접 플랜을 짜고 시작 버튼을 눌러야 해요.',
  'm.start':'▶ 게임 시작','m.how':'게임 방법','m.opts':'설정','m.back':'뒤로','m.resume':'게임으로 돌아가기',
- 'm.time':'시간대','m.wx':'날씨','m.speed':'속도','m.t.auto':'실제 시각','m.t.day':'낮','m.t.dusk':'저녁','m.t.night':'밤','m.w.auto':'랜덤','m.w.clear':'맑음','m.w.rain':'비'
+ 'm.time':'시간대','m.speed':'속도','m.t.auto':'실제 시각','m.t.day':'낮','m.t.dusk':'저녁','m.t.night':'밤',
 }};
 
 export const NAME_KO={Lia:'리아',Vacant:'공석',Ava:'에이바',Leo:'레오',Mina:'미나',Oscar:'오스카',Hana:'하나',Theo:'테오',Zara:'자라',Kai:'카이',Ruby:'루비',Jae:'재',Nora:'노라',Ivy:'아이비',Sam:'샘',Lena:'레나',Omar:'오마르',Yuna:'유나',Felix:'펠릭스',Maya:'마야',Eli:'일라이',Sora:'소라',Priya:'프리야',Tom:'톰',Isla:'아일라',Ben:'벤',Ari:'아리',June:'쥰',Noah:'노아',Chloe:'클로이',Mia:'미아',Jun:'준',Rosa:'로사'};
