@@ -152,12 +152,20 @@ addWall(t=>t>=1,'z',-4.08,[[-5.16,-3,'s']],V(-1,0,0));
 addWall(t=>t===1,'z',4.08,[[-5.16,-3,'s']],V(1,0,0));
 // size 3: the whole shop next door, front to back
 addWall(t=>t>=2,'x',3.08,[[4.16,5,'s'],[5,7.4,'w'],[7.4,8.24,'s']],V(0,0,1));
-addWall(t=>t>=2,'z',8.16,[[-5.16,-3.6,'s'],[-3.6,-1.8,'w'],[-1.8,-.8,'s'],[-.8,1.2,'w'],[1.2,3,'s']],V(1,0,0));
+addWall(t=>t===2||t===3,'z',8.16,[[-5.16,-3.6,'s'],[-3.6,-1.8,'w'],[-1.8,-.8,'s'],[-.8,1.2,'w'],[1.2,3,'s']],V(1,0,0));
 addWall(t=>t===2,'x',-5.08,[[4.16,8.24,'s']],V(0,0,-1));
 // size 4: a deeper room across the whole back
-const rearWall=addWall(t=>t>=3,'x',-7.08,[[-4.16,8.24,'s']],V(0,0,-1));
+const rearWall=addWall(t=>t===3||t===4,'x',-7.08,[[-4.16,8.24,'s']],V(0,0,-1));
 addWall(t=>t>=3,'z',-4.08,[[-7.16,-5,'s']],V(-1,0,0));
-addWall(t=>t>=3,'z',8.16,[[-7.16,-5,'s']],V(1,0,0));
+addWall(t=>t===3,'z',8.16,[[-7.16,-5,'s']],V(1,0,0));
+// size 5: another shop next door, front to back
+addWall(t=>t>=4,'x',3.08,[[8.16,9,'s'],[9,11.4,'w'],[11.4,12.24,'s']],V(0,0,1));
+addWall(t=>t>=4,'z',12.16,[[-7.16,-5.2,'s'],[-5.2,-3.2,'w'],[-3.2,-1,'s'],[-1,1,'w'],[1,3,'s']],V(1,0,0));
+addWall(t=>t===4,'x',-7.08,[[8.16,12.24,'s']],V(0,0,-1));
+// size 6: the whole back, deeper again
+const rear2Wall=addWall(t=>t>=5,'x',-9.08,[[-4.16,12.24,'s']],V(0,0,-1));
+addWall(t=>t>=5,'z',-4.08,[[-9.16,-7,'s']],V(-1,0,0));
+addWall(t=>t>=5,'z',12.16,[[-9.16,-7,'s']],V(1,0,0));
 /** Floor, slab and a ceiling light for an area that opens with an expansion. */
 function zoneGroup(slab,floor,light){const g=new THREE.Group();g.visible=false;world.add(g);const A=new SB();A.box(...slab,0x45404f,slab[3],-.27,slab[4]);A.box(floor[0],.06,floor[1],0xdcd9dc,floor[2],-.02,floor[3]);A.build(g);
   salonFloor(floor[0],floor[1],floor[2],floor[3],g);const l=new THREE.PointLight(0xffd98a,0,8,1.5);l.position.set(light[0],2.4,light[1]);g.add(l);inLights.push(l);return g;}
@@ -165,11 +173,14 @@ const backGroup=zoneGroup([9,.5,2.4,0,-4.1],[8,2,0,-4],[0,-4]);
 const annexGroup=zoneGroup([4.1,.5,11.6,6.55,.4],[4,8,6,-1],[6,-1]);
 {const A=new SB();A.box(4.1,.06,3,0xb7a99a,6.55,-.02,4.7).box(4.1,.1,.18,0x7d7884,6.55,0,6.11);A.build(annexGroup);tiledSurface(4,3,'#b7a99a','#9a8f84',6.5,4.7,annexGroup);}
 const rearGroup=zoneGroup([13.1,.5,2.4,2.05,-6.1],[12,2,2,-6],[2,-6]);
+const annex2Group=zoneGroup([4.1,.5,13.6,10.55,-.6],[4,10,10,-2],[10,-2]);
+{const A=new SB();A.box(4.1,.06,3,0xb7a99a,10.55,-.02,4.7).box(4.1,.1,.18,0x7d7884,10.55,0,6.11);A.build(annex2Group);tiledSurface(4,3,'#b7a99a','#9a8f84',10.5,4.7,annex2Group);}
+const rear2Group=zoneGroup([17.1,.5,2.4,4.05,-8.1],[16,2,4,-8],[4,-8]);
 // sign on the back wall, moved back with the wall when the shop grows
 const signTex=canvasTex(140,22,g=>paintSign(g,140,22,'CIEL GROUND'));
 function mountSign(wall,z,x=0){const sb=new SB();sb.box(4.5,.82,.12,0xf6f3ee,x,2.95,z);sb.box(.08,.4,.08,TRIM,x-1.8,2.6,z).box(.08,.4,.08,TRIM,x+1.8,2.6,z);sb.build(wall.full);
   const p=new THREE.Mesh(new THREE.PlaneGeometry(4.4,.69),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(x,2.95,z+.07);wall.full.add(p);}
-mountSign(walls[0],-3.08);mountSign(backWall,-5.08);mountSign(rearWall,-7.08,2);
+mountSign(walls[0],-3.08);mountSign(backWall,-5.08);mountSign(rearWall,-7.08,2);mountSign(rear2Wall,-9.08,4);
 // storefront sign above the window, white with black lettering like the real shop
 {const sb=new SB();sb.box(3.4,.5,.1,0xf6f3ee,1.4,2.36,3.21);sb.build(walls[1].full);const p=new THREE.Mesh(new THREE.PlaneGeometry(3.3,.42),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(1.4,2.36,3.27);walls[1].full.add(p);}
 // clock
@@ -339,7 +350,7 @@ function spawnCustomer(){
 }
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
 function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos;let pts;
-  pts=(p.x>-4.1&&p.x<(game.layout.tier>=2?8.1:4.1)&&p.z<3.1&&p.z>(game.layout.tier>=3?-7.1:game.layout.tier>=1?-5.1:-3.1))?[...route(p,DOOR_IN),DOOR_OUT,STREET_DOOR,STREET]:[STREET_DOOR,STREET];
+  pts=(p.x>-4.1&&p.x<(game.layout.tier>=4?12.1:game.layout.tier>=2?8.1:4.1)&&p.z<3.1&&p.z>(game.layout.tier>=5?-9.1:game.layout.tier>=3?-7.1:game.layout.tier>=1?-5.1:-3.1))?[...route(p,DOOR_IN),DOOR_OUT,STREET_DOOR,STREET]:[STREET_DOOR,STREET];
   if(why==='full')pts=[DOOR_OUT,STREET_DOOR,STREET];
   f.walkTo(pts,()=>{c.state='gone';c.fadeOut=1;});}
 function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=c;st.state='await';st.touched=false;st.byOwner=false;st.worker=null;const f=c.fig;
@@ -359,7 +370,7 @@ const washerOf=T=>T.h?T.h.fig:T.st.sty.fig;
 function updateWashes(dt){for(const T of washes.slice()){if(!T.ready||!T.seated)continue;const f=washerOf(T);T.t-=dt;
   const hp=T.c.fig.head.getWorldPosition(V()),k=Math.sin(simT*9)*.06;f.handR=hp.clone().add(V(k,.06,0));f.handL=hp.clone().add(V(-k,.04,.05));if(T.t<=0)endWash(T);}}
 function endWash(T){const i=washes.indexOf(T);if(i<0)return;washes.splice(i,1);const f=washerOf(T);f.handL=f.handR=null;if(T.h)T.h.task=null;else T.st.washing=null;
-  T.b.client=null;T.c.fig.tilt=0;T.c.washed=true;T.c.inWash=false;T.then();}
+  if(T.b.item.id==='spaBooth')T.c.spa=true;T.b.client=null;T.c.fig.tilt=0;T.c.washed=true;T.c.inWash=false;T.then();}
 function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OWNER:st.sty;if(worker===OWNER&&ownerBusy())return;if(styling&&styling.station===st)closeStyling(true);st.worker=worker;const p=st.plan,ops=[];
   if(hasColour(p))ops.push({type:'colour',dur:13});
   if(p.doWave&&Math.abs(p.wave-st.cust.hair.wave)>.05)ops.push({type:'wave',dur:10});
@@ -416,7 +427,7 @@ function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,...hel
 /* sweeping: assistants keep the floor clean; without them Lia does it between clients */
 const landedClips=()=>clips.filter(c=>c.alive&&c.landed);
 function startSweep(fig){const landed=landedClips();if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
-  const at=a.clone().add(V(.5,0,.45));at.x=clamp(at.x,-3.6,t>=2?7.6:3.6);at.z=clamp(at.z,t>=3?-6.6:t>=1?-4.6:-2.6,2.6);
+  const at=a.clone().add(V(.5,0,.45));at.x=clamp(at.x,-3.6,t>=4?11.6:t>=2?7.6:3.6);at.z=clamp(at.z,t>=5?-8.6:t>=3?-6.6:t>=1?-4.6:-2.6,2.6);
   const job={kind:'sweep',phase:'walk',fig,aim:a,t:3.2};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
 /** Advances a sweeping job; true once the patch of floor is clean. */
 function updateSweep(job,dt){if(job.phase!=='work')return false;const f=job.fig,a=job.aim;job.t-=dt;f.toolAim=V(a.x+Math.sin(simT*5)*.35,0,a.z+Math.cos(simT*2.5)*.12);
@@ -435,8 +446,8 @@ const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
 function syncSupport(){recep.root.visible=game.staff.receptionist.hired;helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
-const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.2,1.38],[2,-.8,1.55]];
-function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site<0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
+const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.2,1.38],[2,-.8,1.55],[4,-.8,1.8],[4,-1.8,1.95]];
+function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;annex2Group.visible=t>=4;rear2Group.visible=t>=5;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site<0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
 function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='free')return;if(!game.staff.fire(e))return;e.fig.root.visible=false;if(st)vacate(st);}
@@ -459,7 +470,7 @@ function syncStations(){const items=game.layout.items.filter(it=>FURNITURE[it.id
   stations.forEach((s,i)=>{s.i=i;});}
 let deskInfo=null;
 // Where people stand and sit at a shampoo booth (or an older basin), in the item's own frame.
-const BOOTH_ANCHORS={shampooBooth:{seat:[0,.12],seatApp:[0,1.05],face:[0,1],washAt:[.42,-.2],washFace:[-1,0],idle:[.45,1.15]},
+const BOOTH_ANCHORS={shampooBooth:{seat:[0,.12],seatApp:[0,1.05],face:[0,1],washAt:[.42,-.2],washFace:[-1,0],idle:[.45,1.15]},spaBooth:{seat:[0,.12],seatApp:[0,1.05],face:[0,1],washAt:[.42,-.2],washFace:[-1,0],idle:[.45,1.15]},
   basin:{seat:[-.45,-.1],seatApp:[-.45,.75],face:[-1,0],washAt:[.05,.5],washFace:[0,-1],idle:[.1,.75]}};
 function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z);return V(p.x,0,p.z);},dir=(it,x,z)=>{const a=L.toWorld(it,0,0),b=L.toWorld(it,x,z);return Math.atan2(b.x-a.x,b.z-a.z);},desk=L.items.find(it=>it.id==='desk');
   if(desk){const yaw=desk.rotation*Math.PI/2;deskInfo={seat:w(desk,0,-.1),seatYaw:yaw,pay:w(desk,0,1.15),payYaw:yaw+Math.PI};recep.pos.copy(deskInfo.seat);recep.yaw=yaw;}
@@ -531,7 +542,7 @@ function simStep(dt){simT+=dt;
     if(st.vacant)return;
     if(st.sweep){if(updateSweep(st.sweep,dt))st.sweep=null;}
     else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
-    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen||st.sweep||st.filming||pendingMoves.has(st.item)||(booths.length&&!freeBooth()))return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),c=waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)assign(st,c);}
+    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen||st.sweep||st.filming||pendingMoves.has(st.item)||(booths.length&&!freeBooth()))return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),vipRoom=st.item.id==='vipRoom',c=(vipRoom&&queue.find(q=>q.state==='wait'&&q.vip))||waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep&&!st.filming){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);

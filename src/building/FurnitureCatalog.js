@@ -22,7 +22,13 @@ export const FURNITURE = {
   shelf: { price: 250, comfort: 1, dailySales: 30 },
   dryer: { price: 300, comfort: 1, w: 2, d: 2 },
   // A shampoo booth: basin, reclining chair and oak screens. Clients are washed here before their chair.
-  shampooBooth: { price: 900, comfort: 2, w: 3, d: 3, max: 3, needs: [[0, 1]] },
+  shampooBooth: { price: 900, comfort: 2, w: 3, d: 3, max: [3, 3, 3, 4, 5, 6], needs: [[0, 1]] },
+  // Pieces that open as the salon grows (`minTier` is the salon size).
+  spaBooth: { price: 1600, comfort: 2, w: 3, d: 3, minTier: 1, max: [0, 1, 1, 2, 2, 3], needs: [[0, 1]] },
+  vipRoom: { price: 2200, comfort: 2, w: 4, d: 3, minTier: 2, max: [0, 0, 1, 1, 2, 2], needs: [[0, 1]], chairs: [[0, 0, 0]] },
+  photoZone: { price: 900, comfort: 1, w: 2, d: 2, minTier: 2, max: 1, needs: [[0, .75]] },
+  academy: { price: 2500, comfort: 0, w: 3, d: 2, minTier: 3, max: 1, needs: [[0, .75]] },
+  cafeBar: { price: 3000, comfort: 2, w: 3, d: 1, minTier: 4, max: 1, dailySales: 80, needs: [[0, .6]] },
   // Older pieces, kept so earlier saves still load; no longer sold.
   basin: { price: 600, comfort: 1, w: 2, d: 2, needs: [[.25, .75], [-.45, .75]], legacy: true },
   shampoo: { price: 800, comfort: 1, speedBonus: .1, legacy: true },
@@ -36,4 +42,4 @@ export const SEAT_APPROACH = .5;
 export const FURNITURE_IDS = Object.keys(FURNITURE).filter(id => id !== 'station' && id !== 'desk' && !FURNITURE[id].legacy);
 export const CHAIR_PRICE = FURNITURE.station.price;
 export const chairsOn = id => FURNITURE[id].chairs ? FURNITURE[id].chairs.length : 0;
-export const EXPANSIONS = [{ cost: 2000, requires: 'chairs' }, { cost: 5500, requires: 'expansion' }, { cost: 11000, requires: 'annex' }];
+export const EXPANSIONS = [{ cost: 2000, requires: 'chairs' }, { cost: 5500, requires: 'expansion' }, { cost: 11000, requires: 'annex' }, { cost: 18000, requires: 'branches' }, { cost: 28000, requires: 'branches' }];
