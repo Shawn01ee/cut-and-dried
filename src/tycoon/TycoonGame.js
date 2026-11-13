@@ -60,6 +60,10 @@ export class TycoonGame {
     return Math.max(1, Math.round(base * PRICE_DEMAND[this.priceLevel] * this.marketing.demandMultiplier * this.reviews.demandMultiplier * (1 - this.rival.pull(this.standing))));
   }
   /** How Ciel Ground looks from outside, for the rival to react to. */
+  /** What Daniel thinks the salon is worth. */
+  get valuation() { return this.finance.valuation({ reputation: this.reputation.value, followers: this.marketing.followers, chairs: this.layout.chairs, branches: this.franchise.branches.filter(b => b.open).length }); }
+  investIn(i) { return this.finance.takeInvestment(i, this.progression.level, this.valuation, this.clock.day); }
+  buyBackStake() { return this.finance.buyBack(this.valuation); }
   get standing() { return { rating: this.reviews.count ? this.reviews.rating : 0, followers: this.marketing.followers, priceLevel: this.priceLevel }; }
   /** How well the front desk runs marketing: Ruby's marketing skill, or Lia doing it herself without her. */
   get marketingPower() { const r = this.staff.receptionist; return r.hired ? .75 + (r.skills.marketing || 0) / 200 : .5; }
@@ -162,7 +166,8 @@ export class TycoonGame {
     if (sales) e.earn('products', sales); if (branches) e.earn('branches', branches);
     this.operatingCosts.accrue(1); this.#autoReply();
     this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours);
-    this.finance.closeDay(e.dailyProfit);
+    const money = this.finance.closeDay(e.dailyProfit, e.dailyRevenue, this.clock.day);
+    if (money.news) this.news.push('fin:' + money.news);
     // An academy gives everyone a daily lesson.
     const lesson = this.has('academy') ? 15 : 5;
     [this.staff.owner, ...this.staff.working(this.clock.day)].forEach(e => { if (e.gainExperience(lesson)) this.bus.emit('staff:levelup', e); });
