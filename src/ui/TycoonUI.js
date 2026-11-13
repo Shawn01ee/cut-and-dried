@@ -1,5 +1,5 @@
 import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS } from '../building/FurnitureCatalog.js';
-import { hexCss } from '../rendering/color.js';
+import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION } from '../employees/Employee.js';
 import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/StaffManager.js';
 import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS } from '../tycoon/Marketing.js';
@@ -10,8 +10,6 @@ import { INVESTMENTS, LOANS } from '../tycoon/Finance.js';
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 const RANK_ORDER = { master: 0, senior: 1, designer: 2, junior: 3 };
 const level = v => v >= 70 ? 'bad' : v >= 40 ? 'gold' : 'good';
-/** A name colour that reads on the dark panel: masters in gold, dark aprons lightened. */
-const nameColour = e => { if (e.rank === 'master') return '#ffd98a'; const h = e.apron, r = h >> 16 & 255, g = h >> 8 & 255, b = h & 255, lum = (.299 * r + .587 * g + .114 * b) / 255; if (lum >= .45) return hexCss(h); const k = .55; return `rgb(${Math.round(r + (255 - r) * k)},${Math.round(g + (255 - g) * k)},${Math.round(b + (255 - b) * k)})`; };
 
 /** Renders the Staff, Build, Business, Promo, Reviews and Growth pages and routes their button presses. */
 export class TycoonUI {
@@ -45,13 +43,13 @@ export class TycoonUI {
       : e.hired ? `${t('staff.pay', e.level, e.salary, Math.round(e.fatigue), e.experience, e.experienceToNext)} · <span class="${level(e.stress)}">${t('staff.stress', Math.round(e.stress))}</span> ${this.#status(e)}` : t('staff.wage', e.salary);
     const times = `<br>${t('staff.times', e.serviceMinutes('cut', g.layout.speedBonus), e.serviceMinutes('colour', g.layout.speedBonus), e.serviceMinutes('wave', g.layout.speedBonus), e.serviceMinutes('dry', g.layout.speedBonus))}`;
     const r = g.reviews.ratingFor(e.name), perf = e.hired ? `<br>${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
-    return `<div class="brow"><b style="color:${nameColour(e)}">${this.i18n.name(e.name)}</b><span class="dim">${t('role.' + e.role)}</span><span class="sp"></span>${actions}</div><div class="dim">${t('staff.skills', s.cutting, s.colouring, s.perming, s.speed, s.customerService)}${e.specialty ? `<br><span class="gold">${t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100))}</span>` : owner ? `<br><span class="gold">${t('staff.allround')}</span>` : ''}${e.perk ? `<br><span class="good">${t('perk.' + e.perk)}</span>` : ''}${times}<br>${info}${perf}</div>`;
+    return `<div class="brow"><b style="color:${nameColour(e)}">${rankMark(e)}${this.i18n.name(e.name)}</b>${RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`}<span class="sp"></span>${actions}</div><div class="dim">${t('staff.skills', s.cutting, s.colouring, s.perming, s.speed, s.customerService)}${e.specialty ? `<br><span class="gold">${t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100))}</span>` : owner ? `<br><span class="gold">${t('staff.allround')}</span>` : ''}${e.perk ? `<br><span class="good">${t('perk.' + e.perk)}</span>` : ''}${times}<br>${info}${perf}</div>`;
   }
   #supportRow(e) {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, desk = e.effect === 'reception';
     const course = desk && e.hired ? `<button data-do="mtrain:${e.id}" ${(e.skills.marketing || 0) >= 100 || !g.economy.canAfford(g.staff.marketingCourseCost(e)) ? 'disabled' : ''}>${t('staff.mcourse', g.staff.marketingCourseCost(e))}</button>` : '';
     const action = e.hired ? `${course}<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : `<button class="go" data-do="shire:${e.id}" ${!g.economy.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
-    return `<div class="brow"><b style="color:${nameColour(e)}">${this.i18n.name(e.name)}</b><span class="dim">${t('role.' + e.role)}</span><span class="sp"></span>${action}</div><div class="dim">${t('support.' + e.id)}${desk ? '<br>' + t('staff.marketing', e.skills.marketing || 0) : ''}<br>${t('staff.wage', e.salary)}</div>`;
+    return `<div class="brow"><b style="color:${nameColour(e)}">${rankMark(e)}${this.i18n.name(e.name)}</b>${RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`}<span class="sp"></span>${action}</div><div class="dim">${t('support.' + e.id)}${desk ? '<br>' + t('staff.marketing', e.skills.marketing || 0) : ''}<br>${t('staff.wage', e.salary)}</div>`;
   }
   #staff() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff;
@@ -83,7 +81,7 @@ export class TycoonUI {
     <div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>
     <div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}
     <div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>${branches}
-    <div class="bsec"><h4>${t('biz.ladder')}</h4><table class="lad"><tr><th>#</th><th>${t('lad.stylist')}</th><th>${t('lad.done')}</th><th>${t('lad.avg')}</th><th>${t('lad.rating')}</th><th>${t('lad.today')}</th><th>${t('lad.earn')}</th></tr>${rows.map((s, i) => `<tr><td>${i + 1}</td><td style="color:${nameColour(s)}">${this.i18n.name(s.name)}</td><td>${s.stats.served}</td><td>${s.stats.served ? Math.round(s.stats.sum / s.stats.served * 100) + '%' : '–'}</td><td>${rated(s)}</td><td>$${s.today.earn.toLocaleString()}</td><td>$${s.stats.earn.toLocaleString()}</td></tr>`).join('')}</table></div>`;
+    <div class="bsec"><h4>${t('biz.ladder')}</h4><table class="lad"><tr><th>#</th><th>${t('lad.stylist')}</th><th>${t('lad.done')}</th><th>${t('lad.avg')}</th><th>${t('lad.rating')}</th><th>${t('lad.today')}</th><th>${t('lad.earn')}</th></tr>${rows.map((s, i) => `<tr><td>${i + 1}</td><td style="color:${nameColour(s)}">${rankMark(s)}${this.i18n.name(s.name)}</td><td>${s.stats.served}</td><td>${s.stats.served ? Math.round(s.stats.sum / s.stats.served * 100) + '%' : '–'}</td><td>${rated(s)}</td><td>$${s.today.earn.toLocaleString()}</td><td>$${s.stats.earn.toLocaleString()}</td></tr>`).join('')}</table></div>`;
   }
   /** Steppers for tomorrow's opening and closing hours. */
   #hours() {
