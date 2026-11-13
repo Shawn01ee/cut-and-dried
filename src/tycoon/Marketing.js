@@ -6,14 +6,17 @@ export const CAMPAIGNS = {
   instaAd: { cost: 320, days: 3, demand: .35, followers: [60, 130] },
 };
 /**
- * Social channels. Each post costs a little, can go out every `cooldown` days and turns views into followers.
- * TikTok is a gamble, YouTube is slow and steady and keeps people talking for a few days.
+ * Social channels. A post costs money and `film` seconds of someone's time, can go out every `cooldown` days,
+ * always brings at least `minGain` followers and a short `buzz`, and sometimes far more.
+ * TikTok is a gamble, YouTube is slow and steady and keeps people talking for days.
  */
 export const CHANNELS = {
-  instagram: { cost: 40, cooldown: 1, base: 200, perFollower: 1.2, spread: [.6, 1.5], viral: [.03, .1], convert: [.025, .05] },
-  tiktok: { cost: 30, cooldown: 1, base: 120, perFollower: 2, spread: [.3, 2.2], viral: [.06, .14], convert: [.012, .03] },
-  youtube: { cost: 150, cooldown: 3, base: 60, perFollower: .8, spread: [.8, 1.25], viral: [.01, .03], convert: [.06, .1], buzz: { days: 4, demand: .12 }, unlock: 'youtube' },
+  instagram: { cost: 40, film: 8, cooldown: 1, base: 200, perFollower: 1.2, spread: [.6, 1.5], viral: [.03, .1], convert: [.025, .05], minGain: 10, buzz: { days: 1, demand: .08 } },
+  tiktok: { cost: 30, film: 6, cooldown: 1, base: 120, perFollower: 2, spread: [.3, 2.2], viral: [.06, .14], convert: [.012, .03], minGain: 3, buzz: { days: 1, demand: .05 } },
+  youtube: { cost: 150, film: 20, cooldown: 3, base: 60, perFollower: .8, spread: [.8, 1.25], viral: [.01, .03], convert: [.06, .1], minGain: 20, buzz: { days: 4, demand: .12 }, unlock: 'youtube' },
 };
+/** An influencer wants a fee on top of the free service. */
+export const INFLUENCER_FEE = 400;
 const VIRAL = { days: 2, demand: .5 }, INFLUENCER = { days: 3, demand: .45 };
 const START_FOLLOWERS = { instagram: 150, tiktok: 0, youtube: 0 };
 
@@ -54,15 +57,15 @@ export class Marketing {
     const q = clamp(quality * power), viral = Math.random() < def.viral[0] + q * def.viral[1];
     let views = Math.round((def.base + ch.followers * def.perFollower) * (.3 + q) * rand(...def.spread));
     if (viral) { views = Math.round(views * rand(8, 15)); this.#boost('viral', VIRAL.days, VIRAL.demand); }
-    if (def.buzz) this.#boost(id, def.buzz.days, def.buzz.demand * power);
-    const gained = Math.round(views * rand(...def.convert));
+    this.#boost(id, def.buzz.days, def.buzz.demand * power);
+    const gained = Math.max(def.minGain, Math.round(views * rand(...def.convert)));
     ch.lastDay = day; this.#gain(id, gained);
     ch.last = { day, views, gained, viral };
     return { channel: id, ...ch.last };
   }
 
-  canBookInfluencer(day) { return !this.influencerBooked && this.influencerDay !== day; }
-  bookInfluencer(day) { if (!this.canBookInfluencer(day)) return false; this.influencerBooked = true; this.influencerDay = day; this.version++; return true; }
+  canBookInfluencer(day) { return !this.influencerBooked && this.influencerDay !== day && this.economy.canAfford(INFLUENCER_FEE); }
+  bookInfluencer(day) { if (!this.canBookInfluencer(day) || !this.economy.spend('marketing', INFLUENCER_FEE)) return false; this.influencerBooked = true; this.influencerDay = day; this.version++; return true; }
   /** The booked influencer turns up as the next walk-in. */
   takeInfluencer() { if (!this.influencerBooked) return null; this.influencerBooked = false; this.version++; return { followers: Math.round(rand(5, 40)) * 1000 }; }
   /** How the influencer's post landed. Returns the change in followers. */

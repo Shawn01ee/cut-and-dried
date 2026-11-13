@@ -23,6 +23,8 @@ const MATERIALS = { colour: 18, wave: 14 }, CARD_FEE = .016;
 export const STARTING_CASH = 2000;
 // Earlier saves used these ids for the stylist now called Shawn.
 const LEGACY_IDS = { jun: 'shawn', sean: 'shawn', sophie: 'ruby', max: 'hugo' };
+/** Opening hours the owner can choose; changes apply from the next morning. */
+export const HOURS = [[11, 17], [10, 18], [10, 20], [9, 19], [9, 21]];
 const blankIncidents = () => ({ refunds: 0, discounts: 0, dashed: 0 });
 
 /** Composition root of the business simulation. Knows nothing about Three.js. */
@@ -36,7 +38,7 @@ export class TycoonGame {
     this.staff = new StaffManager(this.economy);
     this.layout = new SalonLayout(); this.layout.resetToDefault();
     this.franchise = new Franchise(this.economy);
-    this.operatingCosts = new OperatingCosts(this.economy, this.staff, this.layout, this.progression);
+    this.operatingCosts = new OperatingCosts(this.economy, this.staff, this.layout, this.progression, this.clock);
     this.marketing = new Marketing(this.economy);
     this.reviews = new ReviewBoard();
     this.hospitality = new Hospitality(this.economy, this.layout);
@@ -48,7 +50,7 @@ export class TycoonGame {
     this.priceLevel = 1; this.served = 0; this.servedToday = 0; this.satisfactionSum = 0; this.lastSatisfaction = 0;
     this.repAtDayStart = 0; this.followersAtDayStart = 0; this.incidents = blankIncidents(); this.trollAt = null; this.report = null;
     // Regular clients come back on their own; stylists who want to quit and rival news wait for the morning.
-    this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0;
+    this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null;
   }
   get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned }; }
   /** Roughly how many clients want to come today. There is no cap: seats and chairs decide how many can be served. */
@@ -70,7 +72,9 @@ export class TycoonGame {
   get trollChance() { return this.progression.level < 2 ? 0 : Math.min(.45, .12 + this.marketing.followers / 4000); }
   updateProgress() { this.progression.update(this.context); }
   isUnlocked(feature) { return this.progression.isUnlocked(feature); }
-  nextArrival() { return rand(.8, 1.2) * this.clock.dayLength / this.dailyDemand; }
+  /** Clients arrive at the same rate whatever the hours, so a longer day brings more of them. `dailyDemand` is per eight hours. */
+  nextArrival() { return rand(.8, 1.2) * this.clock.hourLength * 8 / this.dailyDemand; }
+  setHours(open, close) { this.nextHours = open === this.clock.openHour && close === this.clock.closeHour ? null : [open, close]; }
   /** A client for the main salon. Branch clients (`walkIn` false) are never influencers or difficult clients. */
   newCustomer(usedNames, walkIn = true) {
     const influencer = walkIn ? this.marketing.takeInfluencer() : null;
@@ -130,6 +134,7 @@ export class TycoonGame {
     if (this.trollAt != null && this.clock.elapsed >= this.trollAt) { this.trollAt = null; this.#post(this.reviews.troll(this.clock.day)); }
   }
   startDay() {
+    if (this.nextHours) { this.clock.setHours(...this.nextHours); this.nextHours = null; }
     this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day); this.marketing.startDay();
     const move = this.rival.startDay(this.clock.day, this.standing);
     if (move) this.news.push(move);
@@ -144,7 +149,7 @@ export class TycoonGame {
     const e = this.economy, sales = this.layout.dailySales, branches = this.franchise.collectDay();
     if (sales) e.earn('products', sales); if (branches) e.earn('branches', branches);
     this.operatingCosts.accrue(1);
-    this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate);
+    this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours);
     this.finance.closeDay(e.dailyProfit);
     [this.staff.owner, ...this.staff.working(this.clock.day)].forEach(e => { if (e.gainExperience(5)) this.bus.emit('staff:levelup', e); });
     const reviews = this.reviews.today(this.clock.day);
@@ -157,7 +162,7 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, franchise: this.franchise, marketing: this.marketing, reviews: this.reviews, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff };
+    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, franchise: this.franchise, marketing: this.marketing, reviews: this.reviews, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] };
   }
   restore(d) {
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
@@ -167,5 +172,6 @@ export class TycoonGame {
     this.layout.restore(d.layout);
     this.marketing.restore(d.marketing); this.reviews.restore(d.reviews); this.hospitality.restore(d.hospitality);
     this.finance.restore(d.finance); this.rival.restore(d.rival); this.regulars = d.regulars || 0; this.staff.restore(d.staffPolicy);
+    if (d.hours) this.clock.setHours(...d.hours);
   }
 }
