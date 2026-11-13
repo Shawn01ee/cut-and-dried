@@ -15,7 +15,8 @@ import { TycoonUI } from './ui/TycoonUI.js';
 import { BranchScene } from './rendering/BranchScene.js';
 import { NavGrid } from './building/NavGrid.js';
 import { paintSign } from './rendering/pixelFont.js';
-import { DEFAULT_LAYOUT, EXTRA_STATIONS } from './building/SalonLayout.js';
+import { DEFAULT_LAYOUT, EXTRA_STATIONS, INNER_WALLS } from './building/SalonLayout.js';
+import { FURNITURE } from './building/FurnitureCatalog.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { IncidentCard } from './ui/IncidentCard.js';
 
@@ -106,7 +107,11 @@ S.box(8,.06,6,0xdcd9dc,0,-.02,0);
 /** A flat tiled surface drawn as a pixel texture, so joints stay crisp one-pixel lines. */
 function tiledSurface(w,d,fill,joint,x,z,parent=world){const P=16,tex=canvasTex(w*P,d*P,g=>{g.fillStyle=fill;g.fillRect(0,0,w*P,d*P);g.fillStyle=joint;for(let i=0;i<=w;i++)g.fillRect(Math.min(i*P,w*P-1),0,1,d*P);for(let j=0;j<=d;j++)g.fillRect(0,Math.min(j*P,d*P-1),w*P,1);});
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;parent.add(m);return m;}
-tiledSurface(8,6,'#dcd9dc','#bdb9c0',0,0);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7);
+/** Grey terrazzo: a speckled pixel texture, the same pattern every time. */
+function terrazzo(w,d,x,z,parent=world){const P=16;let seed=Math.round((x+20)*131+(z+20)*71);const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+  const tex=canvasTex(w*P,d*P,g=>{g.fillStyle='#bdb9c0';g.fillRect(0,0,w*P,d*P);const dots=['#9c98a2','#dcd9dc','#7d7884'];for(let i=0;i<w*d*16;i++){g.fillStyle=dots[Math.floor(rnd()*3)];g.fillRect(Math.floor(rnd()*w*P),Math.floor(rnd()*d*P),1,1);}});
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;parent.add(m);return m;}
+terrazzo(8,6,0,0);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7);
 // lamp posts
 [[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{S.box(.14,3.3,.14,0x1d1a26,x,1.65,z).box(.3,.08,.3,0x1d1a26,x,3.32,z);});
 // clock post and barber pole base
@@ -118,42 +123,60 @@ const salonMesh=S.build();
 [[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{const m=new THREE.Mesh(BOX,LAMP);m.scale.set(.22,.12,.22);m.position.set(x,3.22,z);world.add(m);extras.push(m);});
 
 /* walls with cutaway */
-const WALLC=0xf1dfae,SKIRT=0x8a6040;
+// Greige plaster walls, steel window frames and a warm cove light along the top, after the real Ciel Ground.
+const WALLC=0xdcd9dc,SKIRT=0x45404f,TRIM=0x7d7884;
 function makeWall(along,c,segs,n){
   const full=new SB(),low=new SB(),glass=[];
   segs.forEach(([a,b,t])=>{const L=b-a,m=(a+b)/2;
     const put=(sb,y0,y1,col,th=.16)=>{const h=y1-y0;if(along==='x')sb.box(L,h,th,col,m,y0+h/2,c);else sb.box(th,h,L,col,c,y0+h/2,m);};
     if(t==='s'){put(full,0,2.6,WALLC);put(low,0,.32,WALLC);}
-    if(t==='w'){put(full,0,.85,WALLC);put(full,2.15,2.6,WALLC);put(full,.82,.88,0x5e3d24,.2);put(full,2.12,2.18,0x5e3d24,.2);put(low,0,.32,WALLC);glass.push([L,m]);}
-    if(t==='d'){put(full,2.25,2.6,WALLC);put(full,2.22,2.27,0x5e3d24,.2);}
+    if(t==='w'){put(full,0,.85,WALLC);put(full,2.15,2.6,WALLC);put(full,.82,.88,TRIM,.2);put(full,2.12,2.18,TRIM,.2);put(low,0,.32,WALLC);glass.push([L,m]);}
+    if(t==='d'){put(full,2.25,2.6,WALLC);put(full,2.22,2.27,TRIM,.2);}
     if(t!=='d'){put(full,0,.18,SKIRT,.2);put(low,0,.18,SKIRT,.2);}
   });
   const gF=new THREE.Group(),gL=new THREE.Group();world.add(gF);world.add(gL);full.build(gF);low.build(gL);
   glass.forEach(([L,m])=>{const g=new THREE.Mesh(BOX,GLASS);if(along==='x'){g.scale.set(L,1.24,.04);g.position.set(m,1.5,c);}else{g.scale.set(.04,1.24,L);g.position.set(c,1.5,m);}gF.add(g);});
+  const a=segs[0][0],b=segs[segs.length-1][1],cove=new THREE.Mesh(BOX,LAMP);cove.raycast=noRay;
+  if(along==='x'){cove.scale.set(b-a,.05,.05);cove.position.set((a+b)/2,2.5,c-n.z*.11);}else{cove.scale.set(.05,.05,b-a);cove.position.set(c-n.x*.11,2.5,(a+b)/2);}gF.add(cove);
   return {n,full:gF,low:gL};
 }
-const walls=[
-  makeWall('x',-3.08,[[-4.16,4.16,'s']],V(0,0,-1)),
-  makeWall('x',3.08,[[-4.16,-2.5,'s'],[-2.5,-1.5,'d'],[-1.5,-0.6,'s'],[-0.6,3.4,'w'],[3.4,4.16,'s']],V(0,0,1)),
-  makeWall('z',-4.08,[[-3,-1.6,'s'],[-1.6,0.2,'w'],[0.2,3,'s']],V(-1,0,0)),
-  makeWall('z',4.08,[[-3,-0.4,'s'],[-0.4,1.6,'w'],[1.6,3,'s']],V(1,0,0)),
-];
-// annex: a second room to the right, opened by the last expansion
-const annexGroup=new THREE.Group();annexGroup.visible=false;world.add(annexGroup);
-{const A=new SB();A.box(4.1,.5,9.6,0x45404f,6.55,-.27,1.4).box(4.16,.06,6,0xdcd9dc,6.08,-.02,0).box(4.1,.06,3,0xb7a99a,6.55,-.02,4.7).box(4.1,.1,.18,0x7d7884,6.55,0,6.11);
- A.build(annexGroup);tiledSurface(4,6,'#dcd9dc','#bdb9c0',6,0,annexGroup);tiledSurface(4,3,'#b7a99a','#9a8f84',6.5,4.7,annexGroup);
- const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(6,2.4,0);annexGroup.add(light);inLights.push(light);}
-const annexWalls=[makeWall('x',-3.08,[[4.16,8.24,'s']],V(0,0,-1)),makeWall('x',3.08,[[4.16,5,'s'],[5,7.4,'w'],[7.4,8.24,'s']],V(0,0,1)),makeWall('z',8.16,[[-3,-.8,'s'],[-.8,1.2,'w'],[1.2,3,'s']],V(1,0,0))];
-annexWalls.forEach(w=>{w.off=true;walls.push(w);});
-// sign on back wall
+/** Every wall, with the salon sizes it stands at. The first four are the original room. */
+const walls=[];
+function addWall(show,...args){const w=makeWall(...args);w.show=show;walls.push(w);return w;}
+addWall(t=>t<1,'x',-3.08,[[-4.16,4.16,'s']],V(0,0,-1));
+addWall(()=>true,'x',3.08,[[-4.16,-2.5,'s'],[-2.5,-1.5,'d'],[-1.5,-0.6,'s'],[-0.6,3.4,'w'],[3.4,4.16,'s']],V(0,0,1));
+addWall(()=>true,'z',-4.08,[[-3,-1.6,'s'],[-1.6,0.2,'w'],[0.2,3,'s']],V(-1,0,0));
+addWall(t=>t<2,'z',4.08,[[-3,-0.4,'s'],[-0.4,1.6,'w'],[1.6,3,'s']],V(1,0,0));
+// size 2: the back of the shop
+const backWall=addWall(t=>t>=1,'x',-5.08,[[-4.16,4.16,'s']],V(0,0,-1));
+addWall(t=>t>=1,'z',-4.08,[[-5.16,-3,'s']],V(-1,0,0));
+addWall(t=>t>=1&&t<3,'z',4.08,[[-5.16,-3,'s']],V(1,0,0));
+// size 3: the annex next door; size 4: the space behind it
+addWall(t=>t>=2,'x',3.08,[[4.16,5,'s'],[5,7.4,'w'],[7.4,8.24,'s']],V(0,0,1));
+addWall(t=>t===2,'x',-3.08,[[4.16,8.24,'s']],V(0,0,-1));
+addWall(t=>t>=2,'z',8.16,[[-3,-.8,'s'],[-.8,1.2,'w'],[1.2,3,'s']],V(1,0,0));
+addWall(t=>t>=3,'x',-5.08,[[4.16,8.24,'s']],V(0,0,-1));
+addWall(t=>t>=3,'z',8.16,[[-5.16,-3,'s']],V(1,0,0));
+/** Floor, slab and a ceiling light for an area that opens with an expansion. */
+function zoneGroup(slab,floor,light){const g=new THREE.Group();g.visible=false;world.add(g);const A=new SB();A.box(...slab,0x45404f,slab[3],-.27,slab[4]);A.box(floor[0],.06,floor[1],0xdcd9dc,floor[2],-.02,floor[3]);A.build(g);
+  terrazzo(floor[0],floor[1],floor[2],floor[3],g);const l=new THREE.PointLight(0xffd98a,0,8,1.5);l.position.set(light[0],2.4,light[1]);g.add(l);inLights.push(l);return g;}
+const backGroup=zoneGroup([9,.5,2.4,0,-4.1],[8,2,0,-4],[0,-4]);
+const annexGroup=zoneGroup([4.1,.5,9.6,6.55,1.4],[4,6,6,0],[6,0]);
+{const A=new SB();A.box(4.1,.06,3,0xb7a99a,6.55,-.02,4.7).box(4.1,.1,.18,0x7d7884,6.55,0,6.11);A.build(annexGroup);tiledSurface(4,3,'#b7a99a','#9a8f84',6.5,4.7,annexGroup);}
+const annexBackGroup=zoneGroup([4.1,.5,2.4,6.55,-4.1],[4,2,6,-4],[6,-4]);
+// Where an outer wall used to be, a waist-high wall with an opening stays after the expansion.
+INNER_WALLS.forEach(({seg:[x1,z1,x2,z2],gaps,tier})=>{const alongX=z1===z2,n=alongX?V(0,0,-1):V(1,0,0),c=alongX?z1-.08:x1+.08,lo=alongX?Math.min(x1,x2):Math.min(z1,z2),hi=alongX?Math.max(x1,x2):Math.max(z1,z2);
+  const parts=[];let at=lo;[...gaps].sort((p,q)=>p[0]-q[0]).forEach(([g0,g1])=>{if(g0>at)parts.push([at,g0]);at=g1;});if(hi>at)parts.push([at,hi]);
+  const full=new SB(),low=new SB();parts.forEach(([a,b])=>{const L=b-a,m=(a+b)/2,put=(sb,y0,y1,col,th=.16)=>{const h=y1-y0;if(alongX)sb.box(L,h,th,col,m,y0+h/2,c);else sb.box(th,h,L,col,c,y0+h/2,m);};
+    put(full,0,1,WALLC);put(full,.98,1.04,TRIM,.2);put(full,0,.18,SKIRT,.2);put(low,0,.32,WALLC);put(low,0,.18,SKIRT,.2);});
+  const gF=new THREE.Group(),gL=new THREE.Group();world.add(gF);world.add(gL);full.build(gF);low.build(gL);walls.push({n,full:gF,low:gL,show:t=>t>=tier});});
+// sign on the back wall, moved back with the wall when the shop grows
 const signTex=canvasTex(140,22,g=>paintSign(g,140,22,'CIEL GROUND'));
-{const sb=new SB();sb.box(4.5,.82,.12,0x1d1a26,0,2.95,-3.08);sb.box(.08,.4,.08,0x1d1a26,-1.8,2.6,-3.08).box(.08,.4,.08,0x1d1a26,1.8,2.6,-3.08);sb.build(walls[0].full);
- const p=new THREE.Mesh(new THREE.PlaneGeometry(4.4,.69),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(0,2.95,-3.01);walls[0].full.add(p);
- }
-// awning on front wall
-const awning=new THREE.Group();awning.position.set(1.4,2.42,3.16);walls[1].full.add(awning);
-for(let i=0;i<10;i++){const m=new THREE.Mesh(BOX,M(i%2?0xf6f3ee:0xc24a46));m.scale.set(.4,.05,1);m.position.set(-1.8+i*.4,0,.5);m.castShadow=true;awning.add(m);}
-awning.rotation.x=0.38;
+function mountSign(wall,z){const sb=new SB();sb.box(4.5,.82,.12,0xf6f3ee,0,2.95,z);sb.box(.08,.4,.08,TRIM,-1.8,2.6,z).box(.08,.4,.08,TRIM,1.8,2.6,z);sb.build(wall.full);
+  const p=new THREE.Mesh(new THREE.PlaneGeometry(4.4,.69),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(0,2.95,z+.07);wall.full.add(p);}
+mountSign(walls[0],-3.08);mountSign(backWall,-5.08);
+// storefront sign above the window, white with black lettering like the real shop
+{const sb=new SB();sb.box(3.4,.5,.1,0xf6f3ee,1.4,2.36,3.21);sb.build(walls[1].full);const p=new THREE.Mesh(new THREE.PlaneGeometry(3.3,.42),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(1.4,2.36,3.27);walls[1].full.add(p);}
 // clock
 const clockTex=canvasTex(20,20,g=>{});
 function drawClock(){const g=clockTex.userData.g;const d=new Date();g.fillStyle='#1d1a26';g.fillRect(0,0,20,20);g.fillStyle='#f6f3ee';
@@ -278,12 +301,16 @@ const VAC={name:'Vacant',style:'Vacant',apron:0x5f5a68,spd:1,stats:{served:0,sum
 STY.forEach(s=>{s.fig.root.visible=false;});
 OWNER.floating=false;
 const ownerStation=()=>stations.find(s=>s.sty===OWNER);
-/** A styling chair's anchor points in the world, worked out from its furniture item. */
-function frameStation(st){const it=st.item,yaw=it.rotation*Math.PI/2,at=(lx,lz)=>{const p=game.layout.toWorld(it,lx,lz);return V(p.x,0,p.z);};
+const quarter=(x,z,r)=>[[x,z],[z,-x],[-x,-z],[-z,x]][((r%4)+4)%4];
+/** A styling chair's anchor points in the world, from its furniture item and the chair's place on it. */
+function frameStation(st){const it=st.item,[ox,oz,t]=FURNITURE[it.id].chairs[st.k],yaw=(it.rotation+t)*Math.PI/2;
+  const at=(lx,lz)=>{const [rx,rz]=quarter(lx,lz,t),p=game.layout.toWorld(it,ox+rx,oz+rz);return V(p.x,0,p.z);};
   Object.assign(st,{yaw,face:yaw+Math.PI,at,rot:v=>v.clone().applyAxisAngle(UP,yaw),chair:at(0,.45),stand:at(0,1.05),approach:at(0,1.35)});}
-function makeStation(item){const st={item,sty:VAC,vacant:true,cust:null,state:'vacant',plan:null,ops:[],opi:0,timer:0,touched:false};frameStation(st);return st;}
+function makeStation(item,k){const st={item,k,sty:VAC,vacant:true,cust:null,state:'vacant',plan:null,ops:[],opi:0,timer:0,touched:false,washing:null,sweep:null};frameStation(st);return st;}
 const recep=new Fig({skin:0xc98e66,shirt:0x8a4fc2,pants:0x1d1a26,staffHair:0x2e1d14,bun:true});recep.pos.set(-3.6,0,1.0);recep.yaw=Math.PI/2;recep.mode='sit';recep.seatH=.72;recep.footY=.3;
-const jr={fig:new Fig({skin:0xe7b892,shirt:0xffb15a,pants:0x2a4478,apron:0x5f9e45,staffHair:0x8f5a2e}),task:null,idle:V(3.6,0,-0.85)};jr.fig.pos.copy(jr.idle);jr.fig.yaw=Math.PI;
+// Assistants wash hair at the shampoo booths and sweep up. Each has a figure and at most one job.
+const HELPER_LOOKS={hugo:{skin:0xe7b892,shirt:0xffb15a,pants:0x2a4478,staffHair:0x8f5a2e},jin:{skin:0xc98e66,shirt:0x1d1a26,pants:0x2e2a38,staffHair:0x16110f},tess:{skin:0xf6d6bd,shirt:0xdcd9dc,pants:0x2a4478,staffHair:0xc8642a,long:true}};
+const helpers=game.staff.support.filter(e=>e.effect==='tidy').map(e=>{const fig=new Fig({...HELPER_LOOKS[e.id],apron:e.apron});fig.root.visible=false;fig.pos.set(3.6,0,-.85);fig.yaw=Math.PI;return {e,fig,task:null,idle:V(3.6,0,-.85),idleYaw:Math.PI,booth:null};});
 const friends=[];
 const bench=[];
 const terr=[];
@@ -315,14 +342,27 @@ function spawnCustomer(){
 }
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
 function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos;let pts;
-  pts=(p.x>-4.1&&p.x<(game.layout.tier>=3?8.1:4.1)&&Math.abs(p.z)<3.1)?[...route(p,DOOR_IN),DOOR_OUT,STREET_DOOR,STREET]:[STREET_DOOR,STREET];
+  pts=(p.x>-4.1&&p.x<(game.layout.tier>=2?8.1:4.1)&&p.z<3.1&&p.z>-5.1)?[...route(p,DOOR_IN),DOOR_OUT,STREET_DOOR,STREET]:[STREET_DOOR,STREET];
   if(why==='full')pts=[DOOR_OUT,STREET_DOOR,STREET];
   f.walkTo(pts,()=>{c.state='gone';c.fadeOut=1;});}
 function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=c;st.state='await';st.touched=false;st.byOwner=false;st.worker=null;const f=c.fig;
-  const from=f.pos.clone();let pts=[];
-  pts=[...(seat?[seat.app[0]]:[]),...route(seat?seat.app[0]:from,st.approach),st.chair.clone()];
-  f.walkTo(pts,()=>{f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);});
+  const start=seat?seat.app[0]:f.pos.clone(),lead=seat?[seat.app[0]]:[],toChair=from=>[...route(from,st.approach),st.chair.clone()];
+  // Every client has a shampoo first when the salon has somewhere to do it.
+  if(booths.length&&!c.washed)shampoo(c,st,lead,start,()=>f.walkTo(toChair(f.pos),arrive));else f.walkTo([...lead,...toChair(start)],arrive);
+  function arrive(){f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);}
   if(sel===st.i)renderPanel(true);}
+const booths=[],washes=[];
+const freeBooth=()=>booths.find(b=>!b.client),freeHelper=()=>helpers.find(h=>h.fig.root.visible&&!h.task);
+/** Shampoo at a free booth: a free assistant washes, otherwise the client's own stylist steps away from the chair to do it. */
+function shampoo(c,st,lead,start,then){const b=freeBooth(),h=freeHelper(),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:4.5};
+  b.client=c;c.inWash=true;if(h)h.task={kind:'wash',T};else st.washing=T;washes.push(T);
+  washer.handL=washer.handR=null;washer.setTool(null);washer.walkTo(route(washer.pos,b.washAt),()=>{washer.yaw=b.washYaw;T.ready=true;});
+  c.fig.walkTo([...lead,...route(start,b.seatApp),b.seat.clone()],()=>{Object.assign(c.fig,{mode:'sit',yaw:b.seatYaw,seatH:.5,footY:.2,tilt:-.45});c.fig.pos.copy(b.seat);T.seated=true;audio.play('swish');});}
+const washerOf=T=>T.h?T.h.fig:T.st.sty.fig;
+function updateWashes(dt){for(const T of washes.slice()){if(!T.ready||!T.seated)continue;const f=washerOf(T);T.t-=dt;
+  const hp=T.c.fig.head.getWorldPosition(V()),k=Math.sin(simT*9)*.06;f.handR=hp.clone().add(V(k,.06,0));f.handL=hp.clone().add(V(-k,.04,.05));if(T.t<=0)endWash(T);}}
+function endWash(T){const i=washes.indexOf(T);if(i<0)return;washes.splice(i,1);const f=washerOf(T);f.handL=f.handR=null;if(T.h)T.h.task=null;else T.st.washing=null;
+  T.b.client=null;T.c.fig.tilt=0;T.c.washed=true;T.c.inWash=false;T.then();}
 function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OWNER:st.sty;if(worker===OWNER&&ownerBusy())return;if(styling&&styling.station===st)closeStyling(true);st.worker=worker;const p=st.plan,ops=[];
   if(hasColour(p))ops.push({type:'colour',dur:13});
   if(p.doWave&&Math.abs(p.wave-st.cust.hair.wave)>.05)ops.push({type:'wave',dur:10});
@@ -374,27 +414,32 @@ function checkout(c,sc){const pay=sc.payment,head=c.fig.head;
     incidents.show({title:tx('inc.haggle.t',nm(c.name)),text:tx('inc.haggle',off),options:[{label:tx('inc.discount',off),run:()=>settle(pay-off,{discount:off})},{label:tx('inc.fullPrice'),run:()=>settle(pay,{haggleRefused:true})}]});return;}
   settle(pay);}
 const recepName=()=>game.staff.support.find(e=>e.effect==='reception').name;
-function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,jr.fig,...friends,...STY.map(s=>s.fig),...custs.filter(c=>c.state==='wait').map(c=>c.fig)];who.forEach(f=>{if(n||Math.random()<.3)f.clapT=rand(1.2,1.8);});}
+function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,...helpers.map(h=>h.fig),...friends,...STY.map(s=>s.fig),...custs.filter(c=>c.state==='wait').map(c=>c.fig)];who.forEach(f=>{if(n||Math.random()<.3)f.clapT=rand(1.2,1.8);});}
 
-/* junior: sweeps up the clippings */
-function jrUpdate(dt){const f=jr.fig,T=jr.task;if(!f.root.visible)return;
-  if(T){if(T.phase==='work'){T.t-=dt;f.toolAim=V(T.aim.x+Math.sin(simT*5)*.35,0,T.aim.z+Math.cos(simT*2.5)*.12);f.handR=f.pos.clone().add(V(0,1.02,0)).addScaledVector(fwd(f.yaw),.22).addScaledVector(rgt(f.yaw),.1);f.handL=f.handR.clone().add(V(0,-.22,0)).addScaledVector(fwd(f.yaw),.05);
-      if(T.t<=0){T.done();jr.task=null;f.handL=f.handR=null;f.toolAim=null;f.setTool(null);}}return;}
-  const go=(standAt,aim,tool,dur,done)=>{jr.task={phase:'walk',aim,done};f.handL=f.handR=null;f.walkTo(route(f.pos,standAt),()=>{jr.task.phase='work';jr.task.t=dur;f.setTool(tool);f.yaw=Math.atan2(aim.x-f.pos.x,aim.z-f.pos.z);});};
-  const landed=clips.filter(c=>c.alive&&c.landed);
-  if(landed.length>24){const a=landed[0].p.clone();a.y=0;const sa=a.clone().add(V(.5,0,.45));sa.x=clamp(sa.x,-3.6,3.6);sa.z=clamp(sa.z,-2.2,2.2);
-    go(sa,a,'broom',3.2,()=>{clips.forEach(c=>{if(c.alive&&c.landed&&Math.hypot(c.p.x-a.x,c.p.z-a.z)<1.0)c.alive=false;});});return;}
-  if(!f.path.length&&f.pos.distanceTo(jr.idle)>.05){f.handL=f.handR=null;f.walkTo(route(f.pos,jr.idle),()=>f.yaw=basinInfo?basinInfo.yaw:Math.PI);}
-  if(f.pos.distanceTo(jr.idle)<.06&&!f.path.length){if(basinInfo){const [a,b]=basinInfo.hands;f.handR=V(a.x,1.0+Math.sin(simT*3)*.04,a.z);f.handL=V(b.x,1.0+Math.cos(simT*3)*.04,b.z);}}else if(!f.path.length){f.handL=f.handR=null;}
-}
+/* sweeping: assistants keep the floor clean; without them Lia does it between clients */
+const landedClips=()=>clips.filter(c=>c.alive&&c.landed);
+function startSweep(fig){const landed=landedClips();if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
+  const at=a.clone().add(V(.5,0,.45));at.x=clamp(at.x,-3.6,t>=2?7.6:3.6);at.z=clamp(at.z,t>=1?-4.6:-2.6,2.6);
+  const job={kind:'sweep',phase:'walk',fig,aim:a,t:3.2};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
+/** Advances a sweeping job; true once the patch of floor is clean. */
+function updateSweep(job,dt){if(job.phase!=='work')return false;const f=job.fig,a=job.aim;job.t-=dt;f.toolAim=V(a.x+Math.sin(simT*5)*.35,0,a.z+Math.cos(simT*2.5)*.12);
+  f.handR=f.pos.clone().add(V(0,1.02,0)).addScaledVector(fwd(f.yaw),.22).addScaledVector(rgt(f.yaw),.1);f.handL=f.handR.clone().add(V(0,-.22,0)).addScaledVector(fwd(f.yaw),.05);
+  if(job.t>0)return false;clips.forEach(c=>{if(c.alive&&c.landed&&Math.hypot(c.p.x-a.x,c.p.z-a.z)<1)c.alive=false;});f.handL=f.handR=null;f.toolAim=null;f.setTool(null);return true;}
+function helpersUpdate(dt){const messy=landedClips().length>24;
+  helpers.forEach(h=>{const f=h.fig,T=h.task;if(!f.root.visible)return;
+    if(T&&T.kind==='wash')return;
+    if(T&&T.kind==='sweep'){if(updateSweep(T,dt))h.task=null;return;}
+    if(messy&&!helpers.some(o=>o.task&&o.task.kind==='sweep')){h.task=startSweep(f);if(h.task)return;}
+    if(!f.path.length&&f.pos.distanceTo(h.idle)>.05){f.handL=f.handR=null;f.walkTo(route(f.pos,h.idle),()=>f.yaw=h.idleYaw);}});}
 
 /* ================= time, weather, timers ================= */
 let started=false,paused=false,booted=false,styling=null,savedCamK=0,lastChair=0;
 const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
-function syncSupport(){recep.root.visible=game.staff.hasSupport('reception');jr.fig.root.visible=game.staff.hasSupport('tidy');}
-function syncChairs(){const big=game.layout.tier>=3;annexGroup.visible=big;walls[3].off=big;annexWalls.forEach(w=>{w.off=!big;});if(site<0){camHome.set(big?2.05:0,.55,1.2);viewScale=big?1.3:1;}}
+function syncSupport(){recep.root.visible=game.staff.hasSupport('reception');helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
+const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.6,1.3],[2,-.2,1.45]];
+function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;annexBackGroup.visible=t>=3;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site<0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
 function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='free')return;if(!game.staff.fire(e))return;e.fig.root.visible=false;if(st)vacate(st);}
@@ -409,18 +454,27 @@ function restoreGame(){const d=game.saves.load();if(!d)return;furnitureView.clea
   game.staff.hired.forEach(e=>{const st=openChair();if(st)placeStaff(e,st);});}
 /** Keeps stations, seats, the desk and the basin in step with the furniture layout. */
 function syncFurniture(){game.layout.items.forEach(it=>{if(!furnitureView.has(it))furnitureView.spawn(it);});furnitureView.prune(game.layout.items);syncStations();syncAnchors();}
-function syncStations(){const items=game.layout.items.filter(it=>it.id==='station');
+function syncStations(){const items=game.layout.items.filter(it=>FURNITURE[it.id].chairs);
   for(let i=stations.length-1;i>=0;i--)if(!items.includes(stations[i].item))stations.splice(i,1);
-  items.forEach(it=>{let st=stations.find(s=>s.item===it);
-    if(!st){st=makeStation(it);stations.push(st);if(!OWNER.floating&&!ownerStation()){st.sty=OWNER;st.vacant=false;st.state='free';if(!started){OWNER.fig.pos.copy(st.stand);OWNER.fig.yaw=st.face;}else OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}return;}
-    frameStation(st);const f=st.sty.fig;if(f&&!st.cust&&(st.state==='free'||st.state==='vacant'))f.walkTo(route(f.pos,st.stand),()=>f.yaw=st.face);});
+  items.forEach(it=>FURNITURE[it.id].chairs.forEach((_,k)=>{let st=stations.find(s=>s.item===it&&s.k===k);
+    if(!st){st=makeStation(it,k);stations.push(st);if(!OWNER.floating&&!ownerStation()){st.sty=OWNER;st.vacant=false;st.state='free';if(!started){OWNER.fig.pos.copy(st.stand);OWNER.fig.yaw=st.face;}else OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}return;}
+    frameStation(st);const f=st.sty.fig;if(f&&!st.cust&&!st.washing&&!st.sweep&&(st.state==='free'||st.state==='vacant'))f.walkTo(route(f.pos,st.stand),()=>f.yaw=st.face);}));
   stations.forEach((s,i)=>{s.i=i;});}
-let deskInfo=null,basinInfo=null;
-function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z);return V(p.x,0,p.z);},desk=L.items.find(it=>it.id==='desk'),basin=L.items.find(it=>it.id==='basin');
+let deskInfo=null;
+// Where people stand and sit at a shampoo booth (or an older basin), in the item's own frame.
+const BOOTH_ANCHORS={shampooBooth:{seat:[0,.12],seatApp:[0,1.05],face:[0,1],washAt:[.42,-.2],washFace:[-1,0],idle:[.45,1.15]},
+  basin:{seat:[-.45,-.1],seatApp:[-.45,.75],face:[-1,0],washAt:[.05,.5],washFace:[0,-1],idle:[.1,.75]}};
+function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z);return V(p.x,0,p.z);},dir=(it,x,z)=>{const a=L.toWorld(it,0,0),b=L.toWorld(it,x,z);return Math.atan2(b.x-a.x,b.z-a.z);},desk=L.items.find(it=>it.id==='desk');
   if(desk){const yaw=desk.rotation*Math.PI/2;deskInfo={seat:w(desk,0,-.1),seatYaw:yaw,pay:w(desk,0,1.15),payYaw:yaw+Math.PI};recep.pos.copy(deskInfo.seat);recep.yaw=yaw;}
-  basinInfo=basin?{idle:w(basin,.1,.75),yaw:basin.rotation*Math.PI/2+Math.PI,hands:[w(basin,0,.18),w(basin,.25,.18)]}:null;jr.idle=basinInfo?basinInfo.idle:V(3.6,0,-.85);}
-function canModify(it){if(it.id!=='station')return !furnitureView.isOccupied(it);const st=stations.find(s=>s.item===it);return !!st&&!st.cust&&(st.state==='free'||st.state==='vacant')&&!(styling&&styling.station===st);}
-function canSell(it){if(!canModify(it))return false;return it.id!=='station'||stations.find(s=>s.item===it).vacant;}
+  const items=L.items.filter(it=>BOOTH_ANCHORS[it.id]);
+  for(let i=booths.length-1;i>=0;i--)if(!items.includes(booths[i].item))booths.splice(i,1);
+  items.forEach(it=>{let b=booths.find(x=>x.item===it);if(!b){b={item:it,client:null};booths.push(b);}const A=BOOTH_ANCHORS[it.id];
+    Object.assign(b,{seat:w(it,...A.seat),seatApp:w(it,...A.seatApp),seatYaw:dir(it,...A.face),washAt:w(it,...A.washAt),washYaw:dir(it,...A.washFace),idle:w(it,...A.idle),idleYaw:dir(it,0,-1)});});
+  helpers.forEach((h,i)=>{const b=booths[i%Math.max(1,booths.length)];h.booth=b||null;h.idle=b?b.idle.clone().add(V(0,0,i>=booths.length?.6:0)):V(3.6,0,-.85).add(V(-.6*i,0,0));h.idleYaw=b?b.idleYaw:Math.PI;});}
+const stationsOf=it=>stations.filter(s=>s.item===it);
+function canModify(it){if(booths.some(b=>b.item===it&&b.client))return false;if(!FURNITURE[it.id].chairs)return !furnitureView.isOccupied(it);
+  const sts=stationsOf(it);return sts.length>0&&sts.every(st=>!st.cust&&!st.washing&&!st.sweep&&(st.state==='free'||st.state==='vacant')&&!(styling&&styling.station===st));}
+function canSell(it){if(!canModify(it))return false;return !FURNITURE[it.id].chairs||stationsOf(it).every(st=>st.vacant);}
 /** The camera quarter-turn that looks at a client's back, so the mirror never blocks the view. */
 function bestCamK(st){const base=Math.round(camK);let best=base,bd=-2;[0,-1,1,-2,2].forEach(o=>{const k=base+o,a=Math.PI/4+k*Math.PI/2,d=Math.sin(a)*Math.sin(st.yaw)+Math.cos(a)*Math.cos(st.yaw);if(d>bd+1e-6){bd=d;best=k;}});return best;}
 function finishDay(){game.staff.hired.filter(e=>e.quits).forEach(e=>{e.quits=false;fireStaff(e);popup(tx('staff.quit',nm(e.name)),recep.head,'big');});
@@ -467,13 +521,15 @@ function simStep(dt){simT+=dt;
   // stations
   stations.forEach(st=>{
     if(st.vacant)return;
-    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen)return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),c=waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)assign(st,c);}
+    if(st.sweep){if(updateSweep(st.sweep,dt))st.sweep=null;}
+    else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
+    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen||st.sweep||(booths.length&&!freeBooth()))return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),c=waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
-    if(st.state!=='work'&&st.state!=='reveal'){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
+    if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
       if(!sf.path.length&&sf.pos.distanceTo(st.stand)>.05)sf.walkTo(route(sf.pos,st.stand),()=>sf.yaw=st.face);
       if(st.state==='consult'&&st.cust){const hp=st.cust.fig.head.getWorldPosition(V());sf.handR=hp.clone().add(st.rot(V(Math.sin(simT*2)*.08,.05,.22)));}}});
-  jrUpdate(dt);
+  updateWashes(dt);helpersUpdate(dt);
   // receptionist watches the latest reveal / door
   const rv=stations.find(s=>s.state==='reveal');{const tgt=rv?rv.chair:DOOR_IN;const a=Math.atan2(tgt.x-recep.pos.x,tgt.z-recep.pos.z)-recep.yaw;recep.look=angLerp(recep.look,clamp(((a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI,-1,1),Math.min(1,dt*3));}
   // spectators look at reveals
@@ -489,7 +545,7 @@ function simStep(dt){simT+=dt;
   let n=0;for(let i=0;i<clips.length;i++){const c=clips[i];if(!c.alive){_m4.makeScale(0,0,0);clipMesh.setMatrixAt(i,_m4);continue;}
     if(!c.landed){c.v.y-=4.5*dt;c.v.multiplyScalar(1-dt*1.5);c.p.addScaledVector(c.v,dt);if(c.p.y<=.02){c.p.y=.02;c.landed=true;}}
     _m4.compose(c.p,_q.setFromAxisAngle(UP,c.ry),_s.set(.035,.02,.08));clipMesh.setMatrixAt(i,_m4);n=i+1;}
-  clipMesh.count=n;clipMesh.instanceMatrix.needsUpdate=true;
+  clipMesh.count=n;clipMesh.instanceMatrix.needsUpdate=true;game.dirt=landedClips().length;
 }
 const FOIL={L:.8,a:-.002,b:-.006};
 
@@ -504,7 +560,7 @@ function envStep(dt,t){
 
 /* ================= UI ================= */
 let sel=0;const tabs=$('#tabs'),pbody=$('#pbody');let panelKey='';
-function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span>`;if(st.state==='await')return tx('st.walk');
+function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span>`;if(st.state==='await')return tx(st.cust.inWash?'st.shampoo':'st.walk');
   if(st.state==='consult')return canAuto(st)?tx('st.auto',Math.max(0,st.timer).toFixed(0)):`<span class="gold">${tx('st.wait')}</span>`;
   if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}%`;}return tx('st.reveal');}
 function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']],unread=game.reviews.unread;
@@ -573,7 +629,7 @@ function drawPV(cv,h,skin,tint=0){if(!cv)return;const g=cv.getContext('2d');g.im
   g.fillStyle=labCss(lab,.93);g.fillRect(24-capW/2,7,capW,13);g.fillRect(24-capW/2+1,6,capW-2,1);
   [7,8,9,10,11,12].forEach(j=>strand(j,3,.86));}
 function updateHud(){const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);
-  const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?'seating':'reveal'));
+  const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
   $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)} ${g.clock.timeText}</span></h1>
   <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.rating',g.reviews.count?`★${g.reviews.rating.toFixed(1)} (${g.reviews.count})`:'–')}${row('hud.followers',g.marketing.followers.toLocaleString())}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length} / ${stations.length+terr.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
@@ -716,4 +772,4 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   if(!booted){booted=true;boot();}}
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,stations,custs,queue,incidents,get speed(){return speed;},set speed(v){speed=v;}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;}};

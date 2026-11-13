@@ -32,7 +32,8 @@ export function drawPixelText(g, text, cx, cy, scale, color) {
 
 /** A dark shop sign with a neon trim and the name in block letters. */
 export function paintSign(g, w, h, text) {
-  g.fillStyle = '#1d1a26'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#e25c8f'; g.fillRect(2, 2, w - 4, 1); g.fillRect(2, h - 3, w - 4, 1);
-  drawPixelText(g, text, w / 2, h / 2, 2, '#ffd98a');
+  // White sign with black lettering, like the shop front.
+  g.fillStyle = '#f6f3ee'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#9c98a2'; g.fillRect(0, h - 1, w, 1);
+  drawPixelText(g, text, w / 2, h / 2, 2, '#1d1a26');
 }

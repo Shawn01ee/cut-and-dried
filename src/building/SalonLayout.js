@@ -1,16 +1,33 @@
-import { FURNITURE, EXPANSIONS } from './FurnitureCatalog.js';
+import { FURNITURE, EXPANSIONS, chairsOn } from './FurnitureCatalog.js';
 
 // The doorway and the pavement walkway: only walkable pieces such as mats may cover them.
 const LANES = [[-2.7, -1.3, 2.4, 5.1], [-4.6, 8.7, 4, 5.1]];
 // Lamp posts, the clock and the barber pole outside. Nothing goes here and people walk around them.
 export const POSTS = [[-4.1, -3.3, 4.1, 4.9], [4, 4.6, 3.3, 4], [2.3, 3.1, 5.3, 6.2], [-1.5, -.9, 3.2, 3.7]];
 export const inRect = (c, [a, b, d, e]) => c.x >= a && c.x <= b && c.z >= d && c.z <= e;
+/**
+ * Floor areas and the salon size at which each opens. The salon grows backwards first,
+ * then into the shop next door, then behind that, so it widens in both directions.
+ */
+export const ZONE_TIER = { main: 0, back: 1, annex: 2, annexBack: 3 };
+/**
+ * Where an outer wall stood before an expansion, a waist-high oak wall stays with an opening in it,
+ * so furniture that stood against the wall still has something behind it.
+ * `seg` is [x1, z1, x2, z2] on cell boundaries, `gaps` are the openings along it, `tier` the size it appears at.
+ */
+export const INNER_WALLS = [
+  { seg: [-4, -3, 4, -3], gaps: [[1.5, 2.5]], tier: 1 },
+  { seg: [4, -3, 4, 3], gaps: [[1.5, 2.5]], tier: 2 },
+  { seg: [4, -5, 4, -3], gaps: [[-4.5, -3.5]], tier: 3 },
+  { seg: [4, -3, 8, -3], gaps: [[5.5, 6.5]], tier: 3 },
+];
 
 /** The salon as it opens on day one: [id, centre x, centre z, quarter turns]. */
+// Chairs line the back wall, shampoo booths line the right wall (room for three), and clients wait by the front window.
 export const DEFAULT_LAYOUT = [
-  ['station', -2.25, -2.25, 0], ['desk', -3.5, 1.25, 1], ['bench', 2.5, 2.75, 2], ['bench2', 3.75, 1.75, 3], ['loungeRug', 2.5, 1.5, 0],
-  ['mat', -2, 2.75, 0], ['bookcase', -3.75, 2.5, 1], ['dryer', -3.5, -2.5, 0], ['basin', 3.5, -1.5, 0],
-  ['plant', 3.75, 2.75, 0], ['plant', -1.25, -2.75, 0], ['plant', .75, -2.75, 0], ['plant', .75, 2.75, 0],
+  ['station', -2.25, -2.25, 0], ['desk', -3.5, 1.25, 1], ['wardrobe', -3.75, 0, 1], ['dryer', -3.5, -2.5, 0], ['shampooBooth', 3.25, -2.25, 3],
+  ['bench', .5, 2.75, 2], ['bench2', 2.75, 2.75, 2], ['loungeRug', 1.5, 2, 0], ['mat', -2, 2.75, 0],
+  ['plant', 3.75, 2.75, 0], ['plant', -3.75, 2.75, 0], ['plant', -.75, 2.75, 0],
 ];
 /** Where extra styling chairs went before furniture could be moved; used to load older saves. */
 export const EXTRA_STATIONS = [[-.25, -2.25], [1.75, -2.25], [5.25, -2.25], [7.25, -2.25]];
@@ -22,20 +39,33 @@ export class SalonLayout {
   #index = new Map();
   constructor() {
     this.cells = []; this.items = []; this.tier = 0;
-    const add = (x, z, outdoor, annex = false) => { const c = { x, z, outdoor, annex }; this.cells.push(c); this.#index.set(this.#key(x, z), c); };
-    for (let i = 0; i < 16; i++) for (let j = 0; j < 12; j++) add(-3.75 + i * .5, -2.75 + j * .5, false);
-    for (let i = 0; i < 18; i++) for (let j = 0; j < 6; j++) add(-4.25 + i * .5, 3.45 + j * .5, true);
-    // The annex to the right opens with the last expansion.
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 12; j++) add(4.25 + i * .5, -2.75 + j * .5, false, true);
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 6; j++) add(4.75 + i * .5, 3.45 + j * .5, true, true);
+    const add = (x, z, outdoor, zone) => { const c = { x, z, outdoor, zone }; this.cells.push(c); this.#index.set(this.#key(x, z), c); };
+    const area = (x0, z0, nx, nz, outdoor, zone) => { for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) add(x0 + i * .5, z0 + j * .5, outdoor, zone); };
+    area(-3.75, -2.75, 16, 12, false, 'main'); area(-4.25, 3.45, 18, 6, true, 'main');
+    area(-3.75, -4.75, 16, 4, false, 'back');
+    area(4.25, -2.75, 8, 12, false, 'annex'); area(4.75, 3.45, 8, 6, true, 'annex');
+    area(4.25, -4.75, 8, 4, false, 'annexBack');
   }
   #key(x, z) { return `${Math.round(x * 4)},${Math.round(z * 4)}`; }
   cellAt(x, z) { return this.#index.get(this.#key(x, z)) || null; }
-  get chairs() { return this.items.filter(it => it.id === 'station').length; }
-  get maxChairs() { return [1, 2, 3, 5][this.tier]; }
+  get chairs() { return this.items.reduce((n, it) => n + chairsOn(it.id), 0); }
+  get maxChairs() { return [1, 3, 6, 9][this.tier]; }
   get nextExpansion() { return EXPANSIONS[this.tier] || null; }
-  /** Furniture may go here at the salon's current size: the pavement opens at size 2 and the annex at size 4. */
-  placeable(c) { return (c.annex ? this.tier >= 3 : !c.outdoor || this.tier >= 1) && !POSTS.some(r => inRect(c, r)); }
+  /** The cell is part of the salon at its current size. */
+  isOpen(c) { return ZONE_TIER[c.zone] <= this.tier; }
+  /** Furniture may go here: open floor, plus the pavement from the first expansion. */
+  placeable(c) { return this.isOpen(c) && (!c.outdoor || this.tier >= 1) && !POSTS.some(r => inRect(c, r)); }
+  /** True when a step between two neighbouring cells would pass through an inner wall rather than its opening. */
+  stepBlocked(a, b) {
+    return INNER_WALLS.some(({ seg: [x1, z1, x2, z2], gaps, tier }) => {
+      if (this.tier < tier) return false;
+      const alongZ = x1 === x2, line = alongZ ? x1 : z1, crosses = alongZ ? (a.x - line) * (b.x - line) < 0 : (a.z - line) * (b.z - line) < 0;
+      if (!crosses) return false;
+      const m = alongZ ? (a.z + b.z) / 2 : (a.x + b.x) / 2, lo = alongZ ? Math.min(z1, z2) : Math.min(x1, x2), hi = alongZ ? Math.max(z1, z2) : Math.max(x1, x2);
+      return m > lo && m < hi && !gaps.some(([g0, g1]) => m > g0 && m < g1);
+    });
+  }
+  #crossesWall(cells) { return cells.some(a => cells.some(b => a !== b && Math.abs(a.x - b.x) + Math.abs(a.z - b.z) <= .5 && this.stepBlocked(a, b))); }
   /** World point of a position given in an item's own frame, where +z is its front. */
   toWorld(item, lx, lz) { const [x, z] = turn(lx, lz, item.rotation); return { x: item.x + x, z: item.z + z }; }
   dims(id, rotation) { const f = FURNITURE[id], w = f.w || 1, d = f.d || 1; return rotation % 2 ? [d, w] : [w, d]; }
@@ -53,7 +83,7 @@ export class SalonLayout {
   occupant(cell, ignore) { return this.items.find(it => it !== ignore && it.cells.includes(cell)) || null; }
   canOccupy(id, cells, ignore) {
     const walkable = FURNITURE[id].walkable;
-    return cells.every(c => this.placeable(c) && (walkable || !LANES.some(r => inRect(c, r))) && !this.occupant(c, ignore));
+    return !this.#crossesWall(cells) && cells.every(c => this.placeable(c) && (walkable || !LANES.some(r => inRect(c, r))) && !this.occupant(c, ignore));
   }
   openCells(ignore) { return this.cells.filter(c => this.placeable(c) && !LANES.some(r => inRect(c, r)) && !this.occupant(c, ignore)); }
   nearestCell(x, z) { let best = null, bestDist = .45; for (const c of this.cells) { const d = Math.hypot(c.x - x, c.z - z); if (d < bestDist) { bestDist = d; best = c; } } return best; }
@@ -82,7 +112,7 @@ export class SalonLayout {
     // Saves from before furniture could move: start from the default salon and add what was bought.
     this.resetToDefault();
     for (let k = 1; k < (data.chairs || 1); k++) this.add('station', ...EXTRA_STATIONS[k - 1], 0);
-    if (this.tier >= 3) this.addAnnexPlants();
+    if (this.tier >= 2) this.addAnnexPlants();
     (data.items || []).forEach(it => {
       if (!FURNITURE[it.id]) return;
       const wide = (FURNITURE[it.id].w || 1) > 1, x = it.x + (wide && !(it.rotation % 2) ? .25 : 0), z = it.z + (wide && it.rotation % 2 ? .25 : 0);

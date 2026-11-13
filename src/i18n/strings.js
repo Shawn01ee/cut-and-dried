@@ -58,7 +58,7 @@ ko:{
  'm.time':'시간대','m.speed':'속도','m.t.auto':'실제 시각','m.t.day':'낮','m.t.dusk':'저녁','m.t.night':'밤',
 }};
 
-export const NAME_KO={Lia:'리아',Shawn:'숀',Ethan:'이든',Yuri:'유리',Sophie:'소피',Max:'맥스',Hugo:'휴고',Grace:'그레이스',Liam:'리암',Somi:'소미',Soo:'수',Daniel:'다니엘',Vacant:'공석',Ava:'에이바',Leo:'레오',Mina:'미나',Oscar:'오스카',Hana:'하나',Theo:'테오',Zara:'자라',Kai:'카이',Ruby:'루비',Jae:'재',Nora:'노라',Ivy:'아이비',Sam:'샘',Lena:'레나',Omar:'오마르',Yuna:'유나',Felix:'펠릭스',Maya:'마야',Eli:'일라이',Sora:'소라',Priya:'프리야',Tom:'톰',Isla:'아일라',Ben:'벤',Ari:'아리',June:'쥰',Noah:'노아',Chloe:'클로이',Mia:'미아',Jun:'준',Rosa:'로사'};
+export const NAME_KO={Lia:'리아',Shawn:'숀',Ethan:'이든',Yuri:'유리',Sophie:'소피',Max:'맥스',Hugo:'휴고',Jin:'진',Tess:'테스',Grace:'그레이스',Liam:'리암',Somi:'소미',Soo:'수',Daniel:'다니엘',Vacant:'공석',Ava:'에이바',Leo:'레오',Mina:'미나',Oscar:'오스카',Hana:'하나',Theo:'테오',Zara:'자라',Kai:'카이',Ruby:'루비',Jae:'재',Nora:'노라',Ivy:'아이비',Sam:'샘',Lena:'레나',Omar:'오마르',Yuna:'유나',Felix:'펠릭스',Maya:'마야',Eli:'일라이',Sora:'소라',Priya:'프리야',Tom:'톰',Isla:'아일라',Ben:'벤',Ari:'아리',June:'쥰',Noah:'노아',Chloe:'클로이',Mia:'미아',Jun:'준',Rosa:'로사'};
 export const DYE_KO=['제트 블랙','다크 브라운','체스트넛','캐러멜','코퍼','오번','골든','애쉬','플래티넘','실버','로즈','바이올렛','오션','틸','체리','라일락'];
 export const WANT_KO=['블랙','다크 브라운','체스트넛','캐러멜','코퍼','오번','골든 블론드','애쉬 블론드','플래티넘','실버','로즈 핑크','라일락','바이올렛','오션 블루','틸','체리 레드'];
 export const NAT_KO=['검정','짙은 갈색','갈색','밝은 갈색','짙은 금발','금발','붉은색','회색'];
