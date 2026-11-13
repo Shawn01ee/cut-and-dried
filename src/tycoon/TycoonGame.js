@@ -152,7 +152,7 @@ export class TycoonGame {
   get reviewManager() { const r = this.staff.receptionist; return r.hired ? { name: r.name, role: 'desk', skill: r.skills.marketing || 0 } : { name: this.staff.owner.name, role: 'owner', skill: 0 }; }
   replyToReview(id, kind) { const r = this.reviews.reply(id, kind, this.reviewManager); if (r && r.rep) this.reputation.add(r.rep); return r; }
   /** With auto-replies on, the receptionist answers the day's unanswered reviews at closing. */
-  #autoReply() { if (!this.reviews.autoReply || !this.staff.receptionist.hired) return; this.reviews.list.filter(r => !r.replied && !r.removed).forEach(r => this.replyToReview(r.id, r.stars >= 4 ? 'thanks' : 'apology')); }
+  #autoReply() { if (!this.reviews.autoReply || !this.staff.receptionist.hired) return; this.reviews.list.filter(r => !r.replied && !r.removed).forEach(r => this.replyToReview(r.id, r.stars >= 4 ? 'thanks' : r.villain || r.fake ? 'report' : 'apology')); }
   post(channel) { return this.marketing.post(channel, this.clock.day, this.reelQuality, this.marketingPower); }
   runCampaign(id) { return this.marketing.run(id, this.marketingPower); }
   expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 2) this.layout.addAnnexPlants(); return true; }

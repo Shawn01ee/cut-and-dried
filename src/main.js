@@ -34,12 +34,12 @@ const scene=new THREE.Scene();scene.background=new THREE.Color(0x7ea2d0);
 const world=new THREE.Group();scene.add(world);
 let W=320,H=240,PIX=3,rt=null,pixScale=1;
 const postMat=new THREE.ShaderMaterial({
-  uniforms:{tColor:{value:null},tDepth:{value:null},res:{value:new THREE.Vector2()},palLab:{value:PAL_LAB},palRgb:{value:PAL_RGB},edge:{value:0.0028}},
+  uniforms:{tColor:{value:null},tDepth:{value:null},res:{value:new THREE.Vector2()},off:{value:new THREE.Vector2()},palLab:{value:PAL_LAB},palRgb:{value:PAL_RGB},edge:{value:0.0028}},
   vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}`,
-  fragmentShader:`precision highp float;uniform sampler2D tColor,tDepth;uniform vec2 res;uniform vec3 palLab[64];uniform vec3 palRgb[64];uniform float edge;varying vec2 vUv;
+  fragmentShader:`precision highp float;uniform sampler2D tColor,tDepth;uniform vec2 res,off;uniform vec3 palLab[64];uniform vec3 palRgb[64];uniform float edge;varying vec2 vUv;
   vec3 lab(vec3 c){c=max(c,vec3(1e-6));float l=pow(0.4122214708*c.r+0.5363325363*c.g+0.0514459929*c.b,1./3.);float m=pow(0.2119034982*c.r+0.6806995451*c.g+0.1073969566*c.b,1./3.);float s=pow(0.0883024619*c.r+0.2817188376*c.g+0.6299787005*c.b,1./3.);
   return vec3(0.2104542553*l+0.7936177850*m-0.0040720468*s,1.9779984951*l-2.4285922050*m+0.4505937099*s,0.0259040371*l+0.7827717662*m-0.8086757660*s);}
-  void main(){vec2 px=1./res;vec2 uv=(floor(vUv*res)+.5)*px;vec3 c=texture2D(tColor,uv).rgb;float d=texture2D(tDepth,uv).r;
+  void main(){vec2 px=1./res;vec2 uv=(floor(vUv*res-off)+.5)*px;vec3 c=texture2D(tColor,uv).rgb;float d=texture2D(tDepth,uv).r;
   float n=max(max(texture2D(tDepth,uv+vec2(px.x,0.)).r,texture2D(tDepth,uv-vec2(px.x,0.)).r),max(texture2D(tDepth,uv+vec2(0.,px.y)).r,texture2D(tDepth,uv-vec2(0.,px.y)).r));
   if(n-d>edge)c*=.3;vec3 q=lab(c);float bd=1e9;vec3 o=vec3(0.);
   for(int i=0;i<64;i++){vec3 e=palLab[i]-q;e.x*=1.35;float dd=dot(e,e);if(dd<bd){bd=dd;o=palRgb[i];}}
@@ -61,9 +61,10 @@ function resize(){
 
 /* ================= camera ================= */
 const cam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,80);
-let camK=0,camAz=Math.PI/4,zoom=1;const EL=Math.atan(1/Math.SQRT2);const camTarget=V(0,.55,1.2);
+let camK=0,camAz=Math.PI/4,zoom=1,zoomGoal=1;const camOff=new THREE.Vector2();const EL=Math.atan(1/Math.SQRT2);const camTarget=V(0,.55,1.2);
 let camBlend=0,viewScale=1;const camHome=V(0,.55,1.2),camClose=V(),camPan=V(0,.55,1.2);
 function updateCam(dt){
+  zoom+=(zoomGoal-zoom)*Math.min(1,dt*10);if(Math.abs(zoomGoal-zoom)<1e-3)zoom=zoomGoal;
   const goal=Math.PI/4+camK*Math.PI/2;camAz+=(goal-camAz)*Math.min(1,dt*9);if(Math.abs(goal-camAz)<1e-3)camAz=goal;
   camBlend+=((styling?1:0)-camBlend)*Math.min(1,dt*6);if(Math.abs((styling?1:0)-camBlend)<.002)camBlend=styling?1:0;camPan.lerp(camHome,Math.min(1,dt*4));camTarget.copy(camPan).lerp(camClose,camBlend);
   const a=W/H,vh=lerp(Math.max(10.8,12.8/a)*viewScale/zoom,Math.max(2.6,1.7/a),camBlend);
@@ -72,7 +73,9 @@ function updateCam(dt){
   cam.lookAt(camTarget);cam.updateMatrixWorld();
   const u=vh/H,r=V().setFromMatrixColumn(cam.matrixWorld,0),up=V().setFromMatrixColumn(cam.matrixWorld,1);
   const x=cam.position.dot(r),y=cam.position.dot(up);
-  cam.position.addScaledVector(r,Math.round(x/u)*u-x).addScaledVector(up,Math.round(y/u)*u-y);cam.updateMatrixWorld();
+  // Snap to whole texels so pixels stay stable, then shift the upscaled picture by what was rounded off so motion stays smooth.
+  const dx=Math.round(x/u)*u-x,dy=Math.round(y/u)*u-y;camOff.set(dx/u,dy/u);postMat.uniforms.off.value.copy(camOff);
+  cam.position.addScaledVector(r,dx).addScaledVector(up,dy);cam.updateMatrixWorld();
 }
 
 /* ================= materials & builders ================= */
@@ -181,6 +184,12 @@ const rear2Group=zoneGroup([17.1,.5,2.4,4.05,-8.1],[16,2,4,-8],[4,-8]);
 const signTex=canvasTex(140,22,g=>paintSign(g,140,22,'CIEL GROUND'));
 function mountSign(wall,z,x=0){const sb=new SB();sb.box(4.5,.82,.12,0xf6f3ee,x,2.95,z);sb.box(.08,.4,.08,TRIM,x-1.8,2.6,z).box(.08,.4,.08,TRIM,x+1.8,2.6,z);sb.build(wall.full);
   const p=new THREE.Mesh(new THREE.PlaneGeometry(4.4,.69),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(x,2.95,z+.07);wall.full.add(p);}
+// shelves of hair products on the wall behind reception (decoration only)
+{const sb=new SB(),X=-3.99,COLS=[0x2f6fd6,0xe25c8f,0x1fa39a,0xffd98a,0xf6f3ee,0x1d1a26,0xc8642a,0x8a4fc2,0xf6f3ee,0x5f9e45];let k=0;
+  for(const y of [1.42,1.8,2.18]){sb.box(.26,.04,1.7,0xb88a5a,X+.13,y,1.3);
+    for(let z=.6;z<=2.02;z+=.13){const h=.12+((k*7)%5)*.025,w=.07+((k*3)%3)*.01;sb.box(w,h,.07,COLS[k%COLS.length],X+.12,y+.02+h/2,z);if(k%4===1)sb.box(.03,.04,.03,0x1d1a26,X+.12,y+.04+h,z);k++;}
+    const glow=new THREE.Mesh(BOX,LAMP);glow.raycast=noRay;glow.scale.set(.04,.03,1.62);glow.position.set(X+.24,y-.03,1.3);walls[2].full.add(glow);}
+  sb.box(.04,.34,1.0,0xf6f3ee,X+.02,2.48,1.3);sb.build(walls[2].full);}
 mountSign(walls[0],-3.08);mountSign(backWall,-5.08);mountSign(rearWall,-7.08,2);mountSign(rear2Wall,-9.08,4);
 // storefront sign above the window, white with black lettering like the real shop
 {const sb=new SB();sb.box(3.4,.5,.1,0xf6f3ee,1.4,2.36,3.21);sb.build(walls[1].full);const p=new THREE.Mesh(new THREE.PlaneGeometry(3.3,.42),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(1.4,2.36,3.27);walls[1].full.add(p);}
@@ -482,14 +491,18 @@ function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z
     Object.assign(b,{seat:w(it,...A.seat),seatApp:w(it,...A.seatApp),seatYaw:dir(it,...A.face),washAt:w(it,...A.washAt),washYaw:dir(it,...A.washFace),idle:w(it,...A.idle),idleYaw:dir(it,0,-1)});});
   helpers.forEach((h,i)=>{const b=booths[i%Math.max(1,booths.length)];h.booth=b||null;h.idle=b?b.idle.clone().add(V(0,0,i>=booths.length?.6:0)):V(3.6,0,-.85).add(V(-.6*i,0,0));h.idleYaw=b?b.idleYaw:Math.PI;});}
 const stationsOf=it=>stations.filter(s=>s.item===it);
-/** Furniture that stood against a wall an expansion removed follows the wall, as soon as nobody is using it. */
 // Pieces waiting to follow a wall: their chairs and booths take no new clients until they have moved.
-const pendingMoves=new Set();
-function alignToWalls(){const L=game.layout;let moved=false;pendingMoves.clear();
+/**
+ * Furniture that stood against a wall when an expansion took it away, with the spot it stood on. It follows the wall
+ * as soon as it is free; anything placed later, or moved by the player in the meantime, stays where it is put.
+ */
+const pendingMoves=new Map();
+function alignToWalls(expanded=false){const L=game.layout;let moved=false;
+  if(expanded)L.items.forEach(it=>{if(L.wallShift(it))pendingMoves.set(it,[it.x,it.z]);});
+  for(const [it,[x,z]] of pendingMoves)if(!L.items.includes(it)||it.x!==x||it.z!==z||!L.wallShift(it))pendingMoves.delete(it);
   for(let pass=0;pass<3;pass++){let any=false;
-    for(const it of L.items){const to=L.wallShift(it);if(!to||(build.active&&build.active.existing===it))continue;const cells=L.footprint(it.id,to.x,to.z,it.rotation);
-      if(!cells||!L.canOccupy(it.id,cells,it)||!nav.wouldConnect({id:it.id,x:to.x,z:to.z,rotation:it.rotation,cells},it))continue;
-      if(!canModify(it)){pendingMoves.add(it);continue;}
+    for(const it of [...pendingMoves.keys()]){const to=L.wallShift(it);if(build.active&&build.active.existing===it)continue;const cells=L.footprint(it.id,to.x,to.z,it.rotation);
+      if(!cells||!L.canOccupy(it.id,cells,it)||!nav.wouldConnect({id:it.id,x:to.x,z:to.z,rotation:it.rotation,cells},it)||!canModify(it))continue;
       pendingMoves.delete(it);furnitureView.despawn(it);L.move(it,to.x,to.z,it.rotation);any=moved=true;}
     if(!any)break;}
   if(moved){syncFurniture();renderPanel(true);}return moved;}
@@ -527,8 +540,8 @@ function updateLights(dt){const P=PRE[phaseNow()],k=Math.min(1,dt*1.5);
 const pops=[];
 function popup(text,obj,cls){const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:2.6});}
 const _p=V();
-function screenOf(v){_p.copy(v).project(cam);return [(_p.x+1)/2*W*PIX,(1-_p.y)/2*H*PIX];}
-function updatePops(dt){for(let i=pops.length-1;i>=0;i--){const p=pops[i];p.t+=dt;const w=p.obj.getWorldPosition(V());w.y+=.35+p.t*.25;const [x,y]=screenOf(w);p.el.style.left=x+'px';p.el.style.top=y+'px';p.el.style.opacity=clamp((p.life-p.t)*2);if(p.t>p.life){p.el.remove();pops.splice(i,1);}}
+function screenOf(v){_p.copy(v).project(cam);return [(_p.x+1)/2*W*PIX+camOff.x*PIX,(1-_p.y)/2*H*PIX-camOff.y*PIX];}
+function updatePops(dt){for(let i=pops.length-1;i>=0;i--){const p=pops[i];p.t+=dt;const w=p.obj.getWorldPosition(V()),k=Math.min(1,p.t/p.life);w.y+=.35+(1-(1-k)*(1-k))*.6;const [x,y]=screenOf(w);p.el.style.left=x+'px';p.el.style.top=y+'px';p.el.style.opacity=clamp((p.life-p.t)*2);if(p.t>p.life){p.el.remove();pops.splice(i,1);}}
   custs.forEach(c=>{if(c.state==='wait'){const w=c.fig.head.getWorldPosition(V());w.y+=.3;const [x,y]=screenOf(w);c.tag.style.display='block';c.tag.style.left=x+'px';c.tag.style.top=y+'px';const k=clamp(c.pat/c.maxPat);const i=c.tag.firstChild;i.style.width=(k*100)+'%';i.style.background=k>.5?'#8fc25a':k>.25?'#ffb15a':'#d8314a';}else c.tag.style.display='none';});}
 
 /* ================= simulation step ================= */
@@ -586,7 +599,7 @@ function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span
   if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}% · ${tx('st.left',Math.max(0,Math.ceil(o.minutes*(1-clamp(o.t/o.dur)))))}`;}return tx('st.reveal');}
 function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']],unread=game.reviews.unread;
   tabs.innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${(k==='salon'?typeof sel==='number':sel===k)?'sel':''}">${tx(l)}${k==='rev'&&unread&&sel!=='rev'?`<span class="badge">${unread}</span>`:''}</button>`).join('')+`<button class="tog" id="bMin">${$('#panel').classList.contains('min')?'▴':'▾'}</button>`;
-  tabs.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{sel=b.dataset.t==='salon'?lastChair:b.dataset.t;$('#panel').classList.remove('min');renderPanel(true);});
+  tabs.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{sel=b.dataset.t==='salon'?lastChair:b.dataset.t;$('#panel').classList.remove('min');renderPanel(true);const pb=$('#pbody');pb.classList.remove('fade');void pb.offsetWidth;pb.classList.add('fade');});
   $('#bMin').onclick=()=>{$('#panel').classList.toggle('min');renderTabs();};}
 function swatches(k,cur){return `<button class="sw none ${cur<0?'sel':''}" data-${k}="-1" title="-"></button>`+DYES.map((d,i)=>`<button class="sw ${cur===i?'sel':''}" data-${k}="${i}" title="${dyeName(i)}" style="background:${hexCss(d.h)}"></button>`).join('');}
 function seg(k,list,cur,lab=n=>n){return `<span class="seg">${list.map((n,i)=>`<button data-${k}="${typeof cur==='string'?n:i}" class="${(typeof cur==='string'?n===cur:i===cur)?'sel':''}">${lab(n)}</button>`).join('')}</span>`;}
@@ -676,16 +689,16 @@ $('#bAuto').onclick=()=>setAuto(!autoOn);
 $('#bLang').onclick=()=>setLang(i18n.lang==='ko'?'en':'ko');
 $('#bSound').onclick=()=>{audio.toggleMute();syncCtrl();};
 $('#bHelp').onclick=()=>{build.cancel();paused=true;openMenu('how','game');};
-$('#bZo').onclick=()=>zoom=clamp(zoom/1.2,.6,2.2);$('#bZi').onclick=()=>zoom=clamp(zoom*1.2,.6,2.2);
-canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom*(e.deltaY<0?1.1:1/1.1),.6,2.2);},{passive:false});
+$('#bZo').onclick=()=>zoomGoal=clamp(zoomGoal/1.2,.6,2.2);$('#bZi').onclick=()=>zoomGoal=clamp(zoomGoal*1.2,.6,2.2);
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoomGoal=clamp(zoomGoal*(e.deltaY<0?1.1:1/1.1),.6,2.2);},{passive:false});
 const ptrs=new Map();let pinch0=0,zoom0=1,down=null;
-canvas.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===1)down=[e.clientX,e.clientY];if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]);zoom0=zoom;down=null;}});
-canvas.addEventListener('pointermove',e=>{if(build.isActive){const q=groundAt(e.clientX,e.clientY);if(q)build.hover(q);}if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===2&&pinch0){const [a,b]=[...ptrs.values()];zoom=clamp(zoom0*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch0,.6,2.2);}});
+canvas.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===1)down=[e.clientX,e.clientY];if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]);zoom0=zoomGoal;down=null;}});
+canvas.addEventListener('pointermove',e=>{if(build.isActive){const q=groundAt(e.clientX,e.clientY);if(q)build.hover(q);}if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===2&&pinch0){const [a,b]=[...ptrs.values()];zoomGoal=clamp(zoom0*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch0,.6,2.2);}});
 const endP=e=>{if(down&&ptrs.size===1&&Math.hypot(e.clientX-down[0],e.clientY-down[1])<10)pickAt(e.clientX,e.clientY);ptrs.delete(e.pointerId);if(ptrs.size<2)pinch0=0;if(!ptrs.size)down=null;};
 canvas.addEventListener('pointerup',endP);canvas.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);down=null;});
 const ray=new THREE.Raycaster();
 const groundPlane=new THREE.Plane(UP,0),_gp=V();
-function groundAt(x,y){const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);return ray.ray.intersectPlane(groundPlane,_gp)?{x:_gp.x,z:_gp.z}:null;}
+function groundAt(x,y){const r=canvas.getBoundingClientRect();x-=camOff.x*PIX;y+=camOff.y*PIX;ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);return ray.ray.intersectPlane(groundPlane,_gp)?{x:_gp.x,z:_gp.z}:null;}
 function pickAt(x,y){if(site>=0)return;if(build.isActive){const q=groundAt(x,y);if(q){const ok=build.commit(q);audio.play(ok?'place':'deny');if(ok)renderPanel(true);}return;}if(styling)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);
   if(sel==='build'){const it=furnitureView.pick(ray);if(it&&build.start(it.id,it))renderPanel(true);return;}
   const hits=ray.intersectObjects(world.children,true).filter(h=>h.object.visible&&h.object.parent.visible);if(!hits.length)return;
@@ -714,7 +727,7 @@ function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>pop
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:1,options:[{label:tx('inc.keep',cost),run:()=>{game.economy.charge('bonus',cost);e.addStress(-45);}},{label:tx('inc.letGo'),run:()=>{e.quits=true;}}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
   post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);

@@ -93,7 +93,14 @@ export const FURNITURE_MODELS = {
     g.box(.16, .2, .16, 0xb88a5a, .22, .84, .18).box(.22, .26, .22, 0x3a7a3a, .22, 1.05, .18);
   },
   // coat storage beside the front desk
-  wardrobe: g => g.box(.95, 1.6, .42, 0xdcd9dc, 0, .8, 0).box(.85, 1.4, .02, 0x9c98a2, 0, .82, .2).box(.8, .03, .03, 0xbdb9c0, 0, 1.35, .12).box(.18, .7, .1, 0x1d1a26, -.22, 1, .12).box(.18, .62, .1, 0x2a4478, 0, 1.04, .12).box(.18, .66, .1, 0xc8642a, .22, 1.02, .12),
+  // an open coat rack: coats on hangers over a shoe shelf, with a hat on top
+  wardrobe: g => {
+    g.box(.06, 1.75, .42, 0xb88a5a, -.46, .875, 0).box(.06, 1.75, .42, 0xb88a5a, .46, .875, 0).box(.98, .05, .44, 0xb88a5a, 0, 1.76, 0).box(.92, .04, .4, 0xb88a5a, 0, .2, 0);
+    g.box(.9, .03, .03, 0xbdb9c0, 0, 1.6, 0);
+    [[-.33, 0x2a4478, .8, .02], [-.17, 0xc8642a, .66, -.03], [0, 0x1d1a26, .86, .03], [.17, 0xd9b98f, .72, -.02], [.33, 0x5f9e45, .62, .02]]
+      .forEach(([x, c, L, z]) => g.box(.13, L, .3, c, x, 1.57 - L / 2, z).box(.1, .05, .2, c, x, 1.55, z).box(.03, .05, .03, 0xbdb9c0, x, 1.62, 0));
+    g.box(.18, .08, .24, 0x1d1a26, -.24, .26, .06).box(.18, .08, .24, 0xa8401e, .12, .26, .06).box(.22, .1, .22, 0xffd98a, .24, 1.84, 0).box(.3, .02, .3, 0xffd98a, .24, 1.79, 0);
+  },
   // brushed steel reception counter with rounded ends and a laptop, like the real front desk
   desk: g => g.box(1.36, 1.05, .6, 0xbdb9c0, 0, .525, .35).box(.12, 1.05, .48, 0xbdb9c0, -.72, .525, .35).box(.12, 1.05, .48, 0xbdb9c0, .72, .525, .35).box(1.5, .04, .64, 0xdcd9dc, 0, 1.07, .35).box(.32, .02, .22, 0x9c98a2, .3, 1.1, .3).box(.32, .2, .02, 0x4b6fa8, .3, 1.2, .2).box(.3, .06, .3, 0x1d1a26, 0, .72, -.1).box(.06, .72, .06, 0xbdb9c0, 0, .36, -.1),
   // rounded terracotta benches, like the waiting area by the front window

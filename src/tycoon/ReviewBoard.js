@@ -103,7 +103,8 @@ export class ReviewBoard {
       r.replied = 'apology'; rep = .8 * knack;
       if (!r.fake && r.stars < 5 && Math.random() < (r.villain ? .15 : .4) * knack) { r.stars++; r.edited = edited = true; }
     } else if (kind === 'report' && r.stars <= 3) {
-      if (r.fake) { r.removed = true; r.replied = 'removed'; } else { r.replied = 'rejected'; rep = -2; }
+      // Fake reviews and abusive ones from difficult clients come down; reporting an ordinary client is rejected.
+      if (r.fake || r.villain) { r.removed = true; r.replied = 'removed'; } else { r.replied = 'rejected'; rep = -2; }
     } else return null;
     this.version++;
     return { review: r, rep, edited };

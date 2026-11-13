@@ -149,6 +149,48 @@ html[lang=ko] #branchCard{font-size:13px;line-height:1.5}
 #hud table.foot{border-top:1px solid #45404f;margin-top:3px}
 html[lang=ko] .bsec h4{font-size:13px}
 html[lang=ko] .brow button{font-size:12px}
+/* ---------- polish: pixel bevels, framed sections and short stepped motion ---------- */
+.card{background:#15121d;border:2px solid #5f5a68;box-shadow:0 0 0 2px #0d0b14,inset 0 0 0 1px #2a2535,0 4px 0 2px rgba(13,11,20,.5)}
+button{border-color:#7d7884 #36313f #36313f #7d7884;box-shadow:0 2px 0 #0d0b14;transition:background-color .12s steps(2),color .12s steps(2)}
+button:hover:not(:disabled){background:#3a3546;color:#fff}
+button:active:not(:disabled){transform:translateY(2px);box-shadow:none}
+button:disabled{box-shadow:none}
+button.go{border-color:#b6e08a #173a1e #173a1e #b6e08a}
+button.go:hover:not(:disabled){background:#2e6a39}
+button.on{border-color:#ffab7a #5e1d28 #5e1d28 #ffab7a}
+button.on:hover:not(:disabled){background:#a3384a}
+#tabs{gap:3px;padding:4px 4px 0;background:#100d17;border-bottom:2px solid #5f5a68}
+#tabs button{box-shadow:none;background:#1d1928;border-bottom:0;margin-bottom:0}
+#tabs button.sel{background:#15121d;border-color:#ffd98a #5f5a68 #15121d #ffd98a;border-bottom:2px solid #15121d;margin-bottom:-2px;position:relative}
+#tabs .tog{background:#1d1928}
+#pbody{scrollbar-width:thin;scrollbar-color:#5f5a68 #15121d}
+#pbody::-webkit-scrollbar,#mcard::-webkit-scrollbar{width:8px}
+#pbody::-webkit-scrollbar-thumb,#mcard::-webkit-scrollbar-thumb{background:#5f5a68;border:2px solid #15121d}
+#pbody::-webkit-scrollbar-track,#mcard::-webkit-scrollbar-track{background:#15121d}
+.bsec{background:#1b1724;border:1px solid #2e2a38;padding:6px 8px 7px;margin:0 0 6px;box-shadow:inset 0 1px 0 #26202f}
+.bsec:last-child{border-bottom:1px solid #2e2a38}
+.bsec h4{display:flex;align-items:center;gap:6px;margin:0 0 5px}
+.bsec h4::before{content:'';width:6px;height:6px;background:#ffd98a;box-shadow:2px 2px 0 #8a6040;flex:none}
+#hud h1{background:#241e2f;margin:-5px -7px 4px;padding:4px 7px;border-bottom:2px solid #45404f}
+#hud table:not(.foot) td:first-child{color:#b7b2c0}
+#hud table:not(.foot) td:last-child{color:#fff}
+#hud table:not(.foot) tr+tr td{border-top:1px solid rgba(69,64,79,.4)}
+.pop{border-color:#5f5a68;box-shadow:0 2px 0 #0d0b14}
+.pop.big{background:rgba(36,30,47,.94);box-shadow:0 2px 0 #0d0b14,inset 0 0 0 1px #8a6040}
+.tag{box-shadow:0 1px 0 #0d0b14}
+@keyframes cardIn{0%{opacity:0;translate:0 10px}100%{opacity:1;translate:0 0}}
+@keyframes fadeUp{0%{opacity:0;translate:0 4px}100%{opacity:1;translate:0 0}}
+@keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
+@keyframes popIn{0%{opacity:0;scale:.5}60%{opacity:1;scale:1.12}100%{opacity:1;scale:1}}
+@keyframes blink{50%{filter:brightness(1.6)}}
+#menu:not(.hide){animation:fadeIn .18s steps(3) both}
+#menu:not(.hide) #mcard{animation:cardIn .24s steps(4) both}
+#pbody.fade{animation:fadeUp .18s steps(3) both}
+.pop{animation:popIn .24s steps(4) both}
+#incident.show{animation:cardIn .2s steps(3) both}
+#tabs .badge{animation:blink 1.2s steps(2) infinite}
+.bar .fl{transition:width .3s steps(5)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body class="inmenu">
