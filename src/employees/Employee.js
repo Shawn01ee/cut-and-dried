@@ -11,8 +11,8 @@ const SETTLING_DAYS = 3, SETTLING_PENALTY = 6;
  * `fig` is a rendering handle attached by the scene and never saved.
  */
 export class Employee {
-  constructor({ id, name, role, style, rank = 'designer', unlock = null, specialty = null, skills, salary, hireCost = 0, bias = 0, fine = false, single = false, apron, hair, long = false }) {
-    Object.assign(this, { id, name, role, style, rank, unlock, specialty, skills: { ...skills }, salary, hireCost, bias, fine, single, apron, hair, long });
+  constructor({ id, name, role, style, rank = 'designer', unlock = null, specialty = null, perk = null, skills, salary, hireCost = 0, bias = 0, fine = false, single = false, apron, hair, long = false }) {
+    Object.assign(this, { id, name, role, style, rank, unlock, specialty, perk, skills: { ...skills }, salary, hireCost, bias, fine, single, apron, hair, long });
     this.stamina = 100; this.experience = 0; this.level = 1; this.status = 'idle'; this.assignedCustomer = null;
     this.hired = false; this.restUntil = 0; this.stats = { served: 0, sum: 0, earn: 0 }; this.today = { served: 0, earn: 0 }; this.fig = null;
     this.stress = 0; this.leaveFrom = 0; this.leaveTo = 0; this.daysEmployed = 0; this.boost = 0;
@@ -38,7 +38,7 @@ export class Employee {
   /** Translates skills, tiredness and stress into the error and speed the hair rules use. */
   serviceProfile(speedBonus = 1) {
     const strain = this.strain, s = this.effectiveSkills;
-    return { cut: (100 - s.cutting) / 25 * strain, bias: this.bias, col: (100 - s.colouring) / 2000 * strain, wave: (100 - s.perming) / 400 * strain, spd: s.speed / 60 * (1 - this.fatigue / 250) * speedBonus, fine: this.fine, single: this.single };
+    return { cut: (100 - s.cutting) / 25 * strain, bias: this.bias, col: (100 - s.colouring) / 2000 * strain, wave: (100 - s.perming) / 400 * strain, spd: s.speed / 60 * (1 - this.fatigue / 250) * speedBonus * (this.perk === 'speed' ? 1.2 : 1), fine: this.fine, single: this.single };
   }
   serviceQuality() { const s = this.effectiveSkills; return Math.max(0, ((s.cutting + s.customerService) / 200) * (1 - this.fatigue / 200) * (1 - Math.max(0, this.stress - 60) / 200)); }
   tire(amount) { this.stamina = Math.max(0, this.stamina - amount); }

@@ -10,10 +10,17 @@ export const starsFor = s => s >= .86 ? 5 : s >= .72 ? 4 : s >= .58 ? 3 : s >= .
  */
 export class ReviewBoard {
   #nextId = 0;
-  constructor() { this.list = []; this.unread = 0; this.version = 0; }
+  constructor() { this.list = []; this.unread = 0; this.version = 0; this.autoReply = false; }
   get visible() { return this.list.filter(r => !r.removed); }
   get count() { return this.visible.length; }
-  get rating() { const recent = this.visible.slice(0, RATING_WINDOW); return recent.length ? recent.reduce((sum, r) => sum + r.stars, 0) / recent.length : 0; }
+  /** How much a review counts towards the rating: a thank-you makes praise count in full, an apology takes the sting out of a complaint. */
+  static weight(r) { return r.replied ? 1 : r.stars >= 4 ? .5 : 1.5; }
+  /** Average stars of recent reviews, weighted by whether they have been answered. */
+  get rating() {
+    const recent = this.visible.slice(0, RATING_WINDOW); if (!recent.length) return 0;
+    const w = recent.reduce((sum, r) => sum + ReviewBoard.weight(r), 0);
+    return recent.reduce((sum, r) => sum + r.stars * ReviewBoard.weight(r), 0) / w;
+  }
   /** Once there are a few reviews, the rating pulls demand up or down. */
   get demandMultiplier() { return this.count >= MIN_FOR_DEMAND ? 1 + (this.rating - 4) * .15 : 1; }
   find(id) { return this.list.find(r => r.id === id) || null; }
@@ -80,15 +87,21 @@ export class ReviewBoard {
   /** A one-star review from someone who never came in. */
   troll(day) { return this.#add({ author: pick(NAMES), day, stars: 1, key: pick(['t.0', 't.1', 't.2', 't.3']), fake: true }); }
 
-  /** The owner answers a review. Returns the reputation change, or null if that answer is not possible. */
-  reply(id, kind) {
+  /**
+   * Someone answers a review: the marketing lead if there is one, otherwise Lia.
+   * `by` is { name, role, skill }; a skilled marketer's replies win back more goodwill.
+   * Returns the reputation change, or null if that answer is not possible.
+   */
+  reply(id, kind, by = { name: 'Lia', role: 'owner', skill: 0 }) {
     const r = this.find(id);
     if (!r || r.replied || r.removed) return null;
     let rep = 0, edited = false;
-    if (kind === 'thanks' && r.stars >= 4) { r.replied = 'thanks'; rep = .3; }
+    const knack = 1 + by.skill / 100;
+    r.by = by.name; r.byRole = by.role;
+    if (kind === 'thanks' && r.stars >= 4) { r.replied = 'thanks'; rep = .3 * knack; }
     else if (kind === 'apology' && r.stars <= 3) {
-      r.replied = 'apology'; rep = .8;
-      if (!r.fake && r.stars < 5 && Math.random() < (r.villain ? .15 : .4)) { r.stars++; r.edited = edited = true; }
+      r.replied = 'apology'; rep = .8 * knack;
+      if (!r.fake && r.stars < 5 && Math.random() < (r.villain ? .15 : .4) * knack) { r.stars++; r.edited = edited = true; }
     } else if (kind === 'report' && r.stars <= 3) {
       if (r.fake) { r.removed = true; r.replied = 'removed'; } else { r.replied = 'rejected'; rep = -2; }
     } else return null;
@@ -96,10 +109,10 @@ export class ReviewBoard {
     return { review: r, rep, edited };
   }
 
-  toJSON() { return { nextId: this.#nextId, list: this.list.slice(0, 60) }; }
+  toJSON() { return { nextId: this.#nextId, list: this.list.slice(0, 60), autoReply: this.autoReply }; }
   restore(d) {
     if (!d) return;
     this.list = d.list || []; this.#nextId = d.nextId || this.list.reduce((m, r) => Math.max(m, r.id), 0);
-    this.unread = 0; this.version++;
+    this.unread = 0; this.autoReply = !!d.autoReply; this.version++;
   }
 }

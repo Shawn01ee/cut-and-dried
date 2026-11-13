@@ -13,7 +13,7 @@ export class FurnitureView {
 
   constructor(world, Builder, seats, layout, glow) {
     Object.assign(this, { world, Builder, seats, layout, glow });
-    this.#grid = new THREE.InstancedMesh(box, new THREE.MeshBasicMaterial({ color: 0x8fc25a, transparent: true, opacity: .32, depthWrite: false }), layout.cells.length);
+    this.#grid = new THREE.InstancedMesh(box, new THREE.MeshBasicMaterial({ color: 0x8fc25a, transparent: true, opacity: .45, depthWrite: false }), layout.cells.length);
     this.#grid.frustumCulled = false; this.#grid.raycast = noRay; this.#grid.visible = false; world.add(this.#grid);
   }
   #build(id, pickable) {
@@ -53,10 +53,15 @@ export class FurnitureView {
     let o = hit && hit.object; while (o && !o.userData.item) o = o.parent;
     return o ? o.userData.item : null;
   }
-  showGhost(id) { this.clearGhost(); this.#ghost = this.#build(id, false); this.#ghost.visible = false; this.world.add(this.#ghost); }
+  showGhost(id) {
+    this.clearGhost(); this.#ghost = this.#build(id, false); this.#ghost.visible = false; this.world.add(this.#ghost);
+    // An arrow on the floor shows which way the piece faces.
+    const d = (FURNITURE[id].d || 1) * .25, arrow = new THREE.Mesh(new THREE.ConeGeometry(.16, .34, 3).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd98a }));
+    arrow.position.set(0, .06, d + .28); arrow.raycast = noRay; arrow.userData.keep = true; this.#ghost.add(arrow);
+  }
   poseGhost(x, z, rotation, ok) {
     this.#ghost.visible = true; this.#place(this.#ghost, x, z, rotation);
-    this.#ghost.traverse(o => { if (o.isMesh) { o.material = ok ? this.#ghostOk : this.#ghostBad; o.castShadow = false; } });
+    this.#ghost.traverse(o => { if (o.isMesh && !o.userData.keep) { o.material = ok ? this.#ghostOk : this.#ghostBad; o.castShadow = false; } });
   }
   hideGhost() { if (this.#ghost) this.#ghost.visible = false; }
   clearGhost() { if (this.#ghost) { this.world.remove(this.#ghost); this.#ghost = null; } }
