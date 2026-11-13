@@ -19,6 +19,8 @@ import { SalonLayout } from '../building/SalonLayout.js';
 import { rand, clamp } from '../core/math.js';
 
 const PRICE_MULTIPLIER = [.8, 1, 1.5], PRICE_DEMAND = [1.3, 1, .7];
+// People who walk past a salon nobody has heard of yet and come in, per eight hours.
+const WALK_INS = 2.5;
 const MATERIALS = { colour: 18, wave: 14 }, CARD_FEE = .016, SPA_FEE = 45;
 export const STARTING_CASH = 2000;
 // Earlier saves used these ids for the stylist now called Shawn.
@@ -58,10 +60,20 @@ export class TycoonGame {
     this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null;
   }
   get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned }; }
-  /** Roughly how many clients want to come today. There is no cap: seats and chairs decide how many can be served. */
+  /**
+   * Where clients come from, per eight hours: a few passers-by, then more as reputation, comfort, followers and
+   * regulars grow (`add`), scaled by prices, marketing, reviews and the rival (`mult`).
+   */
+  get demandParts() {
+    return {
+      add: { walk: WALK_INS, rep: this.reputation.value * .25, comfort: this.comfort * .15, followers: this.marketing.followerClients, regulars: Math.min(15, this.regulars * .12) },
+      mult: { price: PRICE_DEMAND[this.priceLevel], marketing: this.marketing.demandMultiplier, reviews: this.reviews.demandMultiplier, rival: 1 - this.rival.pull(this.standing) },
+    };
+  }
+  /** Roughly how many clients want to come per eight hours. There is no cap: seats and chairs decide how many can be served. */
   get dailyDemand() {
-    const base = 5 + this.reputation.value * .25 + this.comfort * .2 + this.marketing.followerClients + Math.min(15, this.regulars * .12);
-    return Math.max(1, Math.round(base * PRICE_DEMAND[this.priceLevel] * this.marketing.demandMultiplier * this.reviews.demandMultiplier * (1 - this.rival.pull(this.standing))));
+    const { add, mult } = this.demandParts, sum = Object.values(add).reduce((a, b) => a + b, 0), k = Object.values(mult).reduce((a, b) => a * b, 1);
+    return Math.max(1, Math.round(sum * k));
   }
   /** How Ciel Ground looks from outside, for the rival to react to. */
   /** What Shawn, the CEO, thinks the salon is worth. */
