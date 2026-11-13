@@ -107,10 +107,8 @@ S.box(8,.06,6,0xdcd9dc,0,-.02,0);
 /** A flat tiled surface drawn as a pixel texture, so joints stay crisp one-pixel lines. */
 function tiledSurface(w,d,fill,joint,x,z,parent=world){const P=16,tex=canvasTex(w*P,d*P,g=>{g.fillStyle=fill;g.fillRect(0,0,w*P,d*P);g.fillStyle=joint;for(let i=0;i<=w;i++)g.fillRect(Math.min(i*P,w*P-1),0,1,d*P);for(let j=0;j<=d;j++)g.fillRect(0,Math.min(j*P,d*P-1),w*P,1);});
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;parent.add(m);return m;}
-/** Grey terrazzo: a speckled pixel texture, the same pattern every time. */
-function terrazzo(w,d,x,z,parent=world){const P=16;let seed=Math.round((x+20)*131+(z+20)*71);const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
-  const tex=canvasTex(w*P,d*P,g=>{g.fillStyle='#bdb9c0';g.fillRect(0,0,w*P,d*P);const dots=['#9c98a2','#dcd9dc','#7d7884'];for(let i=0;i<w*d*16;i++){g.fillStyle=dots[Math.floor(rnd()*3)];g.fillRect(Math.floor(rnd()*w*P),Math.floor(rnd()*d*P),1,1);}});
-  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;parent.add(m);return m;}
+/** Salon floor: pale large-format tiles, kept plain so people and furniture stand out. */
+function terrazzo(w,d,x,z,parent=world){return tiledSurface(w,d,'#dcd9dc','#bdb9c0',x,z,parent);}
 terrazzo(8,6,0,0);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7);
 // lamp posts
 [[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{S.box(.14,3.3,.14,0x1d1a26,x,1.65,z).box(.3,.08,.3,0x1d1a26,x,3.32,z);});
@@ -124,7 +122,7 @@ const salonMesh=S.build();
 
 /* walls with cutaway */
 // Greige plaster walls, steel window frames and a warm cove light along the top, after the real Ciel Ground.
-const WALLC=0xdcd9dc,SKIRT=0x45404f,TRIM=0x7d7884;
+const WALLC=0xb7a99a,SKIRT=0x45404f,TRIM=0x7d7884;
 function makeWall(along,c,segs,n){
   const full=new SB(),low=new SB(),glass=[];
   segs.forEach(([a,b,t])=>{const L=b-a,m=(a+b)/2;
@@ -142,7 +140,9 @@ function makeWall(along,c,segs,n){
 }
 /** Every wall, with the salon sizes it stands at. The first four are the original room. */
 const walls=[];
-function addWall(show,...args){const w=makeWall(...args);w.show=show;walls.push(w);return w;}
+function addWall(show,...args){const w=makeWall(...args);Object.assign(w,{show,line:args[1]});walls.push(w);return w;}
+/** Only the outermost walls of the salon stand full height; a wall with more salon behind it stays low so it never hides the room. */
+function isOuter(w,t){const n=w.n;if(n.z<0)return Math.abs(w.line-(t>=1?-5.08:-3.08))<.01;if(n.x>0)return Math.abs(w.line-(t>=2?8.16:4.08))<.01;return true;}
 addWall(t=>t<1,'x',-3.08,[[-4.16,4.16,'s']],V(0,0,-1));
 addWall(()=>true,'x',3.08,[[-4.16,-2.5,'s'],[-2.5,-1.5,'d'],[-1.5,-0.6,'s'],[-0.6,3.4,'w'],[3.4,4.16,'s']],V(0,0,1));
 addWall(()=>true,'z',-4.08,[[-3,-1.6,'s'],[-1.6,0.2,'w'],[0.2,3,'s']],V(-1,0,0));
@@ -439,7 +439,7 @@ const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.w
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
 function syncSupport(){recep.root.visible=game.staff.hasSupport('reception');helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
 const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.6,1.3],[2,-.2,1.45]];
-function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;annexBackGroup.visible=t>=3;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site<0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
+function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;annexBackGroup.visible=t>=3;walls.forEach(w=>{if(w.show)w.off=!w.show(t);if(w.line!=null)w.inner=!isOuter(w,t);});if(site<0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
 function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='free')return;if(!game.staff.fire(e))return;e.fig.root.visible=false;if(st)vacate(st);}
@@ -553,7 +553,7 @@ const FOIL={L:.8,a:-.002,b:-.006};
 function envStep(dt,t){
   poleTex.offset.y=(t*.4)%1;
   // cutaway walls facing the camera
-  const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{if(w.off){w.full.visible=w.low.visible=false;return;}const front=w.n.dot(v)>.2;w.full.visible=!front;w.low.visible=front;});
+  const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{if(w.off){w.full.visible=w.low.visible=false;return;}const front=w.n.dot(v)>.2||w.inner;w.full.visible=!front;w.low.visible=front;});
   // selection marker
   if(started&&typeof sel==='number'){const st=stations[sel];marker.visible=true;marker.position.set(st.chair.x,2.35+Math.abs(Math.sin(t*3))*.15,st.chair.z);}else marker.visible=false;
 }
