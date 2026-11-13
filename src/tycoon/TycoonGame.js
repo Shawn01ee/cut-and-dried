@@ -48,7 +48,7 @@ export class TycoonGame {
     this.priceLevel = 1; this.served = 0; this.servedToday = 0; this.satisfactionSum = 0; this.lastSatisfaction = 0;
     this.repAtDayStart = 0; this.followersAtDayStart = 0; this.incidents = blankIncidents(); this.trollAt = null; this.report = null;
     // Regular clients come back on their own; stylists who want to quit and rival news wait for the morning.
-    this.regulars = 0; this.resignations = []; this.news = [];
+    this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0;
   }
   get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned }; }
   /** Roughly how many clients want to come today. There is no cap: seats and chairs decide how many can be served. */
@@ -61,7 +61,8 @@ export class TycoonGame {
   /** How well the front desk runs marketing: Ruby's marketing skill, or Lia doing it herself without her. */
   get marketingPower() { const r = this.staff.receptionist; return r.hired ? .75 + (r.skills.marketing || 0) / 200 : .5; }
   /** Furniture comfort plus a tidy floor while the assistant is employed. */
-  get comfort() { return this.layout.comfort + (this.staff.hasSupport('tidy') ? 2 : 0); }
+  /** Furniture comfort, plus a tidy floor while an assistant is employed, minus hair left lying on the floor. */
+  get comfort() { return this.layout.comfort + (this.staff.hasSupport('tidy') ? 2 : 0) - Math.min(4, Math.floor(this.dirt / 150)); }
   get averageSatisfaction() { return this.served ? this.satisfactionSum / this.served : 0; }
   /** How good a reel filmed right now looks: the latest finished style, the salon and its rating. */
   get reelQuality() { return clamp(.1 + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
@@ -123,7 +124,7 @@ export class TycoonGame {
   replyToReview(id, kind) { const r = this.reviews.reply(id, kind); if (r && r.rep) this.reputation.add(r.rep); return r; }
   post(channel) { return this.marketing.post(channel, this.clock.day, this.reelQuality, this.marketingPower); }
   runCampaign(id) { return this.marketing.run(id, this.marketingPower); }
-  expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 3) this.layout.addAnnexPlants(); return true; }
+  expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 2) this.layout.addAnnexPlants(); return true; }
   tick(dt) {
     this.clock.tick(dt); this.operatingCosts.accrue(this.clock.workedFraction);
     if (this.trollAt != null && this.clock.elapsed >= this.trollAt) { this.trollAt = null; this.#post(this.reviews.troll(this.clock.day)); }
