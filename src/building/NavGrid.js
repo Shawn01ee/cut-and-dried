@@ -16,8 +16,8 @@ export class NavGrid {
     for (const dx of [-.5, 0, .5]) for (const dz of [-.5, 0, .5]) {
       if (!dx && !dz) continue;
       const n = L.cellAt(c.x + dx, c.z + dz);
-      if (!n || n.outdoor !== c.outdoor || !this.#open(n, blocked) || L.stepBlocked(c, n)) continue;
-      if (dx && dz) { const a = L.cellAt(c.x + dx, c.z), b = L.cellAt(c.x, c.z + dz); if (!a || !b || !this.#open(a, blocked) || !this.#open(b, blocked) || L.stepBlocked(c, a) || L.stepBlocked(c, b) || L.stepBlocked(a, n) || L.stepBlocked(b, n)) continue; }
+      if (!n || n.outdoor !== c.outdoor || !this.#open(n, blocked)) continue;
+      if (dx && dz) { const a = L.cellAt(c.x + dx, c.z), b = L.cellAt(c.x, c.z + dz); if (!a || !b || !this.#open(a, blocked) || !this.#open(b, blocked)) continue; }
       out.push([n, dx && dz ? 1.414 : 1]);
     }
     for (const [ax, az, bx, bz] of DOOR) {

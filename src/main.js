@@ -15,7 +15,7 @@ import { TycoonUI } from './ui/TycoonUI.js';
 import { BranchScene } from './rendering/BranchScene.js';
 import { NavGrid } from './building/NavGrid.js';
 import { paintSign } from './rendering/pixelFont.js';
-import { DEFAULT_LAYOUT, EXTRA_STATIONS, INNER_WALLS } from './building/SalonLayout.js';
+import { DEFAULT_LAYOUT, EXTRA_STATIONS } from './building/SalonLayout.js';
 import { FURNITURE } from './building/FurnitureCatalog.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { IncidentCard } from './ui/IncidentCard.js';
@@ -108,8 +108,8 @@ S.box(8,.06,6,0xdcd9dc,0,-.02,0);
 function tiledSurface(w,d,fill,joint,x,z,parent=world){const P=16,tex=canvasTex(w*P,d*P,g=>{g.fillStyle=fill;g.fillRect(0,0,w*P,d*P);g.fillStyle=joint;for(let i=0;i<=w;i++)g.fillRect(Math.min(i*P,w*P-1),0,1,d*P);for(let j=0;j<=d;j++)g.fillRect(0,Math.min(j*P,d*P-1),w*P,1);});
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:tex}));m.position.set(x,.012,z);m.receiveShadow=true;parent.add(m);return m;}
 /** Salon floor: pale large-format tiles, kept plain so people and furniture stand out. */
-function terrazzo(w,d,x,z,parent=world){return tiledSurface(w,d,'#dcd9dc','#bdb9c0',x,z,parent);}
-terrazzo(8,6,0,0);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7);
+function salonFloor(w,d,x,z,parent=world){return tiledSurface(w,d,'#dcd9dc','#bdb9c0',x,z,parent);}
+salonFloor(8,6,0,0);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7);
 // lamp posts
 [[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{S.box(.14,3.3,.14,0x1d1a26,x,1.65,z).box(.3,.08,.3,0x1d1a26,x,3.32,z);});
 // clock post and barber pole base
@@ -140,41 +140,35 @@ function makeWall(along,c,segs,n){
 }
 /** Every wall, with the salon sizes it stands at. The first four are the original room. */
 const walls=[];
-function addWall(show,...args){const w=makeWall(...args);Object.assign(w,{show,line:args[1]});walls.push(w);return w;}
-/** Only the outermost walls of the salon stand full height; a wall with more salon behind it stays low so it never hides the room. */
-function isOuter(w,t){const n=w.n;if(n.z<0)return Math.abs(w.line-(t>=1?-5.08:-3.08))<.01;if(n.x>0)return Math.abs(w.line-(t>=2?8.16:4.08))<.01;return true;}
+function addWall(show,...args){const w=makeWall(...args);w.show=show;walls.push(w);return w;}
 addWall(t=>t<1,'x',-3.08,[[-4.16,4.16,'s']],V(0,0,-1));
 addWall(()=>true,'x',3.08,[[-4.16,-2.5,'s'],[-2.5,-1.5,'d'],[-1.5,-0.6,'s'],[-0.6,3.4,'w'],[3.4,4.16,'s']],V(0,0,1));
 addWall(()=>true,'z',-4.08,[[-3,-1.6,'s'],[-1.6,0.2,'w'],[0.2,3,'s']],V(-1,0,0));
 addWall(t=>t<2,'z',4.08,[[-3,-0.4,'s'],[-0.4,1.6,'w'],[1.6,3,'s']],V(1,0,0));
 // size 2: the back of the shop
-const backWall=addWall(t=>t>=1,'x',-5.08,[[-4.16,4.16,'s']],V(0,0,-1));
+const backWall=addWall(t=>t===1||t===2,'x',-5.08,[[-4.16,4.16,'s']],V(0,0,-1));
 addWall(t=>t>=1,'z',-4.08,[[-5.16,-3,'s']],V(-1,0,0));
-addWall(t=>t>=1&&t<3,'z',4.08,[[-5.16,-3,'s']],V(1,0,0));
-// size 3: the annex next door; size 4: the space behind it
+addWall(t=>t===1,'z',4.08,[[-5.16,-3,'s']],V(1,0,0));
+// size 3: the whole shop next door, front to back
 addWall(t=>t>=2,'x',3.08,[[4.16,5,'s'],[5,7.4,'w'],[7.4,8.24,'s']],V(0,0,1));
-addWall(t=>t===2,'x',-3.08,[[4.16,8.24,'s']],V(0,0,-1));
-addWall(t=>t>=2,'z',8.16,[[-3,-.8,'s'],[-.8,1.2,'w'],[1.2,3,'s']],V(1,0,0));
-addWall(t=>t>=3,'x',-5.08,[[4.16,8.24,'s']],V(0,0,-1));
-addWall(t=>t>=3,'z',8.16,[[-5.16,-3,'s']],V(1,0,0));
+addWall(t=>t>=2,'z',8.16,[[-5.16,-3.6,'s'],[-3.6,-1.8,'w'],[-1.8,-.8,'s'],[-.8,1.2,'w'],[1.2,3,'s']],V(1,0,0));
+addWall(t=>t===2,'x',-5.08,[[4.16,8.24,'s']],V(0,0,-1));
+// size 4: a deeper room across the whole back
+const rearWall=addWall(t=>t>=3,'x',-7.08,[[-4.16,8.24,'s']],V(0,0,-1));
+addWall(t=>t>=3,'z',-4.08,[[-7.16,-5,'s']],V(-1,0,0));
+addWall(t=>t>=3,'z',8.16,[[-7.16,-5,'s']],V(1,0,0));
 /** Floor, slab and a ceiling light for an area that opens with an expansion. */
 function zoneGroup(slab,floor,light){const g=new THREE.Group();g.visible=false;world.add(g);const A=new SB();A.box(...slab,0x45404f,slab[3],-.27,slab[4]);A.box(floor[0],.06,floor[1],0xdcd9dc,floor[2],-.02,floor[3]);A.build(g);
-  terrazzo(floor[0],floor[1],floor[2],floor[3],g);const l=new THREE.PointLight(0xffd98a,0,8,1.5);l.position.set(light[0],2.4,light[1]);g.add(l);inLights.push(l);return g;}
+  salonFloor(floor[0],floor[1],floor[2],floor[3],g);const l=new THREE.PointLight(0xffd98a,0,8,1.5);l.position.set(light[0],2.4,light[1]);g.add(l);inLights.push(l);return g;}
 const backGroup=zoneGroup([9,.5,2.4,0,-4.1],[8,2,0,-4],[0,-4]);
-const annexGroup=zoneGroup([4.1,.5,9.6,6.55,1.4],[4,6,6,0],[6,0]);
+const annexGroup=zoneGroup([4.1,.5,11.6,6.55,.4],[4,8,6,-1],[6,-1]);
 {const A=new SB();A.box(4.1,.06,3,0xb7a99a,6.55,-.02,4.7).box(4.1,.1,.18,0x7d7884,6.55,0,6.11);A.build(annexGroup);tiledSurface(4,3,'#b7a99a','#9a8f84',6.5,4.7,annexGroup);}
-const annexBackGroup=zoneGroup([4.1,.5,2.4,6.55,-4.1],[4,2,6,-4],[6,-4]);
-// Where an outer wall used to be, a waist-high wall with an opening stays after the expansion.
-INNER_WALLS.forEach(({seg:[x1,z1,x2,z2],gaps,tier})=>{const alongX=z1===z2,n=alongX?V(0,0,-1):V(1,0,0),c=alongX?z1-.08:x1+.08,lo=alongX?Math.min(x1,x2):Math.min(z1,z2),hi=alongX?Math.max(x1,x2):Math.max(z1,z2);
-  const parts=[];let at=lo;[...gaps].sort((p,q)=>p[0]-q[0]).forEach(([g0,g1])=>{if(g0>at)parts.push([at,g0]);at=g1;});if(hi>at)parts.push([at,hi]);
-  const full=new SB(),low=new SB();parts.forEach(([a,b])=>{const L=b-a,m=(a+b)/2,put=(sb,y0,y1,col,th=.16)=>{const h=y1-y0;if(alongX)sb.box(L,h,th,col,m,y0+h/2,c);else sb.box(th,h,L,col,c,y0+h/2,m);};
-    put(full,0,1,WALLC);put(full,.98,1.04,TRIM,.2);put(full,0,.18,SKIRT,.2);put(low,0,.32,WALLC);put(low,0,.18,SKIRT,.2);});
-  const gF=new THREE.Group(),gL=new THREE.Group();world.add(gF);world.add(gL);full.build(gF);low.build(gL);walls.push({n,full:gF,low:gL,show:t=>t>=tier});});
+const rearGroup=zoneGroup([13.1,.5,2.4,2.05,-6.1],[12,2,2,-6],[2,-6]);
 // sign on the back wall, moved back with the wall when the shop grows
 const signTex=canvasTex(140,22,g=>paintSign(g,140,22,'CIEL GROUND'));
-function mountSign(wall,z){const sb=new SB();sb.box(4.5,.82,.12,0xf6f3ee,0,2.95,z);sb.box(.08,.4,.08,TRIM,-1.8,2.6,z).box(.08,.4,.08,TRIM,1.8,2.6,z);sb.build(wall.full);
-  const p=new THREE.Mesh(new THREE.PlaneGeometry(4.4,.69),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(0,2.95,z+.07);wall.full.add(p);}
-mountSign(walls[0],-3.08);mountSign(backWall,-5.08);
+function mountSign(wall,z,x=0){const sb=new SB();sb.box(4.5,.82,.12,0xf6f3ee,x,2.95,z);sb.box(.08,.4,.08,TRIM,x-1.8,2.6,z).box(.08,.4,.08,TRIM,x+1.8,2.6,z);sb.build(wall.full);
+  const p=new THREE.Mesh(new THREE.PlaneGeometry(4.4,.69),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(x,2.95,z+.07);wall.full.add(p);}
+mountSign(walls[0],-3.08);mountSign(backWall,-5.08);mountSign(rearWall,-7.08,2);
 // storefront sign above the window, white with black lettering like the real shop
 {const sb=new SB();sb.box(3.4,.5,.1,0xf6f3ee,1.4,2.36,3.21);sb.build(walls[1].full);const p=new THREE.Mesh(new THREE.PlaneGeometry(3.3,.42),new THREE.MeshBasicMaterial({map:signTex}));p.position.set(1.4,2.36,3.27);walls[1].full.add(p);}
 // clock
@@ -342,7 +336,7 @@ function spawnCustomer(){
 }
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
 function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos;let pts;
-  pts=(p.x>-4.1&&p.x<(game.layout.tier>=2?8.1:4.1)&&p.z<3.1&&p.z>-5.1)?[...route(p,DOOR_IN),DOOR_OUT,STREET_DOOR,STREET]:[STREET_DOOR,STREET];
+  pts=(p.x>-4.1&&p.x<(game.layout.tier>=2?8.1:4.1)&&p.z<3.1&&p.z>(game.layout.tier>=3?-7.1:game.layout.tier>=1?-5.1:-3.1))?[...route(p,DOOR_IN),DOOR_OUT,STREET_DOOR,STREET]:[STREET_DOOR,STREET];
   if(why==='full')pts=[DOOR_OUT,STREET_DOOR,STREET];
   f.walkTo(pts,()=>{c.state='gone';c.fadeOut=1;});}
 function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=c;st.state='await';st.touched=false;st.byOwner=false;st.worker=null;const f=c.fig;
@@ -352,7 +346,7 @@ function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=
   function arrive(){f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);}
   if(sel===st.i)renderPanel(true);}
 const booths=[],washes=[];
-const freeBooth=()=>booths.find(b=>!b.client),freeHelper=()=>helpers.find(h=>h.fig.root.visible&&!h.task);
+const freeBooth=()=>booths.find(b=>!b.client&&!pendingMoves.has(b.item)),freeHelper=()=>helpers.find(h=>h.fig.root.visible&&!h.task);
 /** Shampoo at a free booth: a free assistant washes, otherwise the client's own stylist steps away from the chair to do it. */
 function shampoo(c,st,lead,start,then){const b=freeBooth(),h=freeHelper(),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:4.5};
   b.client=c;c.inWash=true;if(h)h.task={kind:'wash',T};else st.washing=T;washes.push(T);
@@ -419,7 +413,7 @@ function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,...hel
 /* sweeping: assistants keep the floor clean; without them Lia does it between clients */
 const landedClips=()=>clips.filter(c=>c.alive&&c.landed);
 function startSweep(fig){const landed=landedClips();if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
-  const at=a.clone().add(V(.5,0,.45));at.x=clamp(at.x,-3.6,t>=2?7.6:3.6);at.z=clamp(at.z,t>=1?-4.6:-2.6,2.6);
+  const at=a.clone().add(V(.5,0,.45));at.x=clamp(at.x,-3.6,t>=2?7.6:3.6);at.z=clamp(at.z,t>=3?-6.6:t>=1?-4.6:-2.6,2.6);
   const job={kind:'sweep',phase:'walk',fig,aim:a,t:3.2};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
 /** Advances a sweeping job; true once the patch of floor is clean. */
 function updateSweep(job,dt){if(job.phase!=='work')return false;const f=job.fig,a=job.aim;job.t-=dt;f.toolAim=V(a.x+Math.sin(simT*5)*.35,0,a.z+Math.cos(simT*2.5)*.12);
@@ -438,8 +432,8 @@ const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
 function syncSupport(){recep.root.visible=game.staff.hasSupport('reception');helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
-const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.6,1.3],[2,-.2,1.45]];
-function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;annexBackGroup.visible=t>=3;walls.forEach(w=>{if(w.show)w.off=!w.show(t);if(w.line!=null)w.inner=!isOuter(w,t);});if(site<0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
+const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.2,1.38],[2,-.8,1.55]];
+function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site<0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
 function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='free')return;if(!game.staff.fire(e))return;e.fig.root.visible=false;if(st)vacate(st);}
@@ -472,6 +466,17 @@ function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z
     Object.assign(b,{seat:w(it,...A.seat),seatApp:w(it,...A.seatApp),seatYaw:dir(it,...A.face),washAt:w(it,...A.washAt),washYaw:dir(it,...A.washFace),idle:w(it,...A.idle),idleYaw:dir(it,0,-1)});});
   helpers.forEach((h,i)=>{const b=booths[i%Math.max(1,booths.length)];h.booth=b||null;h.idle=b?b.idle.clone().add(V(0,0,i>=booths.length?.6:0)):V(3.6,0,-.85).add(V(-.6*i,0,0));h.idleYaw=b?b.idleYaw:Math.PI;});}
 const stationsOf=it=>stations.filter(s=>s.item===it);
+/** Furniture that stood against a wall an expansion removed follows the wall, as soon as nobody is using it. */
+// Pieces waiting to follow a wall: their chairs and booths take no new clients until they have moved.
+const pendingMoves=new Set();
+function alignToWalls(){const L=game.layout;let moved=false;pendingMoves.clear();
+  for(let pass=0;pass<3;pass++){let any=false;
+    for(const it of L.items){const to=L.wallShift(it);if(!to||(build.active&&build.active.existing===it))continue;const cells=L.footprint(it.id,to.x,to.z,it.rotation);
+      if(!cells||!L.canOccupy(it.id,cells,it)||!nav.wouldConnect({id:it.id,x:to.x,z:to.z,rotation:it.rotation,cells},it))continue;
+      if(!canModify(it)){pendingMoves.add(it);continue;}
+      pendingMoves.delete(it);furnitureView.despawn(it);L.move(it,to.x,to.z,it.rotation);any=moved=true;}
+    if(!any)break;}
+  if(moved){syncFurniture();renderPanel(true);}return moved;}
 function canModify(it){if(booths.some(b=>b.item===it&&b.client))return false;if(!FURNITURE[it.id].chairs)return !furnitureView.isOccupied(it);
   const sts=stationsOf(it);return sts.length>0&&sts.every(st=>!st.cust&&!st.washing&&!st.sweep&&(st.state==='free'||st.state==='vacant')&&!(styling&&styling.station===st));}
 function canSell(it){if(!canModify(it))return false;return !FURNITURE[it.id].chairs||stationsOf(it).every(st=>st.vacant);}
@@ -523,7 +528,7 @@ function simStep(dt){simT+=dt;
     if(st.vacant)return;
     if(st.sweep){if(updateSweep(st.sweep,dt))st.sweep=null;}
     else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
-    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen||st.sweep||(booths.length&&!freeBooth()))return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),c=waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)assign(st,c);}
+    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen||st.sweep||pendingMoves.has(st.item)||(booths.length&&!freeBooth()))return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),c=waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
@@ -553,7 +558,7 @@ const FOIL={L:.8,a:-.002,b:-.006};
 function envStep(dt,t){
   poleTex.offset.y=(t*.4)%1;
   // cutaway walls facing the camera
-  const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{if(w.off){w.full.visible=w.low.visible=false;return;}const front=w.n.dot(v)>.2||w.inner;w.full.visible=!front;w.low.visible=front;});
+  const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{if(w.off){w.full.visible=w.low.visible=false;return;}const front=w.n.dot(v)>.2;w.full.visible=!front;w.low.visible=front;});
   // selection marker
   if(started&&typeof sel==='number'){const st=stations[sel];marker.visible=true;marker.position.set(st.chair.x,2.35+Math.abs(Math.sin(t*3))*.15,st.chair.z);}else marker.visible=false;
 }
@@ -682,7 +687,7 @@ function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>pop
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:1,options:[{label:tx('inc.keep',cost),run:()=>{game.economy.charge('bonus',cost);e.addStress(-45);}},{label:tx('inc.letGo'),run:()=>{e.quits=true;}}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
   post:postOn,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
@@ -739,11 +744,11 @@ function renderMenu(){const top=mbox.scrollTop;let h;
 function openMenu(s,from){menuScreen=s;menuFrom=from;mbox.scrollTop=0;$('#menu').classList.remove('hide');renderMenu();mbox.scrollTop=0;}
 function closeMenu(){$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
-function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();syncBranches();openDay();syncRoster();morningNews();game.updateProgress();updateHud();renderPanel(true);}
+function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();syncBranches();openDay();alignToWalls();syncRoster();morningNews();game.updateProgress();updateHud();renderPanel(true);}
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
-  else if(a==='nextday'){game.nextDay();spawnTimer=1.5;paused=false;closeMenu();syncRoster();morningNews();updateHud();renderPanel(true);}
+  else if(a==='nextday'){game.nextDay();spawnTimer=1.5;paused=false;closeMenu();alignToWalls();syncRoster();morningNews();updateHud();renderPanel(true);}
   else if(a==='how'||a==='opts')openMenu(a,'main');
   else if(a==='back'){if(menuFrom==='game'){paused=false;closeMenu();}else openMenu('main','main');}
   else if(a==='lang')setLang(v);
@@ -766,7 +771,7 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
     // The music turns tense while a difficult client is in or around the salon.
     audio.setMood(started&&custs.some(c=>c.villain&&c.state!=='gone')?'tense':'calm');}
-  if((clockT+=dt)>1){clockT=0;drawClock();}
+  if((clockT+=dt)>1){clockT=0;drawClock();if(started)alignToWalls();}
   renderer.setRenderTarget(rt);renderer.render(scene,cam);
   renderer.setRenderTarget(null);renderer.render(post,postCam);
   if(!booted){booted=true;boot();}}
