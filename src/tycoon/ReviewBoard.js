@@ -1,7 +1,8 @@
 import { pick } from '../core/math.js';
 import { NAMES } from '../customers/catalog.js';
 
-const MAX_KEPT = 80, RATING_WINDOW = 40, MIN_FOR_DEMAND = 5;
+// Every review is kept, and the rating is worked out over all of them.
+const MIN_FOR_DEMAND = 5;
 export const starsFor = s => s >= .86 ? 5 : s >= .72 ? 4 : s >= .58 ? 3 : s >= .42 ? 2 : 1;
 
 /**
@@ -17,7 +18,7 @@ export class ReviewBoard {
   static weight(r) { return r.replied ? 1 : r.stars >= 4 ? .5 : 1.5; }
   /** Average stars of recent reviews, weighted by whether they have been answered. */
   get rating() {
-    const recent = this.visible.slice(0, RATING_WINDOW); if (!recent.length) return 0;
+    const recent = this.visible; if (!recent.length) return 0;
     const w = recent.reduce((sum, r) => sum + ReviewBoard.weight(r), 0);
     return recent.reduce((sum, r) => sum + r.stars * ReviewBoard.weight(r), 0) / w;
   }
@@ -32,7 +33,6 @@ export class ReviewBoard {
   #add(review) {
     const r = { id: ++this.#nextId, args: [], visit: null, replied: null, removed: false, edited: false, fake: false, villain: false, ...review };
     this.list.unshift(r);
-    if (this.list.length > MAX_KEPT) this.list.length = MAX_KEPT;
     this.unread++; this.version++;
     return r;
   }
@@ -109,7 +109,7 @@ export class ReviewBoard {
     return { review: r, rep, edited };
   }
 
-  toJSON() { return { nextId: this.#nextId, list: this.list.slice(0, 60), autoReply: this.autoReply }; }
+  toJSON() { return { nextId: this.#nextId, list: this.list, autoReply: this.autoReply }; }
   restore(d) {
     if (!d) return;
     this.list = d.list || []; this.#nextId = d.nextId || this.list.reduce((m, r) => Math.max(m, r.id), 0);

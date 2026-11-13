@@ -362,7 +362,7 @@ function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=
 const booths=[],washes=[];
 const freeBooth=()=>booths.find(b=>!b.client&&!pendingMoves.has(b.item)),freeHelper=()=>helpers.find(h=>h.fig.root.visible&&!h.task);
 /** Shampoo at a free booth: a free assistant washes, otherwise the client's own stylist steps away from the chair to do it. */
-function shampoo(c,st,lead,start,then){const b=freeBooth(),h=freeHelper(),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:4.5};
+function shampoo(c,st,lead,start,then){const b=freeBooth(),h=freeHelper(),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo')*game.clock.hourLength/60};
   b.client=c;c.inWash=true;if(h)h.task={kind:'wash',T};else st.washing=T;washes.push(T);
   washer.handL=washer.handR=null;washer.setTool(null);washer.walkTo(route(washer.pos,b.washAt),()=>{washer.yaw=b.washYaw;T.ready=true;});
   c.fig.walkTo([...lead,...route(start,b.seatApp),b.seat.clone()],()=>{Object.assign(c.fig,{mode:'sit',yaw:b.seatYaw,seatH:.5,footY:.2,tilt:-.45});c.fig.pos.copy(b.seat);T.seated=true;audio.play('swish');});}
@@ -372,10 +372,11 @@ function updateWashes(dt){for(const T of washes.slice()){if(!T.ready||!T.seated)
 function endWash(T){const i=washes.indexOf(T);if(i<0)return;washes.splice(i,1);const f=washerOf(T);f.handL=f.handR=null;if(T.h)T.h.task=null;else T.st.washing=null;
   if(T.b.item.id==='spaBooth')T.c.spa=true;T.b.client=null;T.c.fig.tilt=0;T.c.washed=true;T.c.inWash=false;T.then();}
 function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OWNER:st.sty;if(worker===OWNER&&ownerBusy())return;if(styling&&styling.station===st)closeStyling(true);st.worker=worker;const p=st.plan,ops=[];
-  if(hasColour(p))ops.push({type:'colour',dur:13});
-  if(p.doWave&&Math.abs(p.wave-st.cust.hair.wave)>.05)ops.push({type:'wave',dur:10});
-  if(p.doCut)ops.push({type:'cut',dur:9});
-  ops.push({type:'dry',dur:3.5});const prof=game.serviceProfileOf(worker);ops.forEach(o=>o.dur/=prof.spd);game.chargeMaterials(ops);if(worker!==st.sty)st.sty.fig.walkTo(route(st.sty.fig.pos,st.at(-.8,1.55)));
+  if(hasColour(p))ops.push({type:'colour'});
+  if(p.doWave&&Math.abs(p.wave-st.cust.hair.wave)>.05)ops.push({type:'wave'});
+  if(p.doCut)ops.push({type:'cut'});
+  // Each step takes the stylist's own time for it, from the standard service times.
+  ops.push({type:'dry'});ops.forEach(o=>{o.minutes=worker.serviceMinutes(o.type,game.layout.speedBonus);o.dur=o.minutes*game.clock.hourLength/60;});game.chargeMaterials(ops);if(worker!==st.sty)st.sty.fig.walkTo(route(st.sty.fig.pos,st.at(-.8,1.55)));
   st.ops=ops;st.opi=0;st.state='work';beginOp(st);renderPanel(true);}
 const TOOLS={colour:'brush',wave:'comb',cut:'scissors',dry:'dryer'};
 function beginOp(st){const op=st.ops[st.opi],h=st.cust.hair,s=game.serviceProfileOf(st.worker);op.t=0;op.from=cloneHair(h);op.acc=new Array(NS).fill(0);
@@ -581,7 +582,7 @@ function envStep(dt,t){
 let sel=0;const tabs=$('#tabs'),pbody=$('#pbody');let panelKey='';
 function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span>`;if(st.state==='await')return tx(st.cust.inWash?'st.shampoo':'st.walk');
   if(st.state==='consult')return canAuto(st)?tx('st.auto',Math.max(0,st.timer).toFixed(0)):`<span class="gold">${tx('st.wait')}</span>`;
-  if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}%`;}return tx('st.reveal');}
+  if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}% · ${tx('st.left',Math.max(0,Math.ceil(o.minutes*(1-clamp(o.t/o.dur)))))}`;}return tx('st.reveal');}
 function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']],unread=game.reviews.unread;
   tabs.innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${(k==='salon'?typeof sel==='number':sel===k)?'sel':''}">${tx(l)}${k==='rev'&&unread&&sel!=='rev'?`<span class="badge">${unread}</span>`:''}</button>`).join('')+`<button class="tog" id="bMin">${$('#panel').classList.contains('min')?'▴':'▾'}</button>`;
   tabs.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{sel=b.dataset.t==='salon'?lastChair:b.dataset.t;$('#panel').classList.remove('min');renderPanel(true);});
@@ -707,7 +708,7 @@ function postOn(channel){const who=filmer();if(!who){popup(tx('mk.busy'),OWNER.f
     popup(r.viral?tx('mk.viralPop',name,r.views.toLocaleString()):tx('mk.postPop',name,r.views.toLocaleString(),r.gained.toLocaleString()),f.head,'big');audio.play(r.viral?'levelUp':'happy');renderPanel(true);});
   renderPanel(true);}
 /** Morning news: what the rival did overnight, and stylists who have had enough. */
-function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>popup(tx('rival.news.'+k),recep.head,'big')));
+function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>popup(k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):tx('rival.news.'+k),recep.head,'big')));
   game.resignations.splice(0).forEach(e=>{if(!e.hired)return;const cost=e.salary*2;audio.play('bad');
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:1,options:[{label:tx('inc.keep',cost),run:()=>{game.economy.charge('bonus',cost);e.addStress(-45);}},{label:tx('inc.letGo'),run:()=>{e.quits=true;}}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
