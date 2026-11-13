@@ -120,6 +120,23 @@ export class SalonLayout {
       if (cells && this.canOccupy(id, cells)) this.add(id, x, z, r);
     }
   }
+  /**
+   * Saves from before the styling island opened in the old one-chair salon. A salon still at its first size is refitted
+   * with the new opening interior. Returns null when nothing changed, otherwise what the pieces that did not come with
+   * the new interior cost, so they can be paid back.
+   */
+  upgradeOpening() {
+    if (this.tier !== 0 || this.items.some(it => it.id === 'island')) return null;
+    const old = this.items, given = new Map();
+    this.resetToDefault();
+    DEFAULT_LAYOUT.forEach(([id]) => given.set(id, (given.get(id) || 0) + 1));
+    let refund = 0;
+    for (const it of old) {
+      if (it.id === 'station') continue;
+      if (given.get(it.id) > 0) given.set(it.id, given.get(it.id) - 1); else refund += FURNITURE[it.id].price;
+    }
+    return refund;
+  }
   toJSON() { return { version: 2, tier: this.tier, items: this.items.map(({ id, x, z, rotation }) => ({ id, x, z, rotation })) }; }
   restore(data) {
     this.tier = data.tier;
