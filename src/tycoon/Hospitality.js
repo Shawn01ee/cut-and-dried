@@ -8,6 +8,11 @@ export const AMENITIES = {
   juice: { cost: 4, points: 2, needs: 'coffeeBar' },
 };
 const DRINKS = ['tea', 'coffee', 'juice'];
+/**
+ * The guaranteed minimum satisfaction for a treated client: 35% with one point of treats, rising to 60% with everything.
+ * Difficult clients honour three quarters of it.
+ */
+export const satisfactionFloor = points => points > 0 ? Math.min(.6, .3 + points * .05) : 0;
 
 /** What the salon offers clients while they wait, and what it costs. */
 export class Hospitality {
@@ -17,6 +22,9 @@ export class Hospitality {
   toggle(id) { if (!AMENITIES[id]) return; if (this.offered.has(id)) this.offered.delete(id); else this.offered.add(id); this.version++; }
   get serving() { return [...this.offered].filter(id => this.available(id)); }
   get costPerClient() { return this.serving.reduce((sum, id) => sum + AMENITIES[id].cost, 0); }
+  get points() { return this.serving.reduce((sum, id) => sum + AMENITIES[id].points, 0); }
+  /** The minimum satisfaction a client treated right now is guaranteed. */
+  get floor() { return satisfactionFloor(this.points); }
   /**
    * Treats a client who just sat down: they wait longer and enjoy the visit more.
    * Charges the cost and returns the drink they are holding, if any.

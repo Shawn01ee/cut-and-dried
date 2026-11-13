@@ -1,9 +1,13 @@
 /** Salon opening hours. One working day lasts `dayLength` simulated seconds. */
 export class GameClock {
-  constructor(bus, { dayLength = 150, openHour = 10, closeHour = 18 } = {}) {
-    Object.assign(this, { bus, dayLength, openHour, closeHour });
+  constructor(bus, { hourLength = 150 / 8, openHour = 10, closeHour = 18 } = {}) {
+    Object.assign(this, { bus, hourLength });
     this.day = 1; this.elapsed = 0; this.isOpen = false;
+    this.setHours(openHour, closeHour);
   }
+  /** Opening hours; every hour lasts the same simulated time, so a longer day takes longer to play. */
+  setHours(openHour, closeHour) { Object.assign(this, { openHour, closeHour, dayLength: this.hourLength * (closeHour - openHour) }); }
+  get hours() { return this.closeHour - this.openHour; }
   startDay() { this.elapsed = 0; this.isOpen = true; }
   nextDay() { this.day++; this.startDay(); }
   tick(dt) {

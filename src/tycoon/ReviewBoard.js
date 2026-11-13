@@ -17,6 +17,8 @@ export class ReviewBoard {
   /** Once there are a few reviews, the rating pulls demand up or down. */
   get demandMultiplier() { return this.count >= MIN_FOR_DEMAND ? 1 + (this.rating - 4) * .15 : 1; }
   find(id) { return this.list.find(r => r.id === id) || null; }
+  /** Average stars of the reviews that name a stylist. */
+  ratingFor(stylist) { const mine = this.visible.filter(r => r.visit && r.visit.stylist === stylist); return { count: mine.length, average: mine.length ? mine.reduce((sum, r) => sum + r.stars, 0) / mine.length : 0 }; }
   markRead() { if (this.unread) { this.unread = 0; this.version++; } }
   today(day) { return this.visible.filter(r => r.day === day); }
 
@@ -39,16 +41,17 @@ export class ReviewBoard {
     if (customer.villain) {
       if (outcome.refunded) return this.#add({ author, day, stars: 2, key: 'v.refunded', visit, villain: true });
       if (outcome.refusedRefund) return this.#add({ author, day, stars: 1, key: 'v.refused', visit, villain: true });
-      const stars = Math.max(1, Math.min(3, starsFor(s)) - (outcome.haggleRefused ? 1 : 0));
+      const stars = Math.max(1, Math.min(3, result.reviewStars ?? starsFor(s)) - (outcome.haggleRefused ? 1 : 0));
       return this.#add({ author, day, stars, key: outcome.haggleRefused ? 'v.haggle' : 'v.' + result.nitpick, visit, villain: true });
     }
     if (Math.random() > .3 + Math.abs(s - .65) * .8) return null;
-    const stars = starsFor(s);
+    const stars = result.reviewStars ?? starsFor(s);
     return this.#add({ author, day, stars, key: ReviewBoard.#textFor(stars, customer, result), args: [result.stylist], visit });
   }
   static #textFor(stars, customer, r) {
     const service = customer.requestedService;
     if (stars >= 4) {
+      if (r.hairScore < .72 && r.service >= .65) return 'p.service';
       if (r.specialist) return 'p.special';
       const options = ['p.general'];
       if (r.length > .9) options.push('p.cut');
@@ -59,14 +62,17 @@ export class ReviewBoard {
       return pick(options);
     }
     if (stars === 3) return pick(['m.0', 'm.1', 'm.2']);
+    if (r.hairScore >= .72 && r.service < .4) return 'n.service';
     if (r.dmg > .3) return 'n.damage';
     const faults = [['n.length', r.length], ['n.style', r.style], ['n.wait', r.wait], ['n.price', r.priceFit + .3]];
     if (service === 'colour') faults.push(['n.colour', r.colour]);
     if (service === 'perm') faults.push(['n.wave', r.wav]);
     return faults.sort((a, b) => a[1] - b[1])[0][0];
   }
+  /** Someone who gave up waiting. Being looked after while they waited makes a bad review less likely and less harsh. */
   walkedOut(customer, day) {
-    return Math.random() < .45 ? this.#add({ author: customer.name, day, stars: pick([1, 1, 2]), key: 'n.walkout', visit: { service: customer.requestedService } }) : null;
+    const treated = customer.treated || 0;
+    return Math.random() < .45 * (1 - treated * .1) ? this.#add({ author: customer.name, day, stars: treated >= 2 ? 2 : pick([1, 1, 2]), key: 'n.walkout', visit: { service: customer.requestedService } }) : null;
   }
   turnedAway(customer, day) {
     return Math.random() < .2 ? this.#add({ author: customer.name, day, stars: 2, key: 'n.full', visit: { service: customer.requestedService } }) : null;

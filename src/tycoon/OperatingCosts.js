@@ -7,15 +7,16 @@ const UTILITIES_BASE = 25, UTILITIES_PER_CHAIR = 12, MAINTENANCE_RATE = .01;
 /** Works out what it costs to keep the salon open and charges it as the day goes by. */
 export class OperatingCosts {
   #charged = {}; #rent = 0;
-  constructor(economy, staff, layout, progression) { Object.assign(this, { economy, staff, layout, progression }); }
+  constructor(economy, staff, layout, progression, clock) { Object.assign(this, { economy, staff, layout, progression, clock }); }
 
   /** Full-day cost of each category at the salon's current size. */
   get breakdown() {
-    const furnitureValue = this.layout.items.reduce((sum, it) => sum + FURNITURE[it.id].price, 0);
+    const h = this.clock.hours, furnitureValue = this.layout.items.reduce((sum, it) => sum + FURNITURE[it.id].price, 0);
     return {
       rent: this.#rent,
-      wages: this.staff.payroll,
-      utilities: UTILITIES_BASE + UTILITIES_PER_CHAIR * this.layout.chairs,
+      // Wages are paid by the hour, with time and a half past eight hours.
+      wages: Math.round(this.staff.payroll * (Math.min(8, h) + Math.max(0, h - 8) * 1.5) / 8),
+      utilities: Math.round((UTILITIES_BASE + UTILITIES_PER_CHAIR * this.layout.chairs) * h / 8),
       maintenance: Math.round(furnitureValue * MAINTENANCE_RATE),
     };
   }

@@ -49,7 +49,8 @@ export class StaffManager {
   /** Hired stylists who are in today rather than on leave. */
   working(day) { return this.hired.filter(e => !e.onLeave(day)); }
   get payroll() { return [...this.hired, ...this.support.filter(e => e.hired)].reduce((sum, e) => sum + e.salary, 0); }
-  hasSupport(effect) { return this.support.some(e => e.hired && e.effect === effect); }
+  /** True when someone with this job is hired and at their post (the receptionist can be out filming). */
+  hasSupport(effect) { return this.support.some(e => e.hired && !e.away && e.effect === effect); }
   find(id) { return [...this.all, ...this.support].find(e => e.id === id); }
   hire(employee) { if (employee.hired || !this.economy.spend('recruiting', employee.hireCost)) return false; Object.assign(employee, { hired: true, daysEmployed: 0, stress: 0, leaveFrom: 0, leaveTo: 0 }); this.version++; return true; }
   fire(employee) { if (!employee.hired || employee === this.owner) return false; employee.hired = false; employee.status = 'idle'; this.version++; return true; }
@@ -67,7 +68,8 @@ export class StaffManager {
   setCommission(i) { if (COMMISSION[i] != null) { this.commission = i; this.version++; } }
 
   startDay(day) {
-    this.all.forEach(e => { e.stamina = 100; e.restUntil = 0; e.today = { served: 0, earn: 0 }; });
+    // A night's rest clears tiredness, except what long opening hours carry over.
+    this.all.forEach(e => { e.stamina = 100 - (e.carry || 0); e.carry = 0; e.restUntil = 0; e.today = { served: 0, earn: 0 }; });
     this.hired.forEach(e => { e.boost = COMMISSION_BOOST[this.commission]; if (e.onLeave(day)) e.addStress(-35); });
     this.version++;
   }
@@ -75,13 +77,16 @@ export class StaffManager {
    * End-of-day staff upkeep: performance pay, then stress from the day's load.
    * Returns the stylists so stressed they want to quit.
    */
-  closeDay(day, restRate) {
+  closeDay(day, restRate, hours = 8) {
     const rate = COMMISSION[this.commission], calm = COMMISSION_CALM[this.commission];
     const pay = Math.round(this.hired.reduce((sum, e) => sum + e.today.earn, 0) * rate);
     if (pay) this.economy.charge('commission', pay);
     const quitting = [];
     for (const e of this.working(day)) {
-      const load = e.fatigue * .2 + Math.max(0, e.today.served - 4) * 3 + 2;
+      // Every hour past eight adds stress and leaves some tiredness for tomorrow.
+      const overtime = Math.max(0, hours - 8);
+      const load = e.fatigue * .2 + Math.max(0, e.today.served - 4) * 3 + 2 + overtime * 4;
+      e.carry = Math.round(e.fatigue * overtime * .08);
       e.addStress(load * calm / restRate - (restRate > 1 ? 4 : 0));
       e.daysEmployed++;
       if (e.stress >= RESIGN_STRESS) quitting.push(e);
