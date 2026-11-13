@@ -2,8 +2,7 @@ import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS } from '../building/F
 import { hexCss } from '../rendering/color.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION } from '../employees/Employee.js';
 import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/StaffManager.js';
-import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE } from '../tycoon/Marketing.js';
-import { HOURS } from '../tycoon/TycoonGame.js';
+import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
 import { INVESTMENTS, LOANS } from '../tycoon/Finance.js';
@@ -81,10 +80,19 @@ export class TycoonUI {
     const rows = g.staff.all.filter(s => s.hired).sort((a, b) => b.stats.earn - a.stats.earn), rated = s => { const r = g.reviews.ratingFor(s.name); return r.count ? `★${r.average.toFixed(1)} (${r.count})` : '–'; };
     const hs = g.hospitality, treats = Object.entries(AMENITIES).map(([id, a]) => `<div class="brow"><span>${t('hs.' + id)}</span><span class="dim">${t('hs.cost', a.cost)}</span><span class="sp"></span>${hs.available(id) ? `<span class="seg"><button data-do="amen:${id}" class="${hs.isOffered(id) ? 'sel' : ''}">${t('hs.on')}</button><button data-do="amen:${id}" class="${hs.isOffered(id) ? '' : 'sel'}">${t('hs.off')}</button></span>` : `<span class="dim">${t('hs.needs', t('f.' + a.needs))}</span>`}</div>`).join('');
     return `<div class="bsec"><h4>${t('biz.finance')}</h4>${line('biz.cash', money(e.cash))}${line('biz.rev', money(e.dailyRevenue))}${line('biz.exp', money(-e.dailyOperatingCost))}${line('biz.profit', money(e.dailyProfit))}${e.dailyInvestment ? line('biz.invest', money(-e.dailyInvestment)) : ''}${line('biz.total', g.served)}${line('biz.sat', g.served ? Math.round(g.averageSatisfaction * 100) + '%' : '–')}${line('biz.rep', rep.starText + ' ' + Math.floor(rep.value))}${line('biz.comfort', g.comfort)}${line('biz.regulars', g.regulars)}</div>${costs}${this.#funding()}
-    <div class="bsec"><h4>${t('hours.title')}</h4><div class="seg">${HOURS.map(([o, c], i) => { const cur = g.nextHours || [g.clock.openHour, g.clock.closeHour]; return `<button data-do="hours:${i}" class="${cur[0] === o && cur[1] === c ? 'sel' : ''}">${o}–${c}</button>`; }).join('')}</div><div class="dim">${t('hours.note')}${g.nextHours ? ' ' + t('hours.tomorrow', ...g.nextHours) : ''}</div></div>
+    <div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>
     <div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}
     <div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>${branches}
     <div class="bsec"><h4>${t('biz.ladder')}</h4><table class="lad"><tr><th>#</th><th>${t('lad.stylist')}</th><th>${t('lad.done')}</th><th>${t('lad.avg')}</th><th>${t('lad.rating')}</th><th>${t('lad.today')}</th><th>${t('lad.earn')}</th></tr>${rows.map((s, i) => `<tr><td>${i + 1}</td><td style="color:${nameColour(s)}">${this.i18n.name(s.name)}</td><td>${s.stats.served}</td><td>${s.stats.served ? Math.round(s.stats.sum / s.stats.served * 100) + '%' : '–'}</td><td>${rated(s)}</td><td>$${s.today.earn.toLocaleString()}</td><td>$${s.stats.earn.toLocaleString()}</td></tr>`).join('')}</table></div>`;
+  }
+  /** Steppers for tomorrow's opening and closing hours. */
+  #hours() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, [o, c] = g.plannedHours;
+    const step = (w, s) => `<button data-do="hrs:${w}${s > 0 ? '+' : '-'}" ${g.canShiftHours(w === 'o' ? 0 : 1, s) ? '' : 'disabled'}>${s > 0 ? '+' : '−'}</button>`;
+    const now = `${g.clock.openHour}:00–${g.clock.closeHour}:00`;
+    return `<div class="brow"><span>${t('hours.open')}</span><span class="sp"></span>${step('o', -1)}<b style="min-width:52px;text-align:center">${o}:00</b>${step('o', 1)}</div>
+      <div class="brow"><span>${t('hours.close')}</span><span class="sp"></span>${step('c', -1)}<b style="min-width:52px;text-align:center">${c}:00</b>${step('c', 1)}</div>
+      <div class="brow"><span>${t('hours.today', now)}</span><span class="sp"></span><span class="${g.nextHours ? 'gold' : 'dim'}">${g.nextHours ? t('hours.tomorrow', o, c, c - o) : t('hours.length', c - o)}</span></div>`;
   }
   #funding() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, f = g.finance, cash = g.economy, lv = g.progression.level, day = g.clock.day, value = g.valuation, pct = s => (Math.round(s * 1000) / 10).toString();
@@ -94,7 +102,7 @@ export class TycoonUI {
     const offers = INVESTMENTS.map((o, i) => `<div class="brow"><span>${t('fin.offer2', o.amount.toLocaleString(), pct(f.shareFor(o.amount, value)))}</span><span class="sp"></span>${lv < o.level ? `<span class="dim">${t('build.lockedAt')}</span>` : `<button data-do="invest:${i}" ${f.canInvest(i, lv, value, day) ? '' : 'disabled'}>${t('fin.accept')}</button>`}</div>`).join('');
     const loan = f.loan ? `<div class="brow"><span>${t('fin.loanNow', f.loan.remaining.toLocaleString(), f.loan.daily, f.loan.daysLeft)}</span><span class="sp"></span><button data-do="repay" ${cash.canAfford(f.loan.remaining) ? '' : 'disabled'}>${t('fin.repay', f.loan.remaining.toLocaleString())}</button></div>`
       : LOANS.map((l, i) => { const k = f.loanTerms(i); return `<div class="brow"><span>${t('fin.loanOffer', k.amount.toLocaleString(), k.days, k.daily)}</span><span class="sp"></span><button data-do="loan:${i}">${t('fin.borrow')}</button></div>`; }).join('');
-    return `<div class="bsec"><h4>${t('fin.title')}</h4><div class="dim">${t('fin.daniel')}</div><div class="brow"><span>${t('fin.value')}</span><span class="sp"></span><b>$${value.toLocaleString()}</b></div>${stake}${target}${offers}<div class="dim">${note}</div><div class="dim" style="margin-top:4px">${t('fin.bank')}</div>${loan}</div>`;
+    return `<div class="bsec"><h4>${t('fin.title')}</h4><div class="dim">${t('fin.ceo')}</div><div class="brow"><span>${t('fin.value')}</span><span class="sp"></span><b>$${value.toLocaleString()}</b></div>${stake}${target}${offers}<div class="dim">${note}</div><div class="dim" style="margin-top:4px">${t('fin.bank')}</div>${loan}</div>`;
   }
   #rival() {
     const t = (k, ...a) => this.#t(k, ...a), r = this.game.rival;
@@ -110,11 +118,11 @@ export class TycoonUI {
       return `<div class="brow"><b>${t('mk.ch.' + id)}</b><span>${ch.followers.toLocaleString()}</span><span class="dim">${last}</span><span class="sp"></span>${button}</div><div class="dim">${t('mk.chEffect', def.minGain, Math.round(def.buzz.demand * power * 100), def.buzz.days, def.film)}</div>`;
     };
     const campaign = id => { const c = CAMPAIGNS[id], run = m.active.find(a => a.id === id); return `<div class="brow"><span>${t('mk.' + id)}</span><span class="dim">${t('mk.adEffect', c.days, Math.round(c.demand * power * 100))}</span><span class="sp"></span>${run ? `<span class="good">${t('mk.running', run.daysLeft)}</span>` : `<button class="go" data-do="campaign:${id}" ${cash.canAfford(c.cost) ? '' : 'disabled'}>$${c.cost}</button>`}</div>`; };
-    const influencer = !g.isUnlocked('influencer') ? `<span class="dim">${t('build.lockedAt')}</span>` : !desk.hired ? `<span class="dim">${t('mk.needDesk')}</span>` : m.influencerBooked ? `<span class="good">${t('mk.infBooked')}</span>` : `<button class="go" data-do="influencer" ${m.canBookInfluencer(day) ? '' : 'disabled'}>${t('mk.infBook')}</button>`;
+    const influencer = !g.isUnlocked('influencer') ? `<span class="dim">${t('build.lockedAt')}</span>` : !desk.hired ? `<span class="dim">${t('mk.needDesk')}</span>` : m.influencerBooked ? `<span class="good">${t('mk.infBooked', m.booked.followers.toLocaleString())}</span>` : `<button class="go" data-do="influencer" ${m.canBookInfluencer(day) ? '' : 'disabled'}>${t('mk.infBook')}</button>`;
     const buzz = m.active.filter(a => !CAMPAIGNS[a.id]).map(a => `<div class="brow"><span class="gold">${t('mk.buzz.' + a.id)}</span><span class="sp"></span><span class="dim">${t('mk.running', a.daysLeft)}</span></div>`).join('');
     const manager = (desk.hired ? t('mk.manager', this.i18n.name(desk.name), desk.skills.marketing || 0) : t('mk.managerSelf', this.i18n.name(g.staff.owner.name))) + (this.hooks.filming() ? ' · ' + t('mk.filmingNow') : '');
     return `<div class="bsec"><h4>${t('mk.sns')}</h4><div class="brow"><span>${t('mk.followers')}</span><span class="sp"></span><b>${m.followers.toLocaleString()}</b></div><div class="dim">${manager}</div>${Object.keys(CHANNELS).map(channel).join('')}${buzz}</div>
-      <div class="bsec"><h4>${t('mk.ads')}</h4>${campaign('flyers')}${campaign('instaAd')}<div class="brow"><span>${t('mk.influencer')}</span><span class="dim">${t('mk.infNote', INFLUENCER_FEE)}</span><span class="sp"></span>${influencer}</div></div>`;
+      <div class="bsec"><h4>${t('mk.ads')}</h4>${campaign('flyers')}${campaign('instaAd')}<div class="brow"><span>${t('mk.influencer')}</span><span class="dim">${t('mk.infNote', INFLUENCER_FEE)}</span><span class="sp"></span>${influencer}</div><div class="dim">${INFLUENCER_POSTS.map(p => t('mk.infTier.' + p.tier, p.min.toLocaleString(), Math.round(p.demand * 100), p.days, Math.abs(p.rep))).join('<br>')}</div></div>`;
   }
   #reviews() {
     const t = (k, ...a) => this.#t(k, ...a), rv = this.game.reviews, f = this.reviewFilter, name = n => this.i18n.name(n);
@@ -148,7 +156,7 @@ export class TycoonUI {
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
       post: () => this.hooks.post(value), campaign: () => { if (g.runCampaign(value)) this.hooks.spent(); }, influencer: () => { if (g.staff.receptionist.hired) g.marketing.bookInfluencer(g.clock.day); },
       reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, rvmore: () => { this.reviewLimit += 25; },
-      amen: () => g.hospitality.toggle(value), autoreply: () => { g.reviews.autoReply = !g.reviews.autoReply; g.reviews.version++; }, hours: () => g.setHours(...HOURS[+value]),
+      amen: () => g.hospitality.toggle(value), autoreply: () => { g.reviews.autoReply = !g.reviews.autoReply; g.reviews.version++; }, hrs: () => g.shiftHours(value[0] === 'o' ? 0 : 1, value[1] === '+' ? 1 : -1),
       commission: () => g.staff.setCommission(+value), dinner: () => { if (g.staff.teamDinner(g.clock.day)) this.hooks.spent(); },
       bonus: () => { if (g.staff.giveBonus(e)) this.hooks.spent(); }, leave: () => g.staff.sendOnLeave(e, g.clock.day), mtrain: () => { if (g.staff.trainMarketing(e)) this.hooks.spent(); },
       invest: () => { if (g.investIn(+value)) this.hooks.spent(); }, buyback: () => { if (g.buyBackStake()) this.hooks.spent(); },

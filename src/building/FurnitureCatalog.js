@@ -5,9 +5,13 @@
 export const FURNITURE = {
   // `chairs` lists each styling chair on a piece as [x, z, quarter turns] in its own frame.
   station: { price: 300, comfort: 0, w: 3, d: 3, needs: [[0, 1]], chairs: [[0, 0, 0]] },
-  // A long glass-block styling table with a blue top: two chairs on each side.
-  island: { price: 2400, comfort: 2, w: 6, d: 4, requires: 'chairs', needs: [[-.75, 1.2], [.75, 1.2], [-.75, -1.2], [.75, -1.2]], chairs: [[-.75, .1, 0], [.75, .1, 0], [-.75, -.1, 2], [.75, -.1, 2]] },
+  // A free-standing styling island: three seats in a row, each with its own mirror, split by partitions.
+  island: { price: 1500, comfort: 2, w: 9, d: 3, requires: 'chairs', needs: [[-1.5, 1], [0, 1], [1.5, 1]], chairs: [[-1.5, 0, 0], [0, 0, 0], [1.5, 0, 0]] },
   wardrobe: { price: 350, comfort: 1, w: 2, d: 1, needs: [[0, .6]] },
+  // A waist-high oak planter that divides the floor into areas without blocking the view.
+  partition: { price: 250, comfort: 1, w: 3, d: 1 },
+  // A free-standing table of hair products in the middle of the floor.
+  displayTable: { price: 300, comfort: 1, w: 2, d: 2, dailySales: 30 },
   desk: { price: 500, comfort: 0, w: 3, d: 2, essential: true, needs: [[0, .75]] },
   bench: { price: 350, comfort: 1, w: 4, d: 1, seatH: .44, seats: [[-.65, .1], [0, .1], [.65, .1]] },
   bench2: { price: 250, comfort: 1, w: 3, d: 1, seatH: .44, seats: [[-.3, .1], [.3, .1]] },
@@ -16,6 +20,8 @@ export const FURNITURE = {
   rug: { price: 120, comfort: 1, walkable: true },
   mat: { price: 40, comfort: 0, w: 2, d: 1, walkable: true },
   plant: { price: 80, comfort: 1 },
+  // A small table between the waiting benches, with magazines and flowers.
+  sideTable: { price: 120, comfort: 1 },
   mirror: { price: 150, comfort: 2 },
   lamp: { price: 200, comfort: 2 },
   bookcase: { price: 180, comfort: 1, w: 2, d: 1 },

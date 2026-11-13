@@ -1,5 +1,5 @@
 /**
- * Rounds Daniel, the company's CEO, is willing to invest. The share he asks for comes from the salon's value:
+ * Rounds Shawn, the company's CEO, is willing to invest. The share he asks for comes from the salon's value:
  * the better the salon is doing, the less of it each dollar costs.
  */
 export const INVESTMENTS = [
@@ -39,7 +39,7 @@ export class Finance {
     const o = INVESTMENTS[i];
     return !!o && level >= o.level && !this.target && !this.roundWait(day) && this.investorShare + this.shareFor(o.amount, value) <= MAX_SHARE + 1e-9;
   }
-  /** Takes a round: cash now, a share for Daniel and a revenue target for the next week. */
+  /** Takes a round: cash now, a share for Shawn and a revenue target for the next week. */
   takeInvestment(i, level, value, day) {
     if (!this.canInvest(i, level, value, day)) return false;
     const o = INVESTMENTS[i];
@@ -48,7 +48,7 @@ export class Finance {
     this.target = { due: day + TARGET_DAYS, need: Math.round(o.amount * TARGET_MULTIPLE), progress: 0 };
     this.version++; return true;
   }
-  /** Buying back a slice costs today's value or the value Daniel paid in at, whichever is higher, plus a premium. */
+  /** Buying back a slice costs today's value or the value Shawn paid in at, whichever is higher, plus a premium. */
   buybackPrice(value) { const paidAt = this.investorShare ? this.invested / this.investorShare : 0; return Math.round(Math.min(BUYBACK_CHUNK, this.investorShare) * Math.max(value, paidAt) * BUYBACK_PREMIUM); }
   buyBack(value) {
     if (!this.investorShare) return false;
@@ -70,7 +70,7 @@ export class Finance {
     this.loan = null; this.version++; return true;
   }
   /**
-   * At closing: Daniel's dividend on a profitable day, the loan instalment and the investment target.
+   * At closing: Shawn's dividend on a profitable day, the loan instalment and the investment target.
    * Returns { dividend, instalment, news } where news is 'met', 'missed' or null.
    */
   closeDay(profit, revenue, day) {

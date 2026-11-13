@@ -17,7 +17,16 @@ export const CHANNELS = {
 };
 /** An influencer wants a fee on top of the free service. */
 export const INFLUENCER_FEE = 400;
-const VIRAL = { days: 2, demand: .5 }, INFLUENCER = { days: 3, demand: .45 };
+/**
+ * What an influencer's post brings, by how happy they left (`from` is the satisfaction needed): at least `min` followers
+ * or `share` of their own audience if that is more, `demand` extra clients for `days` days, and a change in reputation.
+ */
+export const INFLUENCER_POSTS = [
+  { tier: 'great', from: .75, min: 600, share: [.03, .05], days: 4, demand: .7, rep: 3 },
+  { tier: 'good', from: .55, min: 250, share: [.01, .02], days: 2, demand: .3, rep: 1 },
+  { tier: 'poor', from: 0, min: 60, share: [0, 0], days: 1, demand: .1, rep: -3 },
+];
+const VIRAL = { days: 2, demand: .5 };
 const START_FOLLOWERS = { instagram: 150, tiktok: 0, youtube: 0 };
 
 /**
@@ -28,7 +37,7 @@ export class Marketing {
   constructor(economy) {
     this.economy = economy;
     this.channels = Object.fromEntries(Object.keys(CHANNELS).map(id => [id, { followers: START_FOLLOWERS[id], lastDay: -99, last: null }]));
-    this.active = []; this.influencerBooked = false; this.influencerDay = 0; this.version = 0;
+    this.active = []; this.booked = null; this.influencerDay = 0; this.version = 0;
   }
   get followers() { return Object.values(this.channels).reduce((sum, c) => sum + c.followers, 0); }
   get demandMultiplier() { return 1 + this.active.reduce((sum, a) => sum + a.demand, 0); }
@@ -37,7 +46,7 @@ export class Marketing {
   isRunning(id) { return this.active.some(a => a.id === id); }
   #boost(id, days, demand) {
     const running = this.active.find(a => a.id === id);
-    if (running) running.daysLeft = Math.max(running.daysLeft, days); else this.active.push({ id, daysLeft: days, demand });
+    if (running) { running.daysLeft = Math.max(running.daysLeft, days); running.demand = Math.max(running.demand, demand); } else this.active.push({ id, daysLeft: days, demand });
     this.version++;
   }
   #gain(channel, n) { const c = this.channels[channel]; c.followers = Math.max(0, Math.round(c.followers + n)); this.version++; }
@@ -64,29 +73,31 @@ export class Marketing {
     return { channel: id, ...ch.last };
   }
 
-  canBookInfluencer(day) { return !this.influencerBooked && this.influencerDay !== day && this.economy.canAfford(INFLUENCER_FEE); }
-  bookInfluencer(day) { if (!this.canBookInfluencer(day) || !this.economy.spend('marketing', INFLUENCER_FEE)) return false; this.influencerBooked = true; this.influencerDay = day; this.version++; return true; }
+  get influencerBooked() { return !!this.booked; }
+  canBookInfluencer(day) { return !this.booked && this.influencerDay !== day && this.economy.canAfford(INFLUENCER_FEE); }
+  /** Books an influencer for the fee; their audience size is known from the start. */
+  bookInfluencer(day) {
+    if (!this.canBookInfluencer(day) || !this.economy.spend('marketing', INFLUENCER_FEE)) return false;
+    this.booked = { followers: Math.round(rand(8, 40)) * 1000 }; this.influencerDay = day; this.version++; return true;
+  }
   /** The booked influencer turns up as the next walk-in. */
-  takeInfluencer() { if (!this.influencerBooked) return null; this.influencerBooked = false; this.version++; return { followers: Math.round(rand(5, 40)) * 1000 }; }
-  /** How the influencer's post landed. Returns the change in followers. */
+  takeInfluencer() { const b = this.booked; if (!b) return null; this.booked = null; this.version++; return { ...b }; }
+  /** The influencer's post: followers and extra clients always, more the happier they were. Returns the tier with the followers gained. */
   influencerPosted(influencer, satisfaction) {
-    let change;
-    if (satisfaction >= .75) { change = Math.round(influencer.followers * rand(.02, .04)); this.#boost('influencer', INFLUENCER.days, INFLUENCER.demand); }
-    else if (satisfaction >= .55) change = Math.round(influencer.followers * rand(.004, .01));
-    else change = -Math.round(rand(30, 90));
-    this.#gain('instagram', change);
-    return change;
+    const post = INFLUENCER_POSTS.find(p => satisfaction >= p.from), followers = Math.max(post.min, Math.round(influencer.followers * rand(...post.share)));
+    this.#gain('instagram', followers); this.#boost('influencer', post.days, post.demand);
+    return { ...post, followers };
   }
 
   /** Campaigns run for whole days, counting the day they were bought. */
   startDay() { this.active.forEach(a => a.daysLeft--); this.active = this.active.filter(a => a.daysLeft > 0); this.version++; }
-  toJSON() { return { channels: this.channels, active: this.active, influencerBooked: this.influencerBooked, influencerDay: this.influencerDay }; }
+  toJSON() { return { channels: this.channels, active: this.active, booked: this.booked, influencerDay: this.influencerDay }; }
   restore(d) {
     if (!d) return;
     if (d.channels) Object.entries(d.channels).forEach(([id, c]) => { if (this.channels[id]) Object.assign(this.channels[id], c); });
     // Saves from before channels: everything was Instagram.
     else this.channels.instagram = { followers: d.followers ?? START_FOLLOWERS.instagram, lastDay: d.reelDay || -99, last: d.lastReel || null };
-    Object.assign(this, { active: d.active || [], influencerBooked: !!d.influencerBooked, influencerDay: d.influencerDay || 0 });
+    Object.assign(this, { active: d.active || [], booked: d.booked || (d.influencerBooked ? { followers: 20000 } : null), influencerDay: d.influencerDay || 0 });
     this.version++;
   }
 }
