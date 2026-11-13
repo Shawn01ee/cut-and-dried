@@ -5,6 +5,8 @@ const REQUEST_SPECIALTY = { haircut: 'cut', colour: 'colour', perm: 'perm' };
 export const SPECIALTY_BONUS = 10, SPECIALTY_SATISFACTION = .05, MAX_LEVEL = 10;
 /** Standard service times in minutes, for an average stylist. */
 export const BASE_MINUTES = { shampoo: 10, cut: 30, colour: 45, wave: 40, dry: 12 };
+/** Of those, the minutes colour and perm are left to process: the same for everyone, and no stylist is needed. */
+export const PROCESS_MINUTES = { colour: 25, wave: 20 };
 const SERVICE_SKILL = { cut: 'cutting', colour: 'colouring', wave: 'perming', dry: 'speed', shampoo: 'speed' };
 // New starters take a few days to settle into the team.
 const SETTLING_DAYS = 3, SETTLING_PENALTY = 6;
@@ -49,9 +51,11 @@ export class Employee {
    */
   serviceMinutes(type, speedBonus = 1) {
     const s = this.effectiveSkills, skill = s[SERVICE_SKILL[type]] ?? s.speed;
-    const minutes = BASE_MINUTES[type] * (1.6 - s.speed / 100) * (1.2 - skill / 250) * (1 + this.fatigue / 250) / speedBonus / (this.perk === 'speed' ? 1.2 : 1);
+    const minutes = (BASE_MINUTES[type] - (PROCESS_MINUTES[type] || 0)) * (1.6 - s.speed / 100) * (1.2 - skill / 250) * (1 + this.fatigue / 250) / speedBonus / (this.perk === 'speed' ? 1.2 : 1);
     return Math.max(3, Math.round(minutes));
   }
+  /** The whole service from start to finish, including any processing time. */
+  totalMinutes(type, speedBonus = 1) { return this.serviceMinutes(type, speedBonus) + (PROCESS_MINUTES[type] || 0); }
   serviceQuality() { const s = this.effectiveSkills; return Math.max(0, ((s.cutting + s.customerService) / 200) * (1 - this.fatigue / 200) * (1 - Math.max(0, this.stress - 60) / 200)); }
   tire(amount) { this.stamina = Math.max(0, this.stamina - amount); }
   rest(amount) { this.stamina = Math.min(100, this.stamina + amount); }

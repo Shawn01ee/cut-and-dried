@@ -6,7 +6,9 @@ export const FURNITURE = {
   // `chairs` lists each styling chair on a piece as [x, z, quarter turns] in its own frame.
   // A styling chair is a free-standing seat with its own mirror and partitions; placed side by side they form a styling island.
   station: { price: 300, comfort: 0, w: 3, d: 3, needs: [[0, 1]], chairs: [[0, 0, 0]] },
-  // A ready-made three-seat island, from saves made before chairs could be lined up into one. No longer sold.
+  // The styling island: a glass table where colour and perm clients sit under processors while the product works.
+  processIsland: { price: 1200, comfort: 2, w: 6, d: 4, processing: true, seatH: .5, max: [1, 1, 2, 2, 3, 3], seats: [[-.75, .55, 0], [.75, .55, 0], [-.75, -.55, 2], [.75, -.55, 2]] },
+  // A ready-made three-seat chair set, from saves made before chairs could be lined up into one. No longer sold.
   island: { price: 1500, comfort: 2, w: 9, d: 3, legacy: true, needs: [[-1.5, 1], [0, 1], [1.5, 1]], chairs: [[-1.5, 0, 0], [0, 0, 0], [1.5, 0, 0]] },
   wardrobe: { price: 350, comfort: 1, w: 2, d: 1, needs: [[0, .6]] },
   // A waist-high oak planter that divides the floor into areas without blocking the view.
@@ -45,6 +47,8 @@ export const FURNITURE = {
 };
 /** How far in front of a seat people stop before sitting down. */
 export const SEAT_APPROACH = .5;
+/** Where a client stops before sitting on seat [x, z, quarter turns], in the piece's own frame: in front of the seat. */
+export const seatApproach = ([x, z, t = 0]) => [x + Math.round(Math.sin(t * Math.PI / 2)) * SEAT_APPROACH, z + Math.round(Math.cos(t * Math.PI / 2)) * SEAT_APPROACH];
 /** Pieces sold in the furniture list. Styling chairs have their own button; the desk cannot be bought twice. */
 export const FURNITURE_IDS = Object.keys(FURNITURE).filter(id => id !== 'station' && id !== 'desk' && !FURNITURE[id].legacy);
 export const CHAIR_PRICE = FURNITURE.station.price;

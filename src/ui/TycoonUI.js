@@ -1,5 +1,6 @@
 import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS } from '../building/FurnitureCatalog.js';
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
+import { REVIEW_REP } from '../tycoon/TycoonGame.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION } from '../employees/Employee.js';
 import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/StaffManager.js';
 import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS } from '../tycoon/Marketing.js';
@@ -41,7 +42,7 @@ export class TycoonUI {
     }
     const info = owner ? t('staff.ownerLv', e.level, e.experience, e.experienceToNext) + ' · ' + t('staff.you')
       : e.hired ? `${t('staff.pay', e.level, e.salary, Math.round(e.fatigue), e.experience, e.experienceToNext)} · <span class="${level(e.stress)}">${t('staff.stress', Math.round(e.stress))}</span> ${this.#status(e)}` : t('staff.wage', e.salary);
-    const times = `<br>${t('staff.times', e.serviceMinutes('cut', g.layout.speedBonus), e.serviceMinutes('colour', g.layout.speedBonus), e.serviceMinutes('wave', g.layout.speedBonus), e.serviceMinutes('dry', g.layout.speedBonus))}`;
+    const times = `<br>${t('staff.times', e.totalMinutes('cut', g.layout.speedBonus), e.totalMinutes('colour', g.layout.speedBonus), e.totalMinutes('wave', g.layout.speedBonus), e.totalMinutes('dry', g.layout.speedBonus))}`;
     const r = g.reviews.ratingFor(e.name), perf = e.hired ? `<br>${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
     return `<div class="brow"><b style="color:${nameColour(e)}">${rankMark(e)}${this.i18n.name(e.name)}</b>${RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`}<span class="sp"></span>${actions}</div><div class="dim">${t('staff.skills', s.cutting, s.colouring, s.perming, s.speed, s.customerService)}${e.specialty ? `<br><span class="gold">${t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100))}</span>` : owner ? `<br><span class="gold">${t('staff.allround')}</span>` : ''}${e.perk ? `<br><span class="good">${t('perk.' + e.perk)}</span>` : ''}${times}<br>${info}${perf}</div>`;
   }
@@ -134,7 +135,7 @@ export class TycoonUI {
     const row = r => r.removed ? `<div class="rv dim">${t(r.villain ? 'rv.removedAbuse' : 'rv.removedNote', name(r.author))}</div>` : `<div class="rv"><div class="brow"><b>${name(r.author)}</b><span class="gold">${stars(r.stars)}</span><span class="dim">${t('rv.day', r.day)}${visit(r.visit)}${r.edited ? ' · ' + t('rv.edited') : ''}</span></div><div>${t('rv.' + r.key, ...r.args.map(name))}</div>${actions(r)}</div>`;
     const filters = ['all', 'todo', 'low'].map(k => `<button data-do="rvf:${k}" class="${f === k ? 'sel' : ''}">${t('rv.f.' + k)}</button>`).join('');
     const mgr = this.game.reviewManager, auto = this.game.staff.receptionist.hired ? `<button data-do="autoreply" class="${rv.autoReply ? 'sel' : ''}">${t(rv.autoReply ? 'rv.autoOn' : 'rv.autoOff')}</button>` : '';
-    return `<div class="bsec"><h4>${t('rv.title')}</h4><div class="brow"><span class="dim">${t('rv.manager', t(mgr.role === 'desk' ? 'rv.by.desk' : 'rv.by.owner', name(mgr.name)))}</span><span class="sp"></span>${auto}</div><div class="dim">${t('rv.weightNote')}</div><div class="brow"><b class="gold">${rv.count ? '★ ' + rv.rating.toFixed(1) : '–'}</b><span class="dim">${t('rv.count', rv.count)}</span></div>${dist}</div>
+    return `<div class="bsec"><h4>${t('rv.title')}</h4><div class="brow"><span class="dim">${t('rv.manager', t(mgr.role === 'desk' ? 'rv.by.desk' : 'rv.by.owner', name(mgr.name)))}</span><span class="sp"></span>${auto}</div><div class="dim">${t('rv.weightNote')} ${t('rv.repNote', [5, 4, 3, 2, 1].map(n => `★${n} ${REVIEW_REP[n] > 0 ? '+' : REVIEW_REP[n] < 0 ? '−' : ''}${Math.abs(REVIEW_REP[n])}`).join(' · '))}</div><div class="brow"><b class="gold">${rv.count ? '★ ' + rv.rating.toFixed(1) : '–'}</b><span class="dim">${t('rv.count', rv.count)}</span></div>${dist}</div>
       <div class="bsec"><div class="seg" style="margin-bottom:4px">${filters}</div>${page.length ? page.map(row).join('') + more : `<div class="dim">${t('rv.none')}</div>`}</div>`;
   }
   #growth() {

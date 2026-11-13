@@ -1,4 +1,4 @@
-import { FURNITURE, SEAT_APPROACH } from './FurnitureCatalog.js';
+import { FURNITURE, seatApproach } from './FurnitureCatalog.js';
 import { POSTS, inRect } from './SalonLayout.js';
 
 // The only links through the front wall: the two cells either side of the door.
@@ -53,7 +53,7 @@ export class NavGrid {
   /** Points of an item that people must be able to walk to: seat approaches, the station's stand, the desk counter. */
   needs(item) {
     const f = FURNITURE[item.id];
-    return [...(f.needs || []), ...(f.seats || []).map(([x, z]) => [x, z + SEAT_APPROACH])].map(([x, z]) => this.layout.toWorld(item, x, z));
+    return [...(f.needs || []), ...(f.seats || []).map(seatApproach)].map(([x, z]) => this.layout.toWorld(item, x, z));
   }
 
   /** Would the salon still work with `candidate` placed (replacing `ignore` when moving)? */
