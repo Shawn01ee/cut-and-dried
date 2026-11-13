@@ -13,7 +13,8 @@ export class BuildMode {
     this.view.showGhost(id); this.view.showGrid(this.layout.openCells(existing));
     return true;
   }
-  rotate() { if (!this.active) return; this.active.rotation = (this.active.rotation + 1) % 4; if (this.active.point) this.hover(this.active.point); }
+  /** Turns the piece from the way it is shown; from then on it keeps the player's way round instead of turning by itself. */
+  rotate() { if (!this.active) return; this.active.rotation = ((this.active.shown ?? this.active.rotation) + 1) % 4; this.active.manual = true; if (this.active.point) this.hover(this.active.point); }
   /**
    * Where the piece would go under `point`. Benches, sofas and other seats turn to the first way round that keeps
    * their seats reachable, so they can be set against a wall without turning them by hand.
@@ -28,7 +29,7 @@ export class BuildMode {
   #target(point) {
     const cell = this.layout.nearestCell(point.x, point.z); if (!cell) return null;
     const snapped = this.active.id === 'station' && this.#chairSlot(point); if (snapped) return snapped;
-    const { id, existing } = this.active, turns = FURNITURE[id].seats ? [0, 1, 2, 3].map(k => (this.active.rotation + k) % 4) : [this.active.rotation];
+    const { id, existing } = this.active, turns = FURNITURE[id].seats && !this.active.manual ? [0, 1, 2, 3].map(k => (this.active.rotation + k) % 4) : [this.active.rotation];
     let first = null;
     for (const rotation of turns) {
       const c = this.layout.centreAt(id, cell, rotation), r = this.#check(id, c.x, c.z, rotation, existing);
@@ -47,14 +48,14 @@ export class BuildMode {
       if (it === existing || it.id !== 'station') continue;
       for (const [lx, lz, turn] of [[-1.5, 0, 0], [1.5, 0, 0], [0, -1.5, 2]]) {
         const p = this.layout.toWorld(it, lx, lz), rotation = (it.rotation + turn) % 4, d = Math.hypot(p.x - point.x, p.z - point.z);
-        if (d >= bestDist) continue;
+        if (d >= bestDist || (this.active.manual && rotation !== this.active.rotation)) continue;
         if (!this.#check('station', p.x, p.z, rotation, existing).ok) continue;
         best = { x: p.x, z: p.z, rotation, ok: true, reason: null }; bestDist = d;
       }
     }
     return best;
   }
-  hover(point) { this.active.point = point; const t = this.#target(point); this.active.reason = t ? t.reason : 'outside'; if (!t) this.view.hideGhost(); else this.view.poseGhost(t.x, t.z, t.rotation, t.ok); }
+  hover(point) { this.active.point = point; const t = this.#target(point); this.active.reason = t ? t.reason : 'outside'; if (t) this.active.shown = t.rotation; if (!t) this.view.hideGhost(); else this.view.poseGhost(t.x, t.z, t.rotation, t.ok); }
   /** Places the piece at `point`. Returns true when placed. */
   commit(point) {
     const t = this.#target(point); if (!t || !t.ok) return false;

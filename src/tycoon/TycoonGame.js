@@ -77,7 +77,10 @@ export class TycoonGame {
   }
   /** How Ciel Ground looks from outside, for the rival to react to. */
   /** What Shawn, the CEO, thinks the salon is worth. */
-  get valuation() { return this.finance.valuation({ reputation: this.reputation.value, followers: this.marketing.followers, chairs: this.layout.chairs, branches: this.franchise.branches.filter(b => b.open).length }); }
+  get #valueContext() { return { reputation: this.reputation.value, followers: this.marketing.followers, chairs: this.layout.chairs, branches: this.franchise.branches.filter(b => b.open).length }; }
+  get valuation() { return this.finance.valuation(this.#valueContext); }
+  /** The parts of the salon's value: [part, counted from, dollars]. */
+  get valuationParts() { return this.finance.valuationParts(this.#valueContext); }
   investIn(i) { return this.finance.takeInvestment(i, this.progression.level, this.valuation, this.clock.day); }
   buyBackStake() { return this.finance.buyBack(this.valuation); }
   get standing() { return { rating: this.reviews.count ? this.reviews.rating : 0, followers: this.marketing.followers, priceLevel: this.priceLevel }; }

@@ -9,7 +9,7 @@ import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/Sta
 import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
-import { INVESTMENTS, LOANS } from '../tycoon/Finance.js';
+import { INVESTMENTS, LOANS, MISSION, MAX_SHARE } from '../tycoon/Finance.js';
 
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 const RANK_ORDER = { master: 0, senior: 1, designer: 2, junior: 3 };
@@ -122,14 +122,24 @@ export class TycoonUI {
       <div class="brow"><span>${t('hours.today', now)}</span><span class="sp"></span><span class="${g.nextHours ? 'gold' : 'dim'}">${g.nextHours ? t('hours.tomorrow', o, c, c - o) : t('hours.length', c - o)}</span></div>`;
   }
   #funding() {
-    const t = (k, ...a) => this.#t(k, ...a), g = this.game, f = g.finance, cash = g.economy, lv = g.progression.level, day = g.clock.day, value = g.valuation, pct = s => (Math.round(s * 1000) / 10).toString();
-    const stake = f.investorShare ? `<div class="brow"><span>${t('fin.stake2', pct(f.investorShare), f.invested.toLocaleString(), f.dividendsPaid.toLocaleString())}</span><span class="sp"></span><button data-do="buyback" ${cash.canAfford(f.buybackPrice(value)) ? '' : 'disabled'}>${t('fin.buyback5', f.buybackPrice(value).toLocaleString())}</button></div>` : '';
-    const target = f.target ? `<div class="gold">${t('fin.target', f.target.need.toLocaleString(), f.target.progress.toLocaleString(), Math.max(0, f.target.due - day))}</div>` : '';
-    const wait = f.roundWait(day), note = f.target ? t('fin.busy') : wait ? t('fin.wait', wait) : t('fin.terms');
-    const offers = INVESTMENTS.map((o, i) => `<div class="brow"><span>${t('fin.offer2', o.amount.toLocaleString(), pct(f.shareFor(o.amount, value)))}</span><span class="sp"></span>${lv < o.level ? `<span class="dim">${t('build.lockedAt')}</span>` : `<button data-do="invest:${i}" ${f.canInvest(i, lv, value, day) ? '' : 'disabled'}>${t('fin.accept')}</button>`}</div>`).join('');
-    const loan = f.loan ? `<div class="brow"><span>${t('fin.loanNow', f.loan.remaining.toLocaleString(), f.loan.daily, f.loan.daysLeft)}</span><span class="sp"></span><button data-do="repay" ${cash.canAfford(f.loan.remaining) ? '' : 'disabled'}>${t('fin.repay', f.loan.remaining.toLocaleString())}</button></div>`
-      : LOANS.map((l, i) => { const k = f.loanTerms(i); return `<div class="brow"><span>${t('fin.loanOffer', k.amount.toLocaleString(), k.days, k.daily)}</span><span class="sp"></span><button data-do="loan:${i}">${t('fin.borrow')}</button></div>`; }).join('');
-    return `<div class="bsec"><h4>${t('fin.title')}</h4><div class="dim">${t('fin.ceo')}</div><div class="brow"><span>${t('fin.value')}</span><span class="sp"></span><b>$${value.toLocaleString()}</b></div>${stake}${target}${offers}<div class="dim">${note}</div><div class="dim" style="margin-top:4px">${t('fin.bank')}</div>${loan}</div>`;
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, f = g.finance, cash = g.economy, lv = g.progression.level, day = g.clock.day, value = g.valuation;
+    const pct = v => (Math.round(v * 1000) / 10).toString(), usd = v => '$' + Math.round(v).toLocaleString(), bar = (k, cls = '') => `<div class="meter ${cls}"><i style="width:${Math.round(Math.min(1, Math.max(0, k)) * 100)}%"></i></div>`;
+    // what the salon is worth, part by part
+    const parts = g.valuationParts.map(([k, n, v]) => `<div class="brow"><span class="dim">${t('fin.vp.' + k, n.toLocaleString())}</span><span class="sp"></span><span>${usd(v)}</span></div>`).join('');
+    const valueSec = `<div class="bsec"><h4>${t('fin.valueTitle')}</h4>${parts}<div class="brow"><span>${t('fin.value')}</span><span class="sp"></span><b class="gold">${usd(value)}</b></div><div class="dim">${t('fin.valueNote')}</div></div>`;
+    // who owns the salon, and what Shawn takes
+    const lia = 1 - f.investorShare;
+    const own = `<div class="brow"><span style="color:#ff9fc4">${t('fin.lia', pct(lia))}</span><span class="sp"></span><span style="color:#8fd0ff">${t('fin.shawn', pct(f.investorShare))}</span></div><div class="own"><i style="width:${lia * 100}%"></i></div>`
+      + (f.investorShare ? `<div class="dim">${t('fin.divNote', pct(f.investorShare), f.dividendsPaid.toLocaleString())}</div><div class="brow"><span class="sp"></span><button data-do="buyback" ${cash.canAfford(f.buybackPrice(value)) ? '' : 'disabled'}>${t('fin.buyback5', f.buybackPrice(value).toLocaleString())}</button></div>` : `<div class="dim">${t('fin.noShare')}</div>`);
+    const mission = f.target ? `<div class="brow"><span class="gold">${t('fin.missionNow', f.target.progress.toLocaleString(), f.target.need.toLocaleString(), Math.max(0, f.target.due - day))}</span></div>${bar(f.target.progress / f.target.need, 'gold')}` : '';
+    const wait = f.roundWait(day), note = f.target ? t('fin.busy') : wait ? t('fin.wait', wait) : '';
+    const offers = INVESTMENTS.map((o, i) => `<div class="offer"><div class="brow"><b>${t('fin.get', usd(o.amount))}</b><span class="sp"></span>${lv < o.level ? `<span class="dim">${t('build.lockedAt')}</span>` : `<button class="go" data-do="invest:${i}" ${f.canInvest(i, lv, value, day) ? '' : 'disabled'}>${t('fin.accept')}</button>`}</div><div class="dim">${f.investorShare + f.shareFor(o.amount, value) > MAX_SHARE + 1e-9 ? t('fin.overCap', Math.round(MAX_SHARE * 100)) : t('fin.offerLine', pct(f.shareFor(o.amount, value)), usd(f.missionFor(o.amount)))}</div></div>`).join('');
+    const ceoSec = `<div class="bsec"><h4>${t('fin.ceoTitle')}</h4><div class="dim">${t('fin.ceo')}</div>${own}${mission}<div class="dim" style="margin:4px 0">${t('fin.mission', MISSION.days, MISSION.multiple, Math.round(MISSION.reward * 100), Math.round(MISSION.penalty * 100))}</div>${offers}${note ? `<div class="dim">${note}</div>` : ''}</div>`;
+    // the bank
+    const L = f.loan, loanSec = L ? `<div class="offer"><div class="brow"><span>${t('fin.loanLeft', usd(L.principal))}</span><span class="sp"></span><button data-do="repay" ${cash.canAfford(L.principal) ? '' : 'disabled'}>${t('fin.repay2', usd(L.principal))}</button></div><div class="dim">${t('fin.loanNow2', usd(f.interestDue), usd(Math.min(L.perDay, L.principal)), L.daysLeft, pct(L.rate))}</div></div>`
+      : LOANS.map((l, i) => { const k = f.loanTerms(i); return `<div class="offer"><div class="brow"><b>${t('fin.borrowAmt', usd(k.amount))}</b><span class="sp"></span><button data-do="loan:${i}">${t('fin.borrow')}</button></div><div class="dim">${t('fin.loanOffer2', k.days, pct(k.rate), usd(k.perDay), usd(k.interest))}</div></div>`; }).join('');
+    const bankSec = `<div class="bsec"><h4>${t('fin.bank')}</h4><div class="dim">${t('fin.bankNote')}</div>${loanSec}</div>`;
+    return valueSec + ceoSec + bankSec;
   }
   #rival() {
     const t = (k, ...a) => this.#t(k, ...a), r = this.game.rival;
