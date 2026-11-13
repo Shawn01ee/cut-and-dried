@@ -381,7 +381,7 @@ const washerOf=T=>T.h?T.h.fig:T.st.sty.fig;
 function updateWashes(dt){for(const T of washes.slice()){if(!T.ready||!T.seated)continue;const f=washerOf(T);T.t-=dt;
   const hp=T.c.fig.head.getWorldPosition(V()),k=Math.sin(simT*9)*.06;f.handR=hp.clone().add(V(k,.06,0));f.handL=hp.clone().add(V(-k,.04,.05));if(T.t<=0)endWash(T);}}
 function endWash(T){const i=washes.indexOf(T);if(i<0)return;washes.splice(i,1);const f=washerOf(T);f.handL=f.handR=null;if(T.h)T.h.task=null;else T.st.washing=null;
-  if(T.b.item.id==='spaBooth')T.c.spa=true;T.b.client=null;T.c.fig.tilt=0;T.c.washed=true;T.c.inWash=false;T.then();}
+  if(T.b.item.id==='spaBooth')T.c.spa=true;T.c.washQuality=(T.h?T.h.e:T.st.sty).washQuality;T.b.client=null;T.c.fig.tilt=0;T.c.washed=true;T.c.inWash=false;T.then();}
 function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OWNER:st.sty;if(worker===OWNER&&ownerBusy())return;if(styling&&styling.station===st)closeStyling(true);st.worker=worker;const p=st.plan,ops=[];
   // Colour and perm are applied, then left to process; that part needs no stylist.
   if(hasColour(p))ops.push({type:'colour'},{type:'process',of:'colour'});
@@ -463,18 +463,21 @@ function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,...hel
 
 /* sweeping: assistants keep the floor clean; without them Lia does it between clients */
 const landedClips=()=>clips.filter(c=>c.alive&&c.landed);
-function startSweep(fig){const landed=landedClips();if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
+/** Sweeping time and reach follow `cleaning` (0 to 100); Lia and stylists sweep at 50. */
+const sweepTime=cleaning=>3.2*(1.5-cleaning/100);
+function startSweep(fig,cleaning=50){const landed=landedClips();if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
   const at=a.clone().add(V(.5,0,.45));at.x=clamp(at.x,-3.6,t>=4?11.6:t>=2?7.6:3.6);at.z=clamp(at.z,t>=5?-8.6:t>=3?-6.6:t>=1?-4.6:-2.6,2.6);
-  const job={kind:'sweep',phase:'walk',fig,aim:a,t:3.2};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
+  const job={kind:'sweep',phase:'walk',fig,aim:a,t:sweepTime(cleaning),r:.8+cleaning/250};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
 /** Advances a sweeping job; true once the patch of floor is clean. */
 function updateSweep(job,dt){if(job.phase!=='work')return false;const f=job.fig,a=job.aim;job.t-=dt;f.toolAim=V(a.x+Math.sin(simT*5)*.35,0,a.z+Math.cos(simT*2.5)*.12);
   f.handR=f.pos.clone().add(V(0,1.02,0)).addScaledVector(fwd(f.yaw),.22).addScaledVector(rgt(f.yaw),.1);f.handL=f.handR.clone().add(V(0,-.22,0)).addScaledVector(fwd(f.yaw),.05);
-  if(job.t>0)return false;clips.forEach(c=>{if(c.alive&&c.landed&&Math.hypot(c.p.x-a.x,c.p.z-a.z)<1)c.alive=false;});f.handL=f.handR=null;f.toolAim=null;f.setTool(null);return true;}
-function helpersUpdate(dt){const messy=landedClips().length>24;
+  if(job.t>0)return false;clips.forEach(c=>{if(c.alive&&c.landed&&Math.hypot(c.p.x-a.x,c.p.z-a.z)<job.r)c.alive=false;});f.handL=f.handR=null;f.toolAim=null;f.setTool(null);return true;}
+function helpersUpdate(dt){const mess=landedClips().length;
   helpers.forEach(h=>{const f=h.fig,T=h.task;if(!f.root.visible)return;
     if(T&&T.kind==='wash')return;
     if(T&&T.kind==='sweep'){if(updateSweep(T,dt))h.task=null;return;}
-    if(messy&&!helpers.some(o=>o.task&&o.task.kind==='sweep')){h.task=startSweep(f);if(h.task)return;}
+    // A keen cleaner picks up the broom sooner.
+    if(mess>40-h.e.cleaning/4&&!helpers.some(o=>o.task&&o.task.kind==='sweep')){h.task=startSweep(f,h.e.cleaning);if(h.task)return;}
     if(!f.path.length&&f.pos.distanceTo(h.idle)>.05){f.handL=f.handR=null;f.walkTo(route(f.pos,h.idle),()=>f.yaw=h.idleYaw);}});}
 
 /* ================= time, weather, timers ================= */
@@ -768,7 +771,7 @@ function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>pop
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:1,options:[{label:tx('inc.keep',cost),run:()=>{game.economy.charge('bonus',cost);e.addStress(-45);}},{label:tx('inc.letGo'),run:()=>{e.quits=true;}}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
   post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
