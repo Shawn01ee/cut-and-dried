@@ -14,17 +14,46 @@ export class BuildMode {
     return true;
   }
   rotate() { if (!this.active) return; this.active.rotation = (this.active.rotation + 1) % 4; if (this.active.point) this.hover(this.active.point); }
+  /**
+   * Where the piece would go under `point`. Benches, sofas and other seats turn to the first way round that keeps
+   * their seats reachable, so they can be set against a wall without turning them by hand.
+   */
   #target(point) {
     const cell = this.layout.nearestCell(point.x, point.z); if (!cell) return null;
-    const { id, rotation, existing } = this.active, c = this.layout.centreAt(id, cell, rotation), cells = this.layout.footprint(id, c.x, c.z, rotation);
-    const ok = !!cells && this.layout.canOccupy(id, cells, existing) && this.hooks.validate({ id, x: c.x, z: c.z, rotation, cells }, existing);
-    return { ...c, ok };
+    const snapped = this.active.id === 'station' && this.#chairSlot(point); if (snapped) return snapped;
+    const { id, existing } = this.active, turns = FURNITURE[id].seats ? [0, 1, 2, 3].map(k => (this.active.rotation + k) % 4) : [this.active.rotation];
+    let first = null;
+    for (const rotation of turns) {
+      const c = this.layout.centreAt(id, cell, rotation), cells = this.layout.footprint(id, c.x, c.z, rotation);
+      const ok = !!cells && this.layout.canOccupy(id, cells, existing) && this.hooks.validate({ id, x: c.x, z: c.z, rotation, cells }, existing);
+      if (ok) return { ...c, rotation, ok };
+      first ||= { ...c, rotation, ok };
+    }
+    return first;
   }
-  hover(point) { this.active.point = point; const t = this.#target(point); if (!t) this.view.hideGhost(); else this.view.poseGhost(t.x, t.z, this.active.rotation, t.ok); }
+  /**
+   * Keeps styling chairs evenly spaced: near another chair, a new one lines up beside it (same facing, one chair
+   * width apart) or back to back with it, making a double-sided island. Returns the closest free slot within reach.
+   */
+  #chairSlot(point) {
+    const { existing } = this.active; let best = null, bestDist = 1;
+    for (const it of this.layout.items) {
+      if (it === existing || it.id !== 'station') continue;
+      for (const [lx, lz, turn] of [[-1.5, 0, 0], [1.5, 0, 0], [0, -1.5, 2]]) {
+        const p = this.layout.toWorld(it, lx, lz), rotation = (it.rotation + turn) % 4, d = Math.hypot(p.x - point.x, p.z - point.z);
+        if (d >= bestDist) continue;
+        const cells = this.layout.footprint('station', p.x, p.z, rotation);
+        if (!cells || !this.layout.canOccupy('station', cells, existing) || !this.hooks.validate({ id: 'station', x: p.x, z: p.z, rotation, cells }, existing)) continue;
+        best = { x: p.x, z: p.z, rotation, ok: true }; bestDist = d;
+      }
+    }
+    return best;
+  }
+  hover(point) { this.active.point = point; const t = this.#target(point); if (!t) this.view.hideGhost(); else this.view.poseGhost(t.x, t.z, t.rotation, t.ok); }
   /** Places the piece at `point`. Returns true when placed. */
   commit(point) {
     const t = this.#target(point); if (!t || !t.ok) return false;
-    const { id, existing, rotation } = this.active;
+    const { id, existing } = this.active, rotation = t.rotation;
     if (existing && !this.hooks.canModify(existing)) { this.view.setVisible(existing, true); this.hooks.queueMove(existing, t.x, t.z, rotation); }
     else if (existing) { this.view.despawn(existing); this.layout.move(existing, t.x, t.z, rotation); this.view.spawn(existing); }
     else if (!this.economy.spend(id === 'station' ? 'equipment' : 'interior', FURNITURE[id].price)) return false;
