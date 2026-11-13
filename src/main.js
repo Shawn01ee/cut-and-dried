@@ -343,7 +343,7 @@ const STREET=V(4.1,0,4.7),STREET_DOOR=V(-2,0,4.4);
 const ROUTE_IN=[STREET_DOOR,DOOR_OUT,DOOR_IN];
 const ROUTE_OUT=[DOOR_IN,DOOR_OUT,STREET_DOOR,STREET];
 const furnitureView=new FurnitureView(world,SB,terr,game.layout,LAMP,procSeats),nav=new NavGrid(game.layout);
-const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex)=>nav.wouldConnect(c,ex),canModify:it=>canModify(it),canMove:it=>canMove(it),queueMove:(it,x,z,r)=>queueMove(it,x,z,r),canSell:it=>canSell(it),onChange:()=>{syncFurniture();renderPanel(true);}});
+const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex)=>nav.wouldConnect(c,ex),blockedBy:(c,ex)=>nav.blockedBy(c,ex),canModify:it=>canModify(it),canMove:it=>canMove(it),queueMove:(it,x,z,r)=>queueMove(it,x,z,r),canSell:it=>canSell(it),onChange:()=>{syncFurniture();renderPanel(true);}});
 /** A walk to `to` that goes around the furniture. */
 function route(from,to){return [...nav.path(from,to).map(p=>V(p.x,0,p.z)),to.clone()];}
 const custs=[],queue=[];
@@ -751,13 +751,17 @@ $('#bZo').onclick=()=>zoomGoal=clamp(zoomGoal/1.2,.6,2.2);$('#bZi').onclick=()=>
 canvas.addEventListener('wheel',e=>{e.preventDefault();zoomGoal=clamp(zoomGoal*(e.deltaY<0?1.1:1/1.1),.6,2.2);},{passive:false});
 const ptrs=new Map();let pinch0=0,zoom0=1,down=null;
 canvas.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===1)down=[e.clientX,e.clientY];if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]);zoom0=zoomGoal;down=null;}});
-canvas.addEventListener('pointermove',e=>{if(build.isActive){const q=groundAt(e.clientX,e.clientY);if(q)build.hover(q);}if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===2&&pinch0){const [a,b]=[...ptrs.values()];zoomGoal=clamp(zoom0*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch0,.6,2.2);}});
+canvas.addEventListener('pointermove',e=>{if(build.isActive){const q=groundAt(e.clientX,e.clientY);if(q)build.hover(q);ghostTip(e.clientX,e.clientY);}else ghostTip();if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===2&&pinch0){const [a,b]=[...ptrs.values()];zoomGoal=clamp(zoom0*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch0,.6,2.2);}});
 const endP=e=>{if(down&&ptrs.size===1&&Math.hypot(e.clientX-down[0],e.clientY-down[1])<10)pickAt(e.clientX,e.clientY);ptrs.delete(e.pointerId);if(ptrs.size<2)pinch0=0;if(!ptrs.size)down=null;};
 canvas.addEventListener('pointerup',endP);canvas.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);down=null;});
 const ray=new THREE.Raycaster();
 const groundPlane=new THREE.Plane(UP,0),_gp=V();
 function groundAt(x,y){const r=canvas.getBoundingClientRect();x-=camOff.x*PIX;y+=camOff.y*PIX;ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);return ray.ray.intersectPlane(groundPlane,_gp)?{x:_gp.x,z:_gp.z}:null;}
-function pickAt(x,y){if(site>=0)return;if(build.isActive){const q=groundAt(x,y);if(q){const ok=build.commit(q);audio.play(ok?'place':'deny');if(ok)renderPanel(true);}return;}if(styling)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);
+/** A note beside the cursor saying why the piece cannot go where it is held. */
+const tipEl=document.createElement('div');tipEl.className='gtip';$('#pops').appendChild(tipEl);
+function ghostTip(x,y){const r=build.isActive&&build.active.reason;if(!r){tipEl.style.display='none';return;}
+  const [k,id]=r.split(':');tipEl.textContent=tx('build.why.'+k,id?tx('f.'+id):'');tipEl.style.display='block';tipEl.style.left=x+'px';tipEl.style.top=y+'px';}
+function pickAt(x,y){if(site>=0)return;if(build.isActive){const q=groundAt(x,y);if(q){build.hover(q);const ok=build.commit(q);audio.play(ok?'place':'deny');ghostTip(x,y);if(ok)renderPanel(true);}return;}if(styling)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);
   if(sel==='build'){const it=furnitureView.pick(ray);if(it&&build.start(it.id,it))renderPanel(true);return;}
   const hits=ray.intersectObjects(world.children,true).filter(h=>h.object.visible&&h.object.parent.visible);if(!hits.length)return;
   const h=hits[0],f=h.object.userData.fig;

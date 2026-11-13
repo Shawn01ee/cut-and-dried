@@ -97,6 +97,13 @@ export class SalonLayout {
     const walkable = !!FURNITURE[id].walkable;
     return cells.every(c => this.placeable(c) && (walkable || !LANES.some(r => inRect(c, r))) && !this.occupant(c, ignore, walkable));
   }
+  /** Why `id` cannot stand on `cells`: 'outside' the salon, on the doorway 'lane', or an 'overlap'; null when it can. */
+  whyNot(id, cells, ignore) {
+    if (!cells || !cells.every(c => this.placeable(c))) return 'outside';
+    const walkable = !!FURNITURE[id].walkable;
+    if (!walkable && cells.some(c => LANES.some(r => inRect(c, r)))) return 'lane';
+    return cells.some(c => this.occupant(c, ignore, walkable)) ? 'overlap' : null;
+  }
   openCells(ignore) { return this.cells.filter(c => this.placeable(c) && !LANES.some(r => inRect(c, r)) && !this.occupant(c, ignore, false)); }
   nearestCell(x, z) { let best = null, bestDist = .45; for (const c of this.cells) { const d = Math.hypot(c.x - x, c.z - z); if (d < bestDist) { bestDist = d; best = c; } } return best; }
   add(id, x, z, rotation) { const item = { id, x, z, rotation, cells: this.footprint(id, x, z, rotation) }; this.items.push(item); return item; }
