@@ -18,16 +18,22 @@ export class BuildMode {
    * Where the piece would go under `point`. Benches, sofas and other seats turn to the first way round that keeps
    * their seats reachable, so they can be set against a wall without turning them by hand.
    */
+  /** Whether `id` can go at x, z turned `rotation`; `reason` says why not ('outside', 'lane', 'overlap', 'self' or 'path:<id>'). */
+  #check(id, x, z, rotation, existing) {
+    const cells = this.layout.footprint(id, x, z, rotation), why = this.layout.whyNot(id, cells, existing);
+    if (why) return { ok: false, reason: why };
+    const cand = { id, x, z, rotation, cells }, blocker = this.hooks.blockedBy(cand, existing);
+    return blocker ? { ok: false, reason: blocker === cand ? 'self' : 'path:' + blocker.id } : { ok: true, reason: null };
+  }
   #target(point) {
     const cell = this.layout.nearestCell(point.x, point.z); if (!cell) return null;
     const snapped = this.active.id === 'station' && this.#chairSlot(point); if (snapped) return snapped;
     const { id, existing } = this.active, turns = FURNITURE[id].seats ? [0, 1, 2, 3].map(k => (this.active.rotation + k) % 4) : [this.active.rotation];
     let first = null;
     for (const rotation of turns) {
-      const c = this.layout.centreAt(id, cell, rotation), cells = this.layout.footprint(id, c.x, c.z, rotation);
-      const ok = !!cells && this.layout.canOccupy(id, cells, existing) && this.hooks.validate({ id, x: c.x, z: c.z, rotation, cells }, existing);
-      if (ok) return { ...c, rotation, ok };
-      first ||= { ...c, rotation, ok };
+      const c = this.layout.centreAt(id, cell, rotation), r = this.#check(id, c.x, c.z, rotation, existing);
+      if (r.ok) return { ...c, rotation, ...r };
+      first ||= { ...c, rotation, ...r };
     }
     return first;
   }
@@ -42,14 +48,13 @@ export class BuildMode {
       for (const [lx, lz, turn] of [[-1.5, 0, 0], [1.5, 0, 0], [0, -1.5, 2]]) {
         const p = this.layout.toWorld(it, lx, lz), rotation = (it.rotation + turn) % 4, d = Math.hypot(p.x - point.x, p.z - point.z);
         if (d >= bestDist) continue;
-        const cells = this.layout.footprint('station', p.x, p.z, rotation);
-        if (!cells || !this.layout.canOccupy('station', cells, existing) || !this.hooks.validate({ id: 'station', x: p.x, z: p.z, rotation, cells }, existing)) continue;
-        best = { x: p.x, z: p.z, rotation, ok: true }; bestDist = d;
+        if (!this.#check('station', p.x, p.z, rotation, existing).ok) continue;
+        best = { x: p.x, z: p.z, rotation, ok: true, reason: null }; bestDist = d;
       }
     }
     return best;
   }
-  hover(point) { this.active.point = point; const t = this.#target(point); if (!t) this.view.hideGhost(); else this.view.poseGhost(t.x, t.z, t.rotation, t.ok); }
+  hover(point) { this.active.point = point; const t = this.#target(point); this.active.reason = t ? t.reason : 'outside'; if (!t) this.view.hideGhost(); else this.view.poseGhost(t.x, t.z, t.rotation, t.ok); }
   /** Places the piece at `point`. Returns true when placed. */
   commit(point) {
     const t = this.#target(point); if (!t || !t.ok) return false;

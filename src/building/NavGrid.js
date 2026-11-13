@@ -56,13 +56,28 @@ export class NavGrid {
     return [...(f.needs || []), ...(f.seats || []).map(seatApproach)].map(([x, z]) => this.layout.toWorld(item, x, z));
   }
 
-  /** Would the salon still work with `candidate` placed (replacing `ignore` when moving)? */
-  wouldConnect(candidate, ignore) {
-    const items = this.layout.items.filter(it => it !== ignore).concat([candidate]), blocked = this.#blocked(items);
-    const start = this.layout.cellAt(...ENTRANCE);
-    if (!start || blocked.has(start)) return false;
+  /** Cells people can walk to from the door with `items` in place, or null when the door itself is blocked. */
+  #reach(items) {
+    const blocked = this.#blocked(items), start = this.layout.cellAt(...ENTRANCE);
+    if (!start || blocked.has(start)) return null;
     const reached = new Set([start]), queue = [start];
     while (queue.length) for (const [n] of this.#neighbours(queue.shift(), blocked)) if (!reached.has(n)) { reached.add(n); queue.push(n); }
-    return items.every(it => this.needs(it).every(p => { const c = this.layout.nearestCell(p.x, p.z); return c && reached.has(c); }));
+    return reached;
   }
+  #reachable(reached, item) { return !!reached && this.needs(item).every(p => { const c = this.layout.nearestCell(p.x, p.z); return c && reached.has(c); }); }
+  /**
+   * What placing `candidate` (in place of `ignore` when moving) would cut off: the candidate itself when its own spots
+   * cannot be reached, another piece whose spots it blocks, or null when the salon still works. A piece that was already
+   * cut off before does not count, so one awkward piece never stops everything else from being placed.
+   */
+  blockedBy(candidate, ignore) {
+    const before = this.layout.items.filter(it => it !== ignore), after = this.#reach(before.concat([candidate]));
+    if (!this.#reachable(after, candidate)) return candidate;
+    const lost = before.filter(it => !this.#reachable(after, it));
+    if (!lost.length) return null;
+    const was = this.#reach(before);
+    return lost.find(it => this.#reachable(was, it)) || null;
+  }
+  /** Would the salon still work with `candidate` placed (replacing `ignore` when moving)? */
+  wouldConnect(candidate, ignore) { return !this.blockedBy(candidate, ignore); }
 }
