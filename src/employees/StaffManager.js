@@ -6,7 +6,7 @@ import { Employee } from './Employee.js';
  */
 const DEFINITIONS = [
   // Master designer: among the best in Melbourne, and priced like it
-  { id: 'jules', name: 'Jules', role: 'Master Designer', rank: 'master', unlock: 'masters', style: 'AllRounder', perk: 'mentor', skills: { cutting: 95, colouring: 94, perming: 93, speed: 76, customerService: 94 }, salary: 600, hireCost: 6500, fine: true, apron: 0x0d0b14, hair: 0x9c98a2, long: true },
+  { id: 'daniel', name: 'Daniel', role: 'Master Designer', rank: 'master', unlock: 'masters', style: 'AllRounder', perk: 'mentor', skills: { cutting: 95, colouring: 94, perming: 93, speed: 76, customerService: 94 }, salary: 600, hireCost: 6500, fine: true, apron: 0x0d0b14, hair: 0x9c98a2, long: true },
   // Senior designers
   { id: 'somi', name: 'Somi', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'ColourSpecialist', specialty: 'colour', perk: 'trend', skills: { cutting: 84, colouring: 92, perming: 78, speed: 68, customerService: 90 }, salary: 430, hireCost: 3500, fine: true, apron: 0x1d1a26, hair: 0x2e1d14, long: true },
   { id: 'kai', name: 'Kai', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 92, colouring: 76, perming: 74, speed: 80, customerService: 82 }, salary: 420, hireCost: 3300, fine: true, apron: 0x45404f, hair: 0x16110f },
@@ -20,7 +20,7 @@ const DEFINITIONS = [
   { id: 'yuri', name: 'Yuri', role: 'Designer', style: 'AllRounder', perk: 'vip', skills: { cutting: 66, colouring: 66, perming: 66, speed: 62, customerService: 74 }, salary: 300, hireCost: 1300, apron: 0xffb15a, hair: 0x16110f, long: true },
   { id: 'ethan', name: 'Ethan', role: 'Barber', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 72, colouring: 40, perming: 36, speed: 84, customerService: 64 }, salary: 270, hireCost: 1000, apron: 0x2a4478, hair: 0x6e4428 },
   // Junior designers
-  { id: 'shawn', name: 'Shawn', role: 'Junior Designer', rank: 'junior', style: 'PermSpecialist', specialty: 'perm', skills: { cutting: 48, colouring: 42, perming: 70, speed: 86, customerService: 60 }, salary: 240, hireCost: 600, bias: -1.2, single: true, apron: 0x1fa39a, hair: 0x16110f },
+  { id: 'owen', name: 'Owen', role: 'Junior Designer', rank: 'junior', style: 'PermSpecialist', specialty: 'perm', skills: { cutting: 48, colouring: 42, perming: 70, speed: 86, customerService: 60 }, salary: 240, hireCost: 600, bias: -1.2, single: true, apron: 0x1fa39a, hair: 0x16110f },
   { id: 'dami', name: 'Dami', role: 'Junior Designer', rank: 'junior', style: 'ColourSpecialist', specialty: 'colour', perk: 'calm', skills: { cutting: 44, colouring: 66, perming: 40, speed: 70, customerService: 64 }, salary: 220, hireCost: 500, apron: 0xf2a0c0, hair: 0x6e4428, long: true },
   { id: 'hyun', name: 'Hyun', role: 'Junior Designer', rank: 'junior', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 64, colouring: 38, perming: 42, speed: 80, customerService: 56 }, salary: 230, hireCost: 550, apron: 0x7fb6f0, hair: 0x16110f },
 ];

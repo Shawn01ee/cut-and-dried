@@ -22,9 +22,11 @@ const PRICE_MULTIPLIER = [.8, 1, 1.5], PRICE_DEMAND = [1.3, 1, .7];
 const MATERIALS = { colour: 18, wave: 14 }, CARD_FEE = .016, SPA_FEE = 45;
 export const STARTING_CASH = 2000;
 // Earlier saves used these ids for the stylist now called Shawn.
-const LEGACY_IDS = { jun: 'shawn', sean: 'shawn', sophie: 'ruby', max: 'hugo' };
-/** Opening hours the owner can choose; changes apply from the next morning. */
-export const HOURS = [[11, 17], [10, 18], [10, 20], [9, 19], [9, 21]];
+const LEGACY_IDS = { jun: 'owen', sean: 'owen', shawn: 'owen', jules: 'daniel', sophie: 'ruby', max: 'hugo' };
+// Stylists who were renamed, so their old reviews still count for them.
+const RENAMED = { Jules: 'Daniel', Shawn: 'Owen' };
+/** Opening hours the owner can set: open from 7 to 12, close from 15 to 23, 6 to 12 hours a day. Changes apply from the next morning. */
+export const HOURS_RANGE = { open: [7, 12], close: [15, 23], length: [6, 12] };
 const blankIncidents = () => ({ refunds: 0, discounts: 0, dashed: 0 });
 
 /** Composition root of the business simulation. Knows nothing about Three.js. */
@@ -60,7 +62,7 @@ export class TycoonGame {
     return Math.max(1, Math.round(base * PRICE_DEMAND[this.priceLevel] * this.marketing.demandMultiplier * this.reviews.demandMultiplier * (1 - this.rival.pull(this.standing))));
   }
   /** How Ciel Ground looks from outside, for the rival to react to. */
-  /** What Daniel thinks the salon is worth. */
+  /** What Shawn, the CEO, thinks the salon is worth. */
   get valuation() { return this.finance.valuation({ reputation: this.reputation.value, followers: this.marketing.followers, chairs: this.layout.chairs, branches: this.franchise.branches.filter(b => b.open).length }); }
   investIn(i) { return this.finance.takeInvestment(i, this.progression.level, this.valuation, this.clock.day); }
   buyBackStake() { return this.finance.buyBack(this.valuation); }
@@ -81,6 +83,15 @@ export class TycoonGame {
   /** Clients arrive at the same rate whatever the hours, so a longer day brings more of them. `dailyDemand` is per eight hours. */
   nextArrival() { return rand(.8, 1.2) * this.clock.hourLength * 8 / this.dailyDemand; }
   setHours(open, close) { this.nextHours = open === this.clock.openHour && close === this.clock.closeHour ? null : [open, close]; }
+  /** Tomorrow's hours as [open, close]. */
+  get plannedHours() { return this.nextHours || [this.clock.openHour, this.clock.closeHour]; }
+  /** Whether the opening (`which` 0) or closing (1) hour can move by `step`. */
+  canShiftHours(which, step) {
+    const h = [...this.plannedHours]; h[which] += step;
+    const [o, c] = h, R = HOURS_RANGE;
+    return o >= R.open[0] && o <= R.open[1] && c >= R.close[0] && c <= R.close[1] && c - o >= R.length[0] && c - o <= R.length[1];
+  }
+  shiftHours(which, step) { if (!this.canShiftHours(which, step)) return false; const h = [...this.plannedHours]; h[which] += step; this.setHours(...h); return true; }
   /** A client for the main salon. Branch clients (`walkIn` false) are never influencers or difficult clients. */
   newCustomer(usedNames, walkIn = true) {
     const influencer = walkIn ? this.marketing.takeInfluencer() : null;
@@ -127,12 +138,12 @@ export class TycoonGame {
       if (result.satisfaction >= .8 && Math.random() < .35) this.regulars++;
       else if (result.satisfaction < .5 && this.regulars && Math.random() < .5) this.regulars--;
     }
-    let followers = 0;
+    let followers = 0, influencerPost = null;
     if (customer.influencer) {
-      followers = this.marketing.influencerPosted(customer.influencer, result.satisfaction);
-      if (result.satisfaction < .55) this.reputation.add(-3);
+      influencerPost = this.marketing.influencerPosted(customer.influencer, result.satisfaction);
+      followers = influencerPost.followers; this.reputation.add(influencerPost.rep);
     }
-    return { review: this.#post(this.reviews.fromService(customer, result, this.clock.day, outcome)), followers };
+    return { review: this.#post(this.reviews.fromService(customer, result, this.clock.day, outcome)), followers, influencerPost };
   }
   customerGaveUp(customer) { this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day)); }
   customerTurnedAway(customer) { this.#post(this.reviews.turnedAway(customer, this.clock.day)); }
@@ -189,6 +200,7 @@ export class TycoonGame {
     d.staff.forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     (d.support || []).forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     this.layout.restore(d.layout);
+    (d.reviews?.list || []).forEach(r => { if (r.visit && RENAMED[r.visit.stylist]) r.visit.stylist = RENAMED[r.visit.stylist]; });
     this.marketing.restore(d.marketing); this.reviews.restore(d.reviews); this.hospitality.restore(d.hospitality);
     this.finance.restore(d.finance); this.rival.restore(d.rival); this.regulars = d.regulars || 0; this.staff.restore(d.staffPolicy);
     if (d.hours) this.clock.setHours(...d.hours);

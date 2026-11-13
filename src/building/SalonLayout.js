@@ -23,14 +23,25 @@ const WALL_SHIFTS = [
   { tier: 5, side: 'back', at: -7, dx: 0, dz: -2, span: [-4, 12] },
 ];
 
-/** The salon as it opens on day one: [id, centre x, centre z, quarter turns]. */
-// Chairs line the back wall, shampoo booths line the right wall (room for three), and clients wait by the front window.
+/**
+ * The salon as it opens on day one: [id, centre x, centre z, quarter turns].
+ * A three-seat styling island in the middle, the shampoo booth in the back corner, the dryer and colour bar by the
+ * left wall, reception and coat storage by the door with a product table, and a lounge by the front window behind
+ * a planter, with a coffee bar.
+ */
 export const DEFAULT_LAYOUT = [
-  ['station', -2.25, -2.25, 0], ['desk', -3.5, 1.25, 1], ['wardrobe', -3.75, 0, 1], ['dryer', -3.5, -2.5, 0], ['shampooBooth', 3.25, -2.25, 3],
-  ['bench', .5, 2.75, 2], ['bench2', 2.75, 2.75, 2], ['loungeRug', 1.5, 2, 0], ['mat', -2, 2.75, 0],
-  ['plant', 3.75, 2.75, 0], ['plant', -3.75, 2.75, 0], ['plant', -.75, 2.75, 0],
+  ['island', -.25, -.75, 0], ['shampooBooth', 3.25, -2.25, 3], ['dryer', -3.5, -2.5, 0], ['colour', -3.75, -.75, 0],
+  ['desk', -3.5, 1.25, 1], ['wardrobe', -3.75, 2.5, 1], ['mat', -2, 2.75, 0], ['displayTable', -1, 1.5, 0],
+  ['partition', 1.75, 1.25, 0], ['loungeRug', 1.5, 2, 0], ['bench', .5, 2.75, 2], ['sideTable', 1.75, 2.75, 0], ['bench2', 2.75, 2.75, 2],
+  ['lamp', 3.75, 2.75, 0], ['plant', -.75, 2.75, 0], ['coffeeBar', 3.75, 1, 3],
 ];
 /** Where extra styling chairs went before furniture could be moved; used to load older saves. */
+/** Branches are simpler copies of the salon: three chairs along the back wall, where their clients are served. */
+export const BRANCH_LAYOUT = [
+  ['station', -2.25, -2.25, 0], ['station', -.25, -2.25, 0], ['station', 1.75, -2.25, 0], ['desk', -3.5, 1.25, 1], ['wardrobe', -3.75, 0, 1],
+  ['dryer', -3.5, -2.5, 0], ['shampooBooth', 3.25, -2.25, 3], ['bench', .5, 2.75, 2], ['bench2', 2.75, 2.75, 2], ['loungeRug', 1.5, 2, 0],
+  ['mat', -2, 2.75, 0], ['plant', 3.75, 2.75, 0], ['plant', -.75, 2.75, 0],
+];
 export const EXTRA_STATIONS = [[-.25, -2.25], [1.75, -2.25], [5.25, -2.25], [7.25, -2.25]];
 const ANNEX_PLANTS = [[7.75, -4.75], [7.75, 2.75]];
 const turn = (x, z, r) => [[x, z], [z, -x], [-x, -z], [-z, x]][r];
@@ -52,7 +63,7 @@ export class SalonLayout {
   #key(x, z) { return `${Math.round(x * 4)},${Math.round(z * 4)}`; }
   cellAt(x, z) { return this.#index.get(this.#key(x, z)) || null; }
   get chairs() { return this.items.reduce((n, it) => n + chairsOn(it.id), 0); }
-  get maxChairs() { return [1, 3, 6, 9, 12, 15][this.tier]; }
+  get maxChairs() { return [3, 6, 9, 12, 15, 18][this.tier]; }
   /** How many of a piece the salon has room for at its current size. */
   maxOf(id) { const m = FURNITURE[id].max; return m == null ? Infinity : Array.isArray(m) ? m[this.tier] : m; }
   get nextExpansion() { return EXPANSIONS[this.tier] || null; }
@@ -100,11 +111,12 @@ export class SalonLayout {
   get dailySales() { return this.#sum(f => f.dailySales); }
   get speedBonus() { return 1 + this.#sum(f => f.speedBonus); }
   get staffRestRate() { return this.items.some(it => FURNITURE[it.id].staffRest) ? 2 : 1; }
-  /** A salon always needs a reception desk and at least one styling chair; put back missing ones at their default spots. */
+  /** A salon always needs a reception desk and somewhere to cut hair; put back missing ones at their default spots. */
   #ensureEssentials() {
-    for (const id of ['desk', 'station']) {
-      if (this.items.some(it => it.id === id)) continue;
-      const [, x, z, r] = DEFAULT_LAYOUT.find(d => d[0] === id), cells = this.footprint(id, x, z, r);
+    const desk = DEFAULT_LAYOUT.find(d => d[0] === 'desk'), chairs = DEFAULT_LAYOUT.find(d => FURNITURE[d[0]].chairs);
+    for (const [id, x, z, r] of [desk, chairs]) {
+      if (id === 'desk' ? this.items.some(it => it.id === 'desk') : this.chairs) continue;
+      const cells = this.footprint(id, x, z, r);
       if (cells && this.canOccupy(id, cells)) this.add(id, x, z, r);
     }
   }
@@ -114,7 +126,7 @@ export class SalonLayout {
     if (data.version === 2) { this.items = []; data.items.forEach(it => { if (FURNITURE[it.id] && this.footprint(it.id, it.x, it.z, it.rotation)) this.add(it.id, it.x, it.z, it.rotation); }); this.#ensureEssentials(); return; }
     // Saves from before furniture could move: start from the default salon and add what was bought.
     this.resetToDefault();
-    for (let k = 1; k < (data.chairs || 1); k++) this.add('station', ...EXTRA_STATIONS[k - 1], 0);
+    for (let k = 1; k < (data.chairs || 1); k++) { const [x, z] = EXTRA_STATIONS[k - 1], cells = this.footprint('station', x, z, 0); if (cells && this.canOccupy('station', cells)) this.add('station', x, z, 0); }
     if (this.tier >= 2) this.addAnnexPlants();
     (data.items || []).forEach(it => {
       if (!FURNITURE[it.id]) return;
