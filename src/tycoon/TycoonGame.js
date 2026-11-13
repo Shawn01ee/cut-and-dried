@@ -67,7 +67,7 @@ export class TycoonGame {
   get comfort() { return this.layout.comfort + (this.staff.hasSupport('tidy') ? 2 : 0) - Math.min(4, Math.floor(this.dirt / 150)); }
   get averageSatisfaction() { return this.served ? this.satisfactionSum / this.served : 0; }
   /** How good a reel filmed right now looks: the latest finished style, the salon and its rating. */
-  get reelQuality() { return clamp(.1 + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
+  get reelQuality() { return clamp(.1 + Math.min(.2, this.staff.hired.filter(e => e.perk === 'trend').length * .1) + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
   /** Chance that someone posts a fake one-star review today; a bigger audience attracts more of them. */
   get trollChance() { return this.progression.level < 2 ? 0 : Math.min(.45, .12 + this.marketing.followers / 4000); }
   updateProgress() { this.progression.update(this.context); }
@@ -89,10 +89,13 @@ export class TycoonGame {
   completeService(customer, worker, byOwner) {
     const result = this.evaluator.evaluate(customer, worker, this.comfort);
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);
+    if (customer.vip && worker.perk === 'vip') result.payment = Math.round(result.payment * 1.2);
     const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + this.comfort * .03 : 1);
     this.reputation.add(gain); worker.recordService(result.satisfaction, result.payment);
     if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate);
-    if (worker.gainExperience(result.specialist ? 15 : 10)) this.bus.emit('staff:levelup', worker);
+    // A mentor on the team helps everyone else learn faster.
+    const learning = this.staff.hasPerk('mentor') && worker.perk !== 'mentor' ? 1.5 : 1;
+    if (worker.gainExperience(Math.round((result.specialist ? 15 : 10) * learning))) this.bus.emit('staff:levelup', worker);
     this.served++; this.servedToday++; this.satisfactionSum += result.satisfaction; this.lastSatisfaction = result.satisfaction;
     return result;
   }
@@ -125,7 +128,11 @@ export class TycoonGame {
   customerGaveUp(customer) { this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day)); }
   customerTurnedAway(customer) { this.#post(this.reviews.turnedAway(customer, this.clock.day)); }
   #post(review) { if (review) this.bus.emit('review:new', review); return review; }
-  replyToReview(id, kind) { const r = this.reviews.reply(id, kind); if (r && r.rep) this.reputation.add(r.rep); return r; }
+  /** Who handles reviews: the receptionist, who runs marketing, or Lia herself without one. */
+  get reviewManager() { const r = this.staff.receptionist; return r.hired ? { name: r.name, role: 'desk', skill: r.skills.marketing || 0 } : { name: this.staff.owner.name, role: 'owner', skill: 0 }; }
+  replyToReview(id, kind) { const r = this.reviews.reply(id, kind, this.reviewManager); if (r && r.rep) this.reputation.add(r.rep); return r; }
+  /** With auto-replies on, the receptionist answers the day's unanswered reviews at closing. */
+  #autoReply() { if (!this.reviews.autoReply || !this.staff.receptionist.hired) return; this.reviews.list.filter(r => !r.replied && !r.removed).forEach(r => this.replyToReview(r.id, r.stars >= 4 ? 'thanks' : 'apology')); }
   post(channel) { return this.marketing.post(channel, this.clock.day, this.reelQuality, this.marketingPower); }
   runCampaign(id) { return this.marketing.run(id, this.marketingPower); }
   expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 2) this.layout.addAnnexPlants(); return true; }
@@ -148,7 +155,7 @@ export class TycoonGame {
   closeDay() {
     const e = this.economy, sales = this.layout.dailySales, branches = this.franchise.collectDay();
     if (sales) e.earn('products', sales); if (branches) e.earn('branches', branches);
-    this.operatingCosts.accrue(1);
+    this.operatingCosts.accrue(1); this.#autoReply();
     this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours);
     this.finance.closeDay(e.dailyProfit);
     [this.staff.owner, ...this.staff.working(this.clock.day)].forEach(e => { if (e.gainExperience(5)) this.bus.emit('staff:levelup', e); });

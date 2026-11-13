@@ -5,17 +5,24 @@ import { Employee } from './Employee.js';
  * Senior designers are the strongest and the most expensive, and only join an established salon.
  */
 const DEFINITIONS = [
+  // Master designer: among the best in Melbourne, and priced like it
+  { id: 'jules', name: 'Jules', role: 'Master Designer', rank: 'master', unlock: 'masters', style: 'AllRounder', perk: 'mentor', skills: { cutting: 95, colouring: 94, perming: 93, speed: 76, customerService: 94 }, salary: 600, hireCost: 6500, fine: true, apron: 0x0d0b14, hair: 0x9c98a2, long: true },
   // Senior designers
-  { id: 'somi', name: 'Somi', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'ColourSpecialist', specialty: 'colour', skills: { cutting: 84, colouring: 92, perming: 78, speed: 68, customerService: 90 }, salary: 430, hireCost: 3500, fine: true, apron: 0x1d1a26, hair: 0x2e1d14, long: true },
-  { id: 'kai', name: 'Kai', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'CutSpecialist', specialty: 'cut', skills: { cutting: 92, colouring: 76, perming: 74, speed: 80, customerService: 82 }, salary: 420, hireCost: 3300, fine: true, apron: 0x45404f, hair: 0x16110f },
-  { id: 'soo', name: 'Soo', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'PermSpecialist', specialty: 'perm', skills: { cutting: 85, colouring: 80, perming: 92, speed: 66, customerService: 88 }, salary: 420, hireCost: 3300, fine: true, apron: 0x7a5d6e, hair: 0x5e3d24, long: true },
+  { id: 'somi', name: 'Somi', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'ColourSpecialist', specialty: 'colour', perk: 'trend', skills: { cutting: 84, colouring: 92, perming: 78, speed: 68, customerService: 90 }, salary: 430, hireCost: 3500, fine: true, apron: 0x1d1a26, hair: 0x2e1d14, long: true },
+  { id: 'kai', name: 'Kai', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 92, colouring: 76, perming: 74, speed: 80, customerService: 82 }, salary: 420, hireCost: 3300, fine: true, apron: 0x45404f, hair: 0x16110f },
+  { id: 'soo', name: 'Soo', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'PermSpecialist', specialty: 'perm', perk: 'consult', skills: { cutting: 85, colouring: 80, perming: 92, speed: 66, customerService: 88 }, salary: 420, hireCost: 3300, fine: true, apron: 0x7a5d6e, hair: 0x5e3d24, long: true },
   // Designers
-  { id: 'mia', name: 'Mia', role: 'Designer', style: 'CutSpecialist', specialty: 'cut', skills: { cutting: 76, colouring: 58, perming: 54, speed: 62, customerService: 78 }, salary: 290, hireCost: 1200, apron: 0x2f6fd6, hair: 0xf1dfae },
+  { id: 'mia', name: 'Mia', role: 'Designer', style: 'CutSpecialist', specialty: 'cut', perk: 'calm', skills: { cutting: 76, colouring: 58, perming: 54, speed: 62, customerService: 78 }, salary: 290, hireCost: 1200, apron: 0x2f6fd6, hair: 0xf1dfae },
   { id: 'rosa', name: 'Rosa', role: 'Colourist', style: 'ColourSpecialist', specialty: 'colour', skills: { cutting: 56, colouring: 80, perming: 48, speed: 58, customerService: 72 }, salary: 290, hireCost: 1200, bias: .6, fine: true, apron: 0xe25c8f, hair: 0xc8642a, long: true },
-  { id: 'yuri', name: 'Yuri', role: 'Designer', style: 'AllRounder', skills: { cutting: 66, colouring: 66, perming: 66, speed: 62, customerService: 74 }, salary: 300, hireCost: 1300, apron: 0xffb15a, hair: 0x16110f, long: true },
-  { id: 'ethan', name: 'Ethan', role: 'Barber', style: 'CutSpecialist', specialty: 'cut', skills: { cutting: 72, colouring: 40, perming: 36, speed: 84, customerService: 64 }, salary: 270, hireCost: 1000, apron: 0x2a4478, hair: 0x6e4428 },
-  // Junior designer
+  { id: 'seo', name: 'Seo', role: 'Colourist', style: 'ColourSpecialist', specialty: 'colour', perk: 'vip', skills: { cutting: 60, colouring: 78, perming: 55, speed: 58, customerService: 76 }, salary: 295, hireCost: 1250, fine: true, apron: 0x4f6b6a, hair: 0x16110f, long: true },
+  { id: 'ella', name: 'Ella', role: 'Designer', style: 'PermSpecialist', specialty: 'perm', perk: 'consult', skills: { cutting: 62, colouring: 58, perming: 76, speed: 60, customerService: 80 }, salary: 290, hireCost: 1200, apron: 0xb79be8, hair: 0xe8c27a, long: true },
+  { id: 'marco', name: 'Marco', role: 'Designer', style: 'CutSpecialist', specialty: 'cut', perk: 'trend', skills: { cutting: 74, colouring: 52, perming: 50, speed: 66, customerService: 70 }, salary: 285, hireCost: 1150, apron: 0x2d4a3a, hair: 0x2e1d14 },
+  { id: 'yuri', name: 'Yuri', role: 'Designer', style: 'AllRounder', perk: 'vip', skills: { cutting: 66, colouring: 66, perming: 66, speed: 62, customerService: 74 }, salary: 300, hireCost: 1300, apron: 0xffb15a, hair: 0x16110f, long: true },
+  { id: 'ethan', name: 'Ethan', role: 'Barber', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 72, colouring: 40, perming: 36, speed: 84, customerService: 64 }, salary: 270, hireCost: 1000, apron: 0x2a4478, hair: 0x6e4428 },
+  // Junior designers
   { id: 'shawn', name: 'Shawn', role: 'Junior Designer', rank: 'junior', style: 'PermSpecialist', specialty: 'perm', skills: { cutting: 48, colouring: 42, perming: 70, speed: 86, customerService: 60 }, salary: 240, hireCost: 600, bias: -1.2, single: true, apron: 0x1fa39a, hair: 0x16110f },
+  { id: 'dami', name: 'Dami', role: 'Junior Designer', rank: 'junior', style: 'ColourSpecialist', specialty: 'colour', perk: 'calm', skills: { cutting: 44, colouring: 66, perming: 40, speed: 70, customerService: 64 }, salary: 220, hireCost: 500, apron: 0xf2a0c0, hair: 0x6e4428, long: true },
+  { id: 'hyun', name: 'Hyun', role: 'Junior Designer', rank: 'junior', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 64, colouring: 38, perming: 42, speed: 80, customerService: 56 }, salary: 230, hireCost: 550, apron: 0x7fb6f0, hair: 0x16110f },
 ];
 
 const SUPPORT = [
@@ -54,8 +61,12 @@ export class StaffManager {
   find(id) { return [...this.all, ...this.support].find(e => e.id === id); }
   hire(employee) { if (employee.hired || !this.economy.spend('recruiting', employee.hireCost)) return false; Object.assign(employee, { hired: true, daysEmployed: 0, stress: 0, leaveFrom: 0, leaveTo: 0 }); this.version++; return true; }
   fire(employee) { if (!employee.hired || employee === this.owner) return false; employee.hired = false; employee.status = 'idle'; this.version++; return true; }
+  /** True when a hired stylist has this special talent. */
+  hasPerk(perk) { return this.hired.some(e => e.perk === perk); }
+  /** A mentor on the team makes training cheaper. */
+  trainingCostFor(e) { return Math.round(e.trainingCost * (this.hasPerk('mentor') ? .7 : 1)); }
   /** Paid training: a block of experience that may lift the stylist a level. Returns levels gained. */
-  train(employee) { if (!employee.hired || !employee.canTrain || !this.economy.spend('training', employee.trainingCost)) return 0; employee.addStress(-5); this.version++; return employee.gainExperience(60); }
+  train(employee) { if (!employee.hired || !employee.canTrain || !this.economy.spend('training', this.trainingCostFor(employee))) return 0; employee.addStress(-5); this.version++; return employee.gainExperience(60); }
   marketingCourseCost(e) { return MARKETING_COURSE + Math.max(0, (e.skills.marketing || 0) - 35) * 10; }
   /** Sends the receptionist on a marketing course. */
   trainMarketing(e) { if (!e.hired || (e.skills.marketing || 0) >= 100 || !this.economy.spend('training', this.marketingCourseCost(e))) return false; e.skills.marketing = Math.min(100, (e.skills.marketing || 0) + 10); this.version++; return true; }
@@ -87,7 +98,7 @@ export class StaffManager {
       const overtime = Math.max(0, hours - 8);
       const load = e.fatigue * .2 + Math.max(0, e.today.served - 4) * 3 + 2 + overtime * 4;
       e.carry = Math.round(e.fatigue * overtime * .08);
-      e.addStress(load * calm / restRate - (restRate > 1 ? 4 : 0));
+      e.addStress(load * calm * (e.perk === 'calm' ? .6 : 1) / restRate - (restRate > 1 ? 4 : 0));
       e.daysEmployed++;
       if (e.stress >= RESIGN_STRESS) quitting.push(e);
     }

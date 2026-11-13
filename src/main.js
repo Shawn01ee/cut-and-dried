@@ -287,7 +287,8 @@ class Hair{
 
 /* ================= people ================= */
 const SKINS=[0x6b3e2a,0x9c6644,0xc98e66,0xe7b892,0xf6d6bd,0x3b2219];
-const SHIRTS=[0xd8314a,0x2f6fd6,0x1fa39a,0xffb15a,0x8a4fc2,0x5f9e45,0xf2a0c0,0x7fb6f0,0xc24a46,0xe8c27a,0xdcd9dc];
+// Red is kept for difficult clients so they stand out.
+const SHIRTS=[0x2f6fd6,0x1fa39a,0xffb15a,0x8a4fc2,0x5f9e45,0xf2a0c0,0x7fb6f0,0xe8c27a,0xdcd9dc],VILLAIN_SHIRT=0xd8314a;
 const PANTS=[0x1d1a26,0x2a4478,0x45404f,0x5e3d24,0x16264e];
 const STY=game.staff.candidates,OWNER=game.staff.owner;
 const stations=[];
@@ -326,9 +327,9 @@ const colName=o=>o.col.t==='nat'?tx('naturalOf',natName(o.col.i)):wantName(o.col
 function orderText(o){return `${tx('shape.'+o.shape)} · ${o.L} cm (${lenDesc(o.L)}) · ${colName(o)} · ${tx('wave.'+WAVES[o.wave])}`;}
 function spawnCustomer(){
   if(custs.filter(c=>c.state!=='gone').length>=40)return;
-  const c=game.newCustomer(new Set(custs.map(q=>q.name))),fig=new Fig({skin:pick(SKINS),shirt:pick(SHIRTS),pants:pick(PANTS)});
+  const c=game.newCustomer(new Set(custs.map(q=>q.name))),fig=new Fig({skin:pick(SKINS),shirt:c.villain?VILLAIN_SHIRT:pick(SHIRTS),pants:c.villain?0x0d0b14:pick(PANTS)});
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(STREET);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
-  c.tag=document.createElement('div');c.tag.className='tag';c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
+  c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle),recep.head,'big');
   fig.walkTo(ROUTE_IN,()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');const seat=bench.find(s=>!s.occ)||terr.find(s=>!s.occ);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
@@ -560,7 +561,7 @@ const FOIL={L:.8,a:-.002,b:-.006};
 function envStep(dt,t){
   poleTex.offset.y=(t*.4)%1;
   // cutaway walls facing the camera
-  const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{if(w.off){w.full.visible=w.low.visible=false;return;}const front=w.n.dot(v)>.2;w.full.visible=!front;w.low.visible=front;});
+  const v=V(Math.sin(camAz),0,Math.cos(camAz));walls.forEach(w=>{if(w.off){w.full.visible=w.low.visible=false;return;}const front=w.n.dot(v)>.2||build.isActive;w.full.visible=!front;w.low.visible=front;});
   // selection marker
   if(started&&typeof sel==='number'){const st=stations[sel];marker.visible=true;marker.position.set(st.chair.x,2.35+Math.abs(Math.sin(t*3))*.15,st.chair.z);}else marker.visible=false;
 }
@@ -584,7 +585,7 @@ function renderPanel(force){if(typeof sel==='number'&&!stations[sel])sel=lastCha
   if(st.vacant){pbody.innerHTML=chairRow+`<div class="dim">${tx('vac.note')}</div>`;return;}
   let h=chairRow+`<div class="ph"><b>${tx('chair',st.i+1)}</b> · <span style="color:${hexCss(st.sty.apron)}">${nm(st.sty.name)}</span> <span class="dim">(${tx('style.'+st.sty.style)})</span> · <span id="stl">${stLabel(st)}</span></div>`;
   if(!c){pbody.innerHTML=h+`<div class="dim">${tx('free.next',queue.length?queue.map(q=>nm(q.name)).join(', '):tx('free.nobody'))}</div><div id="help">${tx('free.help')}</div>`;return;}
-  h+=`<div class="ord">${c.vip?`<span class="gold">${tx('vip')}</span> `:''}${c.influencer?`<span class="gold">${tx('inf.tag',c.influencer.handle)}</span> `:''}<b>${tx('order.wants',nm(c.name))}</b> <span class="otext">${orderText(c.order)}</span> <span class="dim">· ${c.influencer?tx('inf.free'):`$${c.price} · ${tx('p.budget',c.budget)}`}</span>${st.state==='consult'&&!styling?` <button class="go" data-do="style" ${ownerBusy()?'disabled':''}>${tx('p.direct')}</button>`:''}</div>`;
+  h+=`<div class="ord">${c.vip?`<span class="gold">${tx('vip')}</span> `:''}${c.influencer?`<span class="gold">${tx('inf.tag',c.influencer.handle)}</span> `:''}<b class="${c.villain?'bad':''}">${tx('order.wants',nm(c.name))}</b> <span class="otext">${orderText(c.order)}</span> <span class="dim">· ${c.influencer?tx('inf.free'):`$${c.price} · ${tx('p.budget',c.budget)}`}</span>${st.state==='consult'&&!styling?` <button class="go" data-do="style" ${ownerBusy()?'disabled':''}>${tx('p.direct')}</button>`:''}</div>`;
   h+=`<div class="pv"><figure><canvas id="pvO" width="48" height="56"></canvas><figcaption>${tx('fig.order')}</figcaption></figure><figure><canvas id="pvN" width="48" height="56"></canvas><figcaption>${tx('fig.now')}</figcaption></figure>${st.state==='consult'?`<figure><canvas id="pvP" width="48" height="56"></canvas><figcaption>${tx('fig.plan')}</figcaption></figure>`:''}<div class="bars" id="bars"></div></div>`;
   if(st.state==='consult'){const p=st.plan;
     h+=`${styling&&styling.station===st?`<div class="row"><button data-do="turn:-1">◀</button><button data-do="turn:1">▶</button><button data-do="compare">${tx('style.compare')}</button><button data-do="style-close">${tx('style.close')}</button></div>`:''}<div class="row"><label><input type="checkbox" data-k="doCut" ${p.doCut?'checked':''}> ${tx('p.cut')}</label>${seg('shape',SHAPES,p.shape,n=>tx('shape.'+n))}</div>
@@ -640,12 +641,13 @@ function updateHud(){const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
   $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)} ${g.clock.timeText}</span></h1>
   <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.rating',g.reviews.count?`★${g.reviews.rating.toFixed(1)} (${g.reviews.count})`:'–')}${row('hud.followers',g.marketing.followers.toLocaleString())}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length} / ${stations.length+terr.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
-  <table class="foot">${stations.map(st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td>${nm(st.sty.name)}</td><td>${st.cust?(st.cust.vip?'★':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`).join('')}</table>
+  <table class="foot">${stations.map(st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td>${nm(st.sty.name)}</td><td class="${st.cust&&st.cust.villain?'bad':''}">${st.cust?(st.cust.vip?'★':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`).join('')}</table>
   ${last?`<div class="dim">${tx('hud.last',nm(last.name),Math.round(last.all*100),nm(last.sty),last.mins.toFixed(1))}</div>`:''}`;}
 
 /* controls */
 $('#bRotL').onclick=()=>camK--;$('#bRotR').onclick=()=>camK++;
-addEventListener('keydown',e=>{const K=e.key.toLowerCase();
+// Keys are read by position so they work with a Korean keyboard layout too.
+addEventListener('keydown',e=>{const K={KeyQ:'q',KeyE:'e',KeyR:'r',Escape:'escape'}[e.code]||e.key.toLowerCase();
   if(styling){if(K==='q')styling.turn(-1);if(K==='e')styling.turn(1);return;}
   if(build.isActive){if(K==='r'){build.rotate();renderPanel(true);}if(K==='escape'){build.cancel();renderPanel(true);}return;}
   if(K==='q')camK--;if(K==='e')camK++;});
@@ -789,4 +791,4 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   if(!booted){booted=true;boot();}}
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;}};
