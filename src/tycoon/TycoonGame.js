@@ -24,9 +24,9 @@ const WALK_INS = 2.5;
 const MATERIALS = { colour: 18, wave: 14 }, CARD_FEE = .016, SPA_FEE = 45;
 export const STARTING_CASH = 2000;
 // Earlier saves used these ids for the stylist now called Shawn.
-const LEGACY_IDS = { jun: 'owen', sean: 'owen', shawn: 'owen', jules: 'daniel', sophie: 'ruby', max: 'hugo' };
+const LEGACY_IDS = { jun: 'owen', sean: 'owen', shawn: 'owen', jules: 'daniel', mia: 'sophia', sophie: 'ruby', max: 'hugo' };
 // Stylists who were renamed, so their old reviews still count for them.
-const RENAMED = { Jules: 'Daniel', Shawn: 'Owen' };
+const RENAMED = { Jules: 'Daniel', Shawn: 'Owen', Mia: 'Sophia' };
 /** How much each new review moves the salon's reputation, by its stars. */
 export const REVIEW_REP = { 5: .6, 4: .25, 3: 0, 2: -.6, 1: -1.2 };
 /** Opening hours the owner can set: open from 7 to 12, close from 15 to 23, 6 to 12 hours a day. Changes apply from the next morning. */

@@ -178,6 +178,16 @@ button.on:hover:not(:disabled){background:#a3384a}
 .pop{border-color:#5f5a68;box-shadow:0 2px 0 #0d0b14}
 .pop.big{background:rgba(36,30,47,.94);box-shadow:0 2px 0 #0d0b14,inset 0 0 0 1px #8a6040}
 .tag{box-shadow:0 1px 0 #0d0b14}
+.scard{padding:5px 0 8px;border-bottom:1px solid #2e2a38}
+.scard:last-child{border-bottom:0}
+.sk{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px 8px;margin:3px 0 5px}
+.sk div{display:grid;grid-template-columns:auto 1fr;align-items:baseline;column-gap:4px}
+.sk span{color:#9c98a2}.sk b{font-weight:400;text-align:right;color:#f6f3ee}
+.sk i{grid-column:1/-1;display:block;height:3px;margin-top:1px;background:#2e2a38;position:relative}
+.sk i::after{content:'';position:absolute;left:0;top:0;bottom:0;width:var(--v);background:#7fb6f0}
+.sk .hi span,.sk .hi b{color:#ffd98a}.sk .hi i::after{background:#ffd98a}
+.kv{display:grid;grid-template-columns:62px minmax(0,1fr);gap:2px 8px;margin:0}
+.kv dt{color:#9c98a2;white-space:nowrap}.kv dd{margin:0;color:#dcd9dc}
 @keyframes cardIn{0%{opacity:0;translate:0 10px}100%{opacity:1;translate:0 0}}
 @keyframes fadeUp{0%{opacity:0;translate:0 4px}100%{opacity:1;translate:0 0}}
 @keyframes fadeIn{0%{opacity:0}100%{opacity:1}}

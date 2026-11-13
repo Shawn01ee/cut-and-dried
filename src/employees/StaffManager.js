@@ -6,31 +6,31 @@ import { Employee } from './Employee.js';
  */
 const DEFINITIONS = [
   // Master designer: among the best in Melbourne, and priced like it
-  { id: 'daniel', name: 'Daniel', role: 'Master Designer', rank: 'master', unlock: 'masters', style: 'AllRounder', perk: 'mentor', skills: { cutting: 95, colouring: 94, perming: 93, speed: 76, customerService: 94 }, salary: 600, hireCost: 6500, fine: true, apron: 0x0d0b14, hair: 0x9c98a2, long: true },
+  { id: 'daniel', name: 'Daniel', gender: 'm', role: 'Master Designer', rank: 'master', unlock: 'masters', style: 'AllRounder', perk: 'mentor', skills: { cutting: 95, colouring: 94, perming: 93, speed: 76, customerService: 94 }, salary: 600, hireCost: 6500, fine: true, apron: 0x0d0b14, hair: 0x9c98a2, hairdo: 'curly', shades: true, skin: 0x9c6644 },
   // Senior designers
-  { id: 'somi', name: 'Somi', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'ColourSpecialist', specialty: 'colour', perk: 'trend', skills: { cutting: 84, colouring: 92, perming: 78, speed: 68, customerService: 90 }, salary: 430, hireCost: 3500, fine: true, apron: 0x1d1a26, hair: 0x2e1d14, long: true },
-  { id: 'kai', name: 'Kai', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 92, colouring: 76, perming: 74, speed: 80, customerService: 82 }, salary: 420, hireCost: 3300, fine: true, apron: 0x45404f, hair: 0x16110f },
-  { id: 'soo', name: 'Soo', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'PermSpecialist', specialty: 'perm', perk: 'consult', skills: { cutting: 85, colouring: 80, perming: 92, speed: 66, customerService: 88 }, salary: 420, hireCost: 3300, fine: true, apron: 0x7a5d6e, hair: 0x5e3d24, long: true },
+  { id: 'somi', name: 'Somi', gender: 'f', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'ColourSpecialist', specialty: 'colour', perk: 'trend', skills: { cutting: 84, colouring: 92, perming: 78, speed: 68, customerService: 90 }, salary: 430, hireCost: 3500, fine: true, apron: 0x1d1a26, hair: 0x2e1d14, hairdo: 'long', skin: 0xf6d6bd },
+  { id: 'kai', name: 'Kai', gender: 'm', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 92, colouring: 76, perming: 74, speed: 80, customerService: 82 }, salary: 420, hireCost: 3300, fine: true, apron: 0x45404f, hair: 0x16110f, hairdo: 'short', skin: 0xe7b892 },
+  { id: 'soo', name: 'Soo', gender: 'f', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'PermSpecialist', specialty: 'perm', perk: 'consult', skills: { cutting: 85, colouring: 80, perming: 92, speed: 66, customerService: 88 }, salary: 420, hireCost: 3300, fine: true, apron: 0x7a5d6e, hair: 0x5e3d24, hairdo: 'long', skin: 0xf6d6bd },
   // Designers
-  { id: 'mia', name: 'Mia', role: 'Designer', style: 'CutSpecialist', specialty: 'cut', perk: 'calm', skills: { cutting: 76, colouring: 58, perming: 54, speed: 62, customerService: 78 }, salary: 290, hireCost: 1200, apron: 0x2f6fd6, hair: 0xf1dfae },
-  { id: 'rosa', name: 'Rosa', role: 'Colourist', style: 'ColourSpecialist', specialty: 'colour', skills: { cutting: 56, colouring: 80, perming: 48, speed: 58, customerService: 72 }, salary: 290, hireCost: 1200, bias: .6, fine: true, apron: 0xe25c8f, hair: 0xc8642a, long: true },
-  { id: 'seo', name: 'Seo', role: 'Colourist', style: 'ColourSpecialist', specialty: 'colour', perk: 'vip', skills: { cutting: 60, colouring: 78, perming: 55, speed: 58, customerService: 76 }, salary: 295, hireCost: 1250, fine: true, apron: 0x4f6b6a, hair: 0x16110f, long: true },
-  { id: 'ella', name: 'Ella', role: 'Designer', style: 'PermSpecialist', specialty: 'perm', perk: 'consult', skills: { cutting: 62, colouring: 58, perming: 76, speed: 60, customerService: 80 }, salary: 290, hireCost: 1200, apron: 0xb79be8, hair: 0xe8c27a, long: true },
-  { id: 'marco', name: 'Marco', role: 'Designer', style: 'CutSpecialist', specialty: 'cut', perk: 'trend', skills: { cutting: 74, colouring: 52, perming: 50, speed: 66, customerService: 70 }, salary: 285, hireCost: 1150, apron: 0x2d4a3a, hair: 0x2e1d14 },
-  { id: 'yuri', name: 'Yuri', role: 'Designer', style: 'AllRounder', perk: 'vip', skills: { cutting: 66, colouring: 66, perming: 66, speed: 62, customerService: 74 }, salary: 300, hireCost: 1300, apron: 0xffb15a, hair: 0x16110f, long: true },
-  { id: 'ethan', name: 'Ethan', role: 'Barber', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 72, colouring: 40, perming: 36, speed: 84, customerService: 64 }, salary: 270, hireCost: 1000, apron: 0x2a4478, hair: 0x6e4428 },
+  { id: 'sophia', name: 'Sophia', gender: 'f', role: 'Designer', style: 'CutSpecialist', specialty: 'cut', perk: 'calm', skills: { cutting: 76, colouring: 58, perming: 54, speed: 62, customerService: 78 }, salary: 290, hireCost: 1200, apron: 0x2f6fd6, hair: 0xf1dfae, hairdo: 'bob', skin: 0xf6d6bd },
+  { id: 'rosa', name: 'Rosa', gender: 'f', role: 'Colourist', style: 'ColourSpecialist', specialty: 'colour', skills: { cutting: 56, colouring: 80, perming: 48, speed: 58, customerService: 72 }, salary: 290, hireCost: 1200, bias: .6, fine: true, apron: 0xe25c8f, hair: 0xc8642a, hairdo: 'long', skin: 0xe7b892 },
+  { id: 'seo', name: 'Seo', gender: 'm', role: 'Colourist', style: 'ColourSpecialist', specialty: 'colour', perk: 'vip', skills: { cutting: 60, colouring: 78, perming: 55, speed: 58, customerService: 76 }, salary: 295, hireCost: 1250, fine: true, apron: 0x4f6b6a, hair: 0x16110f, hairdo: 'short', skin: 0xe7b892 },
+  { id: 'ella', name: 'Ella', gender: 'f', role: 'Designer', style: 'PermSpecialist', specialty: 'perm', perk: 'consult', skills: { cutting: 62, colouring: 58, perming: 76, speed: 60, customerService: 80 }, salary: 290, hireCost: 1200, apron: 0xb79be8, hair: 0xe8c27a, hairdo: 'long', skin: 0xf6d6bd },
+  { id: 'marco', name: 'Marco', gender: 'm', role: 'Designer', style: 'CutSpecialist', specialty: 'cut', perk: 'trend', skills: { cutting: 74, colouring: 52, perming: 50, speed: 66, customerService: 70 }, salary: 285, hireCost: 1150, apron: 0x2d4a3a, hair: 0x2e1d14, hairdo: 'short', beard: true, skin: 0xc98e66 },
+  { id: 'yuri', name: 'Yuri', gender: 'f', role: 'Designer', style: 'AllRounder', perk: 'vip', skills: { cutting: 66, colouring: 66, perming: 66, speed: 62, customerService: 74 }, salary: 300, hireCost: 1300, apron: 0xffb15a, hair: 0x16110f, hairdo: 'long', skin: 0xf6d6bd },
+  { id: 'ethan', name: 'Ethan', gender: 'm', role: 'Barber', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 72, colouring: 40, perming: 36, speed: 84, customerService: 64 }, salary: 270, hireCost: 1000, apron: 0x2a4478, hair: 0x6e4428, hairdo: 'buzz', beard: true, skin: 0x6b3e2a },
   // Junior designers
-  { id: 'owen', name: 'Owen', role: 'Junior Designer', rank: 'junior', style: 'PermSpecialist', specialty: 'perm', skills: { cutting: 48, colouring: 42, perming: 70, speed: 86, customerService: 60 }, salary: 240, hireCost: 600, bias: -1.2, single: true, apron: 0x1fa39a, hair: 0x16110f },
-  { id: 'dami', name: 'Dami', role: 'Junior Designer', rank: 'junior', style: 'ColourSpecialist', specialty: 'colour', perk: 'calm', skills: { cutting: 44, colouring: 66, perming: 40, speed: 70, customerService: 64 }, salary: 220, hireCost: 500, apron: 0xf2a0c0, hair: 0x6e4428, long: true },
-  { id: 'hyun', name: 'Hyun', role: 'Junior Designer', rank: 'junior', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 64, colouring: 38, perming: 42, speed: 80, customerService: 56 }, salary: 230, hireCost: 550, apron: 0x7fb6f0, hair: 0x16110f },
+  { id: 'owen', name: 'Owen', gender: 'm', role: 'Junior Designer', rank: 'junior', style: 'PermSpecialist', specialty: 'perm', skills: { cutting: 48, colouring: 42, perming: 70, speed: 86, customerService: 60 }, salary: 240, hireCost: 600, bias: -1.2, single: true, apron: 0x1fa39a, hair: 0x16110f, hairdo: 'short', skin: 0xe7b892 },
+  { id: 'dami', name: 'Dami', gender: 'f', role: 'Junior Designer', rank: 'junior', style: 'ColourSpecialist', specialty: 'colour', perk: 'calm', skills: { cutting: 44, colouring: 66, perming: 40, speed: 70, customerService: 64 }, salary: 220, hireCost: 500, apron: 0xf2a0c0, hair: 0x6e4428, hairdo: 'bun', skin: 0xf6d6bd },
+  { id: 'hyun', name: 'Hyun', gender: 'm', role: 'Junior Designer', rank: 'junior', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 64, colouring: 38, perming: 42, speed: 80, customerService: 56 }, salary: 230, hireCost: 550, apron: 0x7fb6f0, hair: 0x16110f, hairdo: 'short', skin: 0xe7b892 },
 ];
 
 const SUPPORT = [
-  { id: 'ruby', name: 'Ruby', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, startsHired: true },
+  { id: 'ruby', name: 'Ruby', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, startsHired: true },
   // Assistants wash and sweep. `shampoo` is how good a wash is, `cleaning` how quickly and widely they sweep.
-  { id: 'hugo', name: 'Hugo', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 60, customerService: 60, shampoo: 60, cleaning: 60 }, salary: 140, hireCost: 260, apron: 0x5f9e45 },
-  { id: 'jin', name: 'Jin', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 74, customerService: 52, shampoo: 45, cleaning: 84 }, salary: 135, hireCost: 240, apron: 0xffb15a },
-  { id: 'tess', name: 'Tess', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 54, customerService: 72, shampoo: 86, cleaning: 42 }, salary: 155, hireCost: 320, apron: 0x7fb6f0 },
+  { id: 'hugo', name: 'Hugo', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 60, customerService: 60, shampoo: 60, cleaning: 60 }, salary: 140, hireCost: 260, apron: 0x5f9e45 },
+  { id: 'jin', name: 'Jin', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 74, customerService: 52, shampoo: 45, cleaning: 84 }, salary: 135, hireCost: 240, apron: 0xffb15a },
+  { id: 'tess', name: 'Tess', gender: 'f', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 54, customerService: 72, shampoo: 86, cleaning: 42 }, salary: 155, hireCost: 320, apron: 0x7fb6f0 },
 ];
 
 /** Performance pay as a share of each stylist's takings: steadier staff and a small skill lift, at a cost. */
@@ -43,8 +43,8 @@ export const RESIGN_STRESS = 85;
 export class StaffManager {
   constructor(economy) {
     this.economy = economy;
-    // Lia owns the salon and can do everything well; she draws no wage.
-    this.owner = new Employee({ id: 'owner', name: 'Lia', role: 'Director', style: 'Owner', skills: { cutting: 78, colouring: 76, perming: 74, speed: 62, customerService: 84 }, salary: 0, single: true, apron: 0xffd98a, hair: 0x2e1d14 });
+    // Lia owns the salon: she does every service, specialises in colour, runs the place thriftily and draws no wage.
+    this.owner = new Employee({ id: 'owner', name: 'Lia', gender: 'f', role: 'Director', style: 'Owner', specialty: 'colour', perk: 'manage', skills: { cutting: 78, colouring: 76, perming: 74, speed: 62, customerService: 84 }, salary: 0, apron: 0xffd98a, hair: 0x2e1d14, hairdo: 'bob' });
     this.owner.hired = true; this.owner.daysEmployed = Infinity;
     this.candidates = DEFINITIONS.map(d => new Employee(d));
     // Front desk and floor help, never at a styling chair. Only the receptionist is there on day one.
