@@ -13,13 +13,20 @@ const BARS = [
   { chord: [62, 65, 69, 72], bass: 50, melody: [[0, 74, 2], [2, 77, 2], [4, 81, 3], [8, 79, 2], [10, 77, 2], [12, 74, 4]] },
   { chord: [55, 59, 62, 65], bass: 43, melody: [[0, 71, 4], [4, 74, 2], [6, 77, 2], [8, 79, 6]] },
 ];
-const LOOP_STEPS = BARS.length * STEPS_PER_BAR;
+// A tense minor loop for while a difficult client is in the salon: driving bass, tritone stabs.
+const TENSE_BARS = [
+  { chord: [57, 60, 64], bass: 45, melody: [[0, 69, 2], [3, 72, 1], [4, 71, 3], [8, 68, 3], [12, 69, 2], [14, 64, 2]] },
+  { chord: [57, 60, 63], bass: 45, melody: [[0, 72, 2], [3, 75, 1], [4, 74, 3], [8, 72, 2], [10, 71, 2], [12, 69, 4]] },
+  { chord: [53, 57, 60], bass: 41, melody: [[0, 65, 2], [3, 69, 1], [4, 72, 3], [8, 71, 2], [10, 69, 2], [12, 68, 4]] },
+  { chord: [52, 56, 59], bass: 40, melody: [[0, 64, 3], [4, 68, 2], [6, 71, 2], [8, 74, 3], [12, 75, 2], [14, 76, 2]] },
+];
+const MOODS = { calm: BARS, tense: TENSE_BARS };
 const MIN_GAP = { snip: .11, click: .03, chime: .4, cash: .08, clap: .6, swish: .15 };
 
 /** Synthesises all music and sound effects, so the game ships without audio files. */
 export class AudioManager {
   #ctx = null; #master = null; #music = null; #sfx = null; #noiseBuffer = null;
-  #nextTime = 0; #step = 0; #pass = 0; #lastPlayed = {};
+  #nextTime = 0; #step = 0; #pass = 0; #lastPlayed = {}; #mood = 'calm'; #playing = 'calm';
 
   constructor(bus) {
     this.musicVolume = .5; this.sfxVolume = .8; this.muted = false;
@@ -77,13 +84,27 @@ export class AudioManager {
     source.connect(filter).connect(gain).connect(out);
     source.start(start, Math.random() * 1.5, dur + .05);
   }
+  /** 'calm' or 'tense'. The music changes at the start of the next bar. */
+  setMood(mood) { if (MOODS[mood]) this.#mood = mood; }
   #scheduleMusic() {
     if (!this.#ctx || this.#ctx.state !== 'running') return;
     while (this.#nextTime < this.#ctx.currentTime + SCHEDULE_AHEAD) {
-      this.#playStep(this.#step, this.#nextTime);
-      this.#nextTime += STEP; this.#step++;
-      if (this.#step >= LOOP_STEPS) { this.#step = 0; this.#pass++; }
+      if (this.#step % STEPS_PER_BAR === 0 && this.#mood !== this.#playing) { this.#playing = this.#mood; this.#step = 0; this.#pass = 0; }
+      const tense = this.#playing === 'tense';
+      if (tense) this.#playTenseStep(this.#step, this.#nextTime); else this.#playStep(this.#step, this.#nextTime);
+      this.#nextTime += tense ? STEP * .8 : STEP; this.#step++;
+      if (this.#step >= MOODS[this.#playing].length * STEPS_PER_BAR) { this.#step = 0; this.#pass++; }
     }
+  }
+  #playTenseStep(step, t) {
+    const out = this.#music, bar = TENSE_BARS[Math.floor(step / STEPS_PER_BAR)], s = step % STEPS_PER_BAR, st = STEP * .8;
+    if (s % 4 === 0) this.#tone(out, { freq: 120, to: 45, start: t, dur: .12, type: 'sine', vol: .26 });
+    if (s === 4 || s === 12) this.#noise(out, { start: t, dur: .08, vol: .06, type: 'bandpass', freq: 2000 });
+    this.#noise(out, { start: t, dur: .02, vol: s % 2 ? .012 : .022, freq: 8000 });
+    if (s % 2 === 0) this.#tone(out, { freq: midiHz(bar.bass + (s % 8 === 6 ? 12 : 0)), start: t, dur: st * 1.4, type: 'sawtooth', vol: .06 });
+    if (s === 0 || s === 10) bar.chord.forEach(n => this.#tone(out, { freq: midiHz(n + 12), start: t, dur: st * 2, type: 'square', vol: .025 }));
+    if (s === 7) this.#tone(out, { freq: midiHz(bar.bass + 18), start: t, dur: st, type: 'square', vol: .03 });
+    bar.melody.filter(([at]) => at === s).forEach(([, note, len]) => this.#tone(out, { freq: midiHz(note), start: t, dur: st * len, type: 'triangle', vol: .1, attack: .01 }));
   }
   #playStep(step, t) {
     const out = this.#music, bar = BARS[Math.floor(step / STEPS_PER_BAR)], s = step % STEPS_PER_BAR;

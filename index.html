@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Cut &amp; Dried</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -120,6 +121,20 @@ body.closeup #hud,body.closeup #ctrl{display:none}
 #sites button.sel{background:#45404f;border-color:#ffd98a;color:#ffd98a}
 #branchCard{position:fixed;left:50%;top:54px;transform:translateX(-50%);display:none;padding:6px 10px;font-size:17px;text-align:center;white-space:nowrap}
 #branchCard.show{display:block}
+#incident{position:fixed;left:50%;top:96px;transform:translateX(-50%);display:none;padding:7px 10px;font-size:16px;text-align:center;min-width:240px;max-width:min(92vw,420px);z-index:6}
+#incident.show{display:block}
+#incident .itext{margin:4px 0 6px}
+#incident .ibtns{display:flex;gap:6px;justify-content:center}
+#incident .ibtns button{flex:1;padding:4px 6px}
+#incident .tbar{height:3px;background:#2a2633;margin-top:6px}
+#incident .tbar i{display:block;height:100%;width:100%;background:#ffd98a}
+body.inmenu #incident{display:none}
+html[lang=ko] #incident{font-size:13px;line-height:1.5}
+@media (max-width:760px){#incident{top:auto;bottom:calc(47vh + 20px)}}
+#tabs .badge{display:inline-block;min-width:13px;margin-left:3px;padding:0 3px;background:#d8314a;color:#fff;font-size:11px;line-height:14px;vertical-align:1px}
+.rv{padding:4px 0;border-bottom:1px solid #2a2633}
+.rv:last-child{border-bottom:0}
+.rv .reply{color:#9c98a2;margin:2px 0 0 10px}
 body.inmenu #sites,body.closeup #sites,body.inmenu #branchCard,body.closeup #branchCard{display:none}
 @media (max-width:760px){#sites{left:auto;right:8px;top:96px;transform:none;flex-direction:column}#branchCard{left:auto;right:8px;top:auto;bottom:calc(47vh + 20px);transform:none;white-space:normal;max-width:60vw}}
 html[lang=ko] #branchCard{font-size:13px;line-height:1.5}
@@ -181,7 +196,7 @@ html[lang=ko] .brow button{font-size:12px}
   <button id="bSpd" title="Speed">×1</button><button id="bAuto" class="on" title="Stylists plan and start on their own">Auto</button>
   <button id="bZo">−</button><button id="bZi">+</button><button id="bSound"></button><button id="bLang"></button><button id="bHelp">?</button>
 </div>
-<div id="sites" class="card"></div><div id="branchCard" class="card"></div>
+<div id="sites" class="card"></div><div id="branchCard" class="card"></div><div id="incident" class="card"></div>
 <div id="panel" class="card"><div id="tabs"></div><div id="pbody"></div></div>
 
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>

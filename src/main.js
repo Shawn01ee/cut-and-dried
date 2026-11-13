@@ -17,6 +17,7 @@ import { NavGrid } from './building/NavGrid.js';
 import { paintSign } from './rendering/pixelFont.js';
 import { DEFAULT_LAYOUT, EXTRA_STATIONS } from './building/SalonLayout.js';
 import { AudioManager } from './audio/AudioManager.js';
+import { IncidentCard } from './ui/IncidentCard.js';
 
 const game = new TycoonGame(), i18n = new I18n(window.__lang), audio = new AudioManager(game.bus);
 const tx = (k, ...a) => i18n.t(k, ...a), nm = n => i18n.name(n);
@@ -207,7 +208,9 @@ class Fig{
     if(k==='brush'){b(.02,.17,.02,0x1d1a26,0,.08,0);b(.04,.05,.03,0x8a4fc2,0,.18,0);}
     if(k==='dryer'){b(.05,.1,.05,0x1d1a26,0,.04,0);b(.08,.08,.22,0xe25c8f,0,.11,.07);}
     if(k==='broom'){b(.03,1.0,.03,0x8a6040,0,.48,0);b(.34,.1,.08,0xe8c27a,0,.98,0);}
-    if(k==='bowl'){b(.13,.06,.13,0x1d1a26,0,.02,.04);}}
+    if(k==='bowl'){b(.13,.06,.13,0x1d1a26,0,.02,.04);}
+    if(k==='cup'){b(.07,.09,.07,0xf6f3ee,0,.05,0);b(.05,.01,.05,0x5e3d24,0,.1,0);}
+    if(k==='juice'){b(.06,.12,.06,0xffb15a,0,.06,0);b(.012,.06,.012,0xd8314a,.015,.14,0);}}
   walkTo(pts,cb){this.path=pts.map(p=>p.clone());this.cb=cb||null;if(this.mode==='sit')this.mode='stand';}
   remove(){world.remove(this.root);figs.splice(figs.indexOf(this),1);}
   update(dt){
@@ -303,10 +306,12 @@ function spawnCustomer(){
   const c=game.newCustomer(new Set(custs.map(q=>q.name))),fig=new Fig({skin:pick(SKINS),shirt:pick(SHIRTS),pants:pick(PANTS)});
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(STREET);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag';c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
-  custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');
+  custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle),recep.head,'big');
   fig.walkTo(ROUTE_IN,()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');const seat=bench.find(s=>!s.occ)||terr.find(s=>!s.occ);
-    if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');leave(c,'full');return;}
-    seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);});});
+    if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
+    seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
+      // Drinks and snacks are served as soon as the client sits down.
+      const drink=game.hospitality.serve(c);if(drink)fig.setTool(drink==='juice'?'juice':'cup');});});
 }
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
 function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos;let pts;
@@ -346,15 +351,29 @@ function runOps(st,dt){const op=st.ops[st.opi],c=st.cust,h=c.hair,sf=st.worker.f
 const WORDS=[[.9,'w0'],[.75,'w1'],[.55,'w2'],[.35,'w3'],[0,'w4']];
 let last=null;
 function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.setTool(null);sf.handL=sf.handR=null;
-  const sc=game.completeService(c,s,st.byOwner);c.result=sc;const pay=sc.payment;
+  const sc=game.completeService(c,s,st.byOwner);c.result=sc;
   last={name:c.name,sty:s.name,all:sc.all,mins:(simT-c.tStart)/60};
   sf.walkTo([st.at(-.55,1.15)],()=>{sf.yaw=st.face-Math.PI*.2;});
   c.fig.walkTo([st.at(.55,1.2)],()=>{c.fig.yaw=st.face;audio.play(sc.all>=.6?'happy':'sad');
     popup(`${Math.round(sc.all*100)}% · ${tx(WORDS.find(w=>sc.all>=w[0])[1])}`,c.fig.head,'big');
     later(.6,()=>{c.fig.yaw=st.face-Math.PI*.85;clapAll(sc.all);popup(tx('chairPct',st.i+1,Math.round(sc.all*100)),recep.head,'');});
     later(2.8,()=>{st.state='free';st.cust=null;{const home=s===st.sty?st:ownerStation();sf.walkTo(route(sf.pos,home?home.stand:OWNER_IDLE),()=>sf.yaw=home?home.face:Math.PI);}if(sel===st.i)renderPanel(true);
-      c.fig.walkTo(route(c.fig.pos,deskInfo.pay),()=>{c.fig.yaw=deskInfo.payYaw;later(1.3,()=>{game.receivePayment(pay);audio.play('cash');popup('+$'+pay,c.fig.head,'big');c.state='paid';leave(c);});});});});
+      c.fig.walkTo(route(c.fig.pos,deskInfo.pay),()=>{c.fig.yaw=deskInfo.payYaw;later(1.3,()=>checkout(c,sc));});});});
   if(sel===st.i)renderPanel(true);}
+/** Paying at the desk. Difficult clients may haggle, demand a refund or run off without paying. */
+function checkout(c,sc){const pay=sc.payment,head=c.fig.head;
+  const settle=(amount,outcome={})=>{if(amount>0){game.receivePayment(amount);audio.play('cash');popup('+$'+amount,head,'big');}
+    const r=game.finishVisit(c,sc,outcome);if(r.followers)popup(tx(r.followers>0?'inf.gain':'inf.loss',Math.abs(r.followers).toLocaleString()),head,'big');c.state='paid';leave(c);};
+  if(c.influencer){popup(tx('inf.sponsored'),recep.head,'');settle(0);return;}
+  if(c.villain==='dasher'){
+    if(game.staff.hasSupport('reception')&&Math.random()<.85){popup(tx('vil.caught',nm(recepName())),recep.head,'big');settle(pay);return;}
+    audio.play('bad');popup(tx('vil.dashed',pay),head,'big');game.finishVisit(c,sc,{dashed:true});c.state='paid';c.fig.spd=3.4;leave(c);return;}
+  if(c.villain==='complainer'&&sc.satisfaction<.72){audio.play('bad');
+    incidents.show({title:tx('inc.complain.t',nm(c.name)),text:tx('inc.complain'),options:[{label:tx('inc.refund',pay),run:()=>settle(0,{refunded:true})},{label:tx('inc.refuse'),run:()=>settle(pay,{refusedRefund:true})}]});return;}
+  if(c.villain==='haggler'){const off=Math.max(5,Math.round(pay*.25));
+    incidents.show({title:tx('inc.haggle.t',nm(c.name)),text:tx('inc.haggle',off),options:[{label:tx('inc.discount',off),run:()=>settle(pay-off,{discount:off})},{label:tx('inc.fullPrice'),run:()=>settle(pay,{haggleRefused:true})}]});return;}
+  settle(pay);}
+const recepName=()=>game.staff.support.find(e=>e.effect==='reception').name;
 function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,jr.fig,...friends,...STY.map(s=>s.fig),...custs.filter(c=>c.state==='wait').map(c=>c.fig)];who.forEach(f=>{if(n||Math.random()<.3)f.clapT=rand(1.2,1.8);});}
 
 /* junior: sweeps up the clippings */
@@ -374,7 +393,7 @@ let started=false,paused=false,booted=false,styling=null,savedCamK=0,lastChair=0
 const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
-function syncSupport(){recep.root.visible=game.staff.find('sophie').hired;jr.fig.root.visible=game.staff.find('max').hired;}
+function syncSupport(){recep.root.visible=game.staff.hasSupport('reception');jr.fig.root.visible=game.staff.hasSupport('tidy');}
 function syncChairs(){const big=game.layout.tier>=3;annexGroup.visible=big;walls[3].off=big;annexWalls.forEach(w=>{w.off=!big;});if(site<0){camHome.set(big?2.05:0,.55,1.2);viewScale=big?1.3:1;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
@@ -402,6 +421,7 @@ function dayTick(dt){if(game.report)return;game.tick(dt);if(!game.clock.isOpen&&
 game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');queue.slice().forEach(c=>leave(c));});
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
 game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');renderPanel(true);});
+game.bus.on('review:new',r=>{if(sel==='rev')game.reviews.markRead();if(r.stars<=2){popup(tx('rv.newLow','★'.repeat(r.stars)),recep.head,'');audio.play('bad');}});
 function openStyling(st){if(site>=0)focusSite(-1);if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=bestCamK(st);document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
 function closeStyling(confirmed){const s=styling;if(!s)return;styling=null;document.body.classList.remove('closeup');pixScale=1;resize();camK=savedCamK;s.station.sty.fig.root.visible=true;const c=s.customer;c.previewHair=null;c.hm.dirty=true;c.fig.yaw=Math.PI;if(!confirmed){const st=s.station;st.byOwner=false;if(autoOn||st.sty!==OWNER){st.plan=aiPlan(c,st.sty);st.playerPlan=false;st.touched=false;st.timer=2;}}renderPanel(true);}
 function stylingTick(dt){if(!styling)return;const c=styling.customer;c.fig.yaw=angLerp(c.fig.yaw,styling.targetYaw(Math.PI/4+camK*Math.PI/2+Math.PI),Math.min(1,dt*10));c.fig.look=0;}
@@ -435,7 +455,7 @@ function simStep(dt){simT+=dt;
   if(game.clock.isOpen){spawnTimer-=dt;if(spawnTimer<=0){spawnCustomer();spawnTimer=game.nextArrival();}}
   dayTick(dt);
   // waiting patience
-  custs.forEach(c=>{if(c.state==='wait'){c.pat-=dt;if(c.pat<=0){popup(tx('tooSlow'),c.fig.head,'');audio.play('bad');game.customerGaveUp();leave(c);}}});
+  custs.forEach(c=>{if(c.state==='wait'){c.pat-=dt;if(c.pat<=0){popup(tx('tooSlow'),c.fig.head,'');audio.play('bad');game.customerGaveUp(c);leave(c);}}});
   // stations
   stations.forEach(st=>{
     if(st.vacant)return;
@@ -479,21 +499,21 @@ let sel=0;const tabs=$('#tabs'),pbody=$('#pbody');let panelKey='';
 function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span>`;if(st.state==='await')return tx('st.walk');
   if(st.state==='consult')return canAuto(st)?tx('st.auto',Math.max(0,st.timer).toFixed(0)):`<span class="gold">${tx('st.wait')}</span>`;
   if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}%`;}return tx('st.reveal');}
-function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['build','tab.build'],['biz','tab.biz'],['prog','tab.prog']];
-  tabs.innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${(k==='salon'?typeof sel==='number':sel===k)?'sel':''}">${tx(l)}</button>`).join('')+`<button class="tog" id="bMin">${$('#panel').classList.contains('min')?'▴':'▾'}</button>`;
+function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']],unread=game.reviews.unread;
+  tabs.innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${(k==='salon'?typeof sel==='number':sel===k)?'sel':''}">${tx(l)}${k==='rev'&&unread&&sel!=='rev'?`<span class="badge">${unread}</span>`:''}</button>`).join('')+`<button class="tog" id="bMin">${$('#panel').classList.contains('min')?'▴':'▾'}</button>`;
   tabs.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{sel=b.dataset.t==='salon'?lastChair:b.dataset.t;$('#panel').classList.remove('min');renderPanel(true);});
   $('#bMin').onclick=()=>{$('#panel').classList.toggle('min');renderTabs();};}
 function swatches(k,cur){return `<button class="sw none ${cur<0?'sel':''}" data-${k}="-1" title="-"></button>`+DYES.map((d,i)=>`<button class="sw ${cur===i?'sel':''}" data-${k}="${i}" title="${dyeName(i)}" style="background:${hexCss(d.h)}"></button>`).join('');}
 function seg(k,list,cur,lab=n=>n){return `<span class="seg">${list.map((n,i)=>`<button data-${k}="${typeof cur==='string'?n:i}" class="${(typeof cur==='string'?n===cur:i===cur)?'sel':''}">${lab(n)}</button>`).join('')}</span>`;}
 function renderPanel(force){if(typeof sel==='number'&&!stations[sel])sel=lastChair=0;
-  const key=typeof sel==='number'?(()=>{const st=stations[sel];return [sel,st.state,st.sty.name,st.cust&&st.cust.id,st.opi,game.layout.chairs,!!styling,i18n.lang].join('|');})():ui.key(sel);
+  const key=(typeof sel==='number'?(()=>{const st=stations[sel];return [sel,st.state,st.sty.name,st.cust&&st.cust.id,st.opi,game.layout.chairs,!!styling,i18n.lang].join('|');})():ui.key(sel))+'|'+game.reviews.unread;
   if(!force&&key===panelKey){refreshDynamic();return;}panelKey=key;renderTabs();
   if(typeof sel!=='number'){pbody.innerHTML=ui.render(sel);return;}
   const st=stations[sel],c=st.cust,chairRow=`<div class="seg" style="margin-bottom:4px">${stations.map(x=>`<button data-do="chair-tab:${x.i}" class="${x.i===sel?'sel':''}">${x.i+1}·${nm(x.sty.name)}</button>`).join('')}</div>`;
   if(st.vacant){pbody.innerHTML=chairRow+`<div class="dim">${tx('vac.note')}</div>`;return;}
   let h=chairRow+`<div class="ph"><b>${tx('chair',st.i+1)}</b> · <span style="color:${hexCss(st.sty.apron)}">${nm(st.sty.name)}</span> <span class="dim">(${tx('style.'+st.sty.style)})</span> · <span id="stl">${stLabel(st)}</span></div>`;
   if(!c){pbody.innerHTML=h+`<div class="dim">${tx('free.next',queue.length?queue.map(q=>nm(q.name)).join(', '):tx('free.nobody'))}</div><div id="help">${tx('free.help')}</div>`;return;}
-  h+=`<div class="ord">${c.vip?`<span class="gold">${tx('vip')}</span> `:''}<b>${tx('order.wants',nm(c.name))}</b> <span class="otext">${orderText(c.order)}</span> <span class="dim">· $${c.price} · ${tx('p.budget',c.budget)}</span>${st.state==='consult'&&!styling?` <button class="go" data-do="style" ${ownerBusy()?'disabled':''}>${tx('p.direct')}</button>`:''}</div>`;
+  h+=`<div class="ord">${c.vip?`<span class="gold">${tx('vip')}</span> `:''}${c.influencer?`<span class="gold">${tx('inf.tag',c.influencer.handle)}</span> `:''}<b>${tx('order.wants',nm(c.name))}</b> <span class="otext">${orderText(c.order)}</span> <span class="dim">· ${c.influencer?tx('inf.free'):`$${c.price} · ${tx('p.budget',c.budget)}`}</span>${st.state==='consult'&&!styling?` <button class="go" data-do="style" ${ownerBusy()?'disabled':''}>${tx('p.direct')}</button>`:''}</div>`;
   h+=`<div class="pv"><figure><canvas id="pvO" width="48" height="56"></canvas><figcaption>${tx('fig.order')}</figcaption></figure><figure><canvas id="pvN" width="48" height="56"></canvas><figcaption>${tx('fig.now')}</figcaption></figure>${st.state==='consult'?`<figure><canvas id="pvP" width="48" height="56"></canvas><figcaption>${tx('fig.plan')}</figcaption></figure>`:''}<div class="bars" id="bars"></div></div>`;
   if(st.state==='consult'){const p=st.plan;
     h+=`${styling&&styling.station===st?`<div class="row"><button data-do="turn:-1">◀</button><button data-do="turn:1">▶</button><button data-do="compare">${tx('style.compare')}</button><button data-do="style-close">${tx('style.close')}</button></div>`:''}<div class="row"><label><input type="checkbox" data-k="doCut" ${p.doCut?'checked':''}> ${tx('p.cut')}</label>${seg('shape',SHAPES,p.shape,n=>tx('shape.'+n))}</div>
@@ -548,7 +568,7 @@ function updateHud(){const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?'seating':'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
   $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)} ${g.clock.timeText}</span></h1>
-  <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length} / ${stations.length+terr.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
+  <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.rating',g.reviews.count?`★${g.reviews.rating.toFixed(1)} (${g.reviews.count})`:'–')}${row('hud.followers',g.marketing.followers.toLocaleString())}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length} / ${stations.length+terr.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
   <table class="foot">${stations.map(st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td>${nm(st.sty.name)}</td><td>${st.cust?(st.cust.vip?'★':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`).join('')}</table>
   ${last?`<div class="dim">${tx('hud.last',nm(last.name),Math.round(last.all*100),nm(last.sty),last.mins.toFixed(1))}</div>`:''}`;}
 
@@ -589,7 +609,13 @@ function pickAt(x,y){if(site>=0)return;if(build.isActive){const q=groundAt(x,y);
   const p=h.point;let best=null,bd=.9;stations.forEach(s=>{const d=Math.hypot(p.x-s.chair.x,p.z-s.chair.z);if(d<bd){bd=d;best=s;}});
   if(best){sel=best.i;$('#panel').classList.remove('min');renderPanel(true);}}
 
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it)});
+const incidents=new IncidentCard($('#incident'));
+function postReel(){const r=game.postReel();if(!r)return;popup(tx('mk.shooting'),OWNER.fig.head,'');
+  later(1.6,()=>{popup(r.viral?tx('mk.viralPop',r.views.toLocaleString()):tx('mk.reelPop',r.views.toLocaleString(),r.gained.toLocaleString()),OWNER.fig.head,'big');audio.play(r.viral?'levelUp':'happy');});}
+function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
+  if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
+  postReel,reply:replyToReview,spent:()=>audio.play('cash')});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});
@@ -601,7 +627,7 @@ const branchScenes=new Map();let site=-1;
 const branchDeps={
   makeFig:kind=>kind==='client'?new Fig({skin:pick(SKINS),shirt:pick(SHIRTS),pants:pick(PANTS)})
     :new Fig({skin:pick(SKINS),shirt:kind==='desk'?pick(SHIRTS):0x45404f,pants:0x2e2a38,apron:kind==='desk'?undefined:pick([0x2f6fd6,0x1fa39a,0xe25c8f,0x8a4fc2,0xffb15a]),staffHair:pick([0x16110f,0x2e1d14,0x6e4428,0xc8642a,0xe8c27a]),long:Math.random()<.4}),
-  makeHair:fig=>new Hair(fig.head,fig),newCustomer:()=>game.newCustomer(new Set()),isOpen:()=>game.clock.isOpen,
+  makeHair:fig=>new Hair(fig.head,fig),newCustomer:()=>game.newCustomer(new Set(),false),isOpen:()=>game.clock.isOpen,
   record:(b,sat)=>game.franchise.recordClient(b,sat,game.reputation.value)};
 function signTexture(text){const w=Math.max(140,text.length*12+8);return canvasTex(w,22,g=>paintSign(g,w,22,text));}
 /** Builds a copy of the original salon at a branch's plot, with its own sign and floor. */
@@ -634,7 +660,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mbtns">${game.saves.has()?`<button class="go big" data-act="start">${tx('m.continue',game.saves.load().day)}</button><button data-act="new">${tx('m.new')}</button>`:`<button class="go big" data-act="new">${tx('m.start')}</button>`}<button data-act="how">${tx('m.how')}</button><button data-act="opts">${tx('m.opts')}</button></div>`;
   else if(menuScreen==='how')h=`<div class="mhead">${tx('m.how')}</div>${HOW[i18n.lang].map(([t,b])=>`<div class="hsec"><h3>${t}</h3>${b}</div>`).join('')}<div class="mbtns side">${backBtn}</div>`;
   else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v,c)).join('');
-    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}</table><div class="mbtns"><button class="go big" data-act="nextday">${tx('day.next')}</button></div>`;}
+    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table><div class="mbtns"><button class="go big" data-act="nextday">${tx('day.next')}</button></div>`;}
   else h=`<div class="mhead">${tx('m.opts')}</div>${langRow()}
     <div class="mrow"><label>${tx('m.time')}</label>${mSeg('time',TM.map(v=>[v,tx('m.t.'+v)]),timeMode)}</div>
     <div class="mrow"><label>${tx('m.speed')}</label>${mSeg('spd',[[1,'×1'],[3,'×3'],[5,'×5']],speed)}</div>
@@ -667,11 +693,15 @@ let lastT=performance.now(),hudT=0,clockT=0,realT=0;
 function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)/1000);lastT=now;realT+=dt;
   // Fast speeds run the simulation in small steps so walking and services stay smooth.
   if(started&&!paused){const total=dt*(styling?1:speed),steps=Math.ceil(total/.06);for(let i=0;i<steps;i++)simStep(total/steps);}else figs.forEach(f=>f.pose(0));
-  stylingTick(dt);
+  stylingTick(dt);if(started&&!paused)incidents.update(dt);
   updateLights(dt);updateCam(dt);envStep(dt,realT);updatePops(dt);
-  if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}}
+  if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
+    // The music turns tense while a difficult client is in or around the salon.
+    audio.setMood(started&&custs.some(c=>c.villain&&c.state!=='gone')?'tense':'calm');}
   if((clockT+=dt)>1){clockT=0;drawClock();}
   renderer.setRenderTarget(rt);renderer.render(scene,cam);
   renderer.setRenderTarget(null);renderer.render(post,postCam);
   if(!booted){booted=true;boot();}}
 requestAnimationFrame(frame);
+// `?debug` exposes the simulation for automated play tests.
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,stations,custs,queue,incidents,get speed(){return speed;},set speed(v){speed=v;}};

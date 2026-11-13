@@ -1,7 +1,8 @@
 import { FURNITURE } from '../building/FurnitureCatalog.js';
 
-const RENT_BY_LEVEL = [0, 80, 110, 160, 240, 320], RENT_PER_EXPANSION = 40;
-const UTILITIES_BASE = 20, UTILITIES_PER_CHAIR = 10, MAINTENANCE_RATE = .02;
+// Daily figures in AUD, roughly in line with a Melbourne shopfront.
+const RENT_BY_LEVEL = [0, 160, 190, 240, 310, 390], RENT_PER_EXPANSION = 60;
+const UTILITIES_BASE = 25, UTILITIES_PER_CHAIR = 12, MAINTENANCE_RATE = .01;
 
 /** Works out what it costs to keep the salon open and charges it as the day goes by. */
 export class OperatingCosts {
