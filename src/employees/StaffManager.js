@@ -27,9 +27,10 @@ const DEFINITIONS = [
 
 const SUPPORT = [
   { id: 'ruby', name: 'Ruby', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, startsHired: true },
-  { id: 'hugo', name: 'Hugo', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 60, customerService: 60 }, salary: 140, hireCost: 250, apron: 0x5f9e45 },
-  { id: 'jin', name: 'Jin', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 66, customerService: 58 }, salary: 140, hireCost: 250, apron: 0xffb15a },
-  { id: 'tess', name: 'Tess', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 58, customerService: 70 }, salary: 150, hireCost: 300, apron: 0x7fb6f0 },
+  // Assistants wash and sweep. `shampoo` is how good a wash is, `cleaning` how quickly and widely they sweep.
+  { id: 'hugo', name: 'Hugo', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 60, customerService: 60, shampoo: 60, cleaning: 60 }, salary: 140, hireCost: 260, apron: 0x5f9e45 },
+  { id: 'jin', name: 'Jin', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 74, customerService: 52, shampoo: 45, cleaning: 84 }, salary: 135, hireCost: 240, apron: 0xffb15a },
+  { id: 'tess', name: 'Tess', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 54, customerService: 72, shampoo: 86, cleaning: 42 }, salary: 155, hireCost: 320, apron: 0x7fb6f0 },
 ];
 
 /** Performance pay as a share of each stylist's takings: steadier staff and a small skill lift, at a cost. */
