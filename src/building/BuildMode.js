@@ -7,7 +7,7 @@ export class BuildMode {
   /** Starts placing a new piece, or picks up `existing` to move it. Returns false if it cannot be moved right now. */
   start(id, existing = null) {
     this.cancel();
-    if (existing && !this.hooks.canModify(existing)) return false;
+    if (existing && !this.hooks.canMove(existing)) return false;
     this.active = { id, existing, rotation: existing ? existing.rotation : 0, point: null };
     if (existing) this.view.setVisible(existing, false);
     this.view.showGhost(id); this.view.showGrid(this.layout.openCells(existing));
@@ -25,7 +25,8 @@ export class BuildMode {
   commit(point) {
     const t = this.#target(point); if (!t || !t.ok) return false;
     const { id, existing, rotation } = this.active;
-    if (existing) { this.view.despawn(existing); this.layout.move(existing, t.x, t.z, rotation); this.view.spawn(existing); }
+    if (existing && !this.hooks.canModify(existing)) { this.view.setVisible(existing, true); this.hooks.queueMove(existing, t.x, t.z, rotation); }
+    else if (existing) { this.view.despawn(existing); this.layout.move(existing, t.x, t.z, rotation); this.view.spawn(existing); }
     else if (!this.economy.spend(id === 'station' ? 'equipment' : 'interior', FURNITURE[id].price)) return false;
     else this.view.spawn(this.layout.add(id, t.x, t.z, rotation));
     this.#finish(); this.hooks.onChange(); return true;
