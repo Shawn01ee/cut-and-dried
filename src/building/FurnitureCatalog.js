@@ -21,10 +21,11 @@ export const FURNITURE = {
   shampoo: { price: 800, comfort: 1, speedBonus: .1 },
   colour: { price: 900, comfort: 1, speedBonus: .05, requires: 'colour' },
   staffRoom: { price: 1000, comfort: 0, w: 2, d: 1, staffRest: true, requires: 'staff' },
+  coffeeBar: { price: 700, comfort: 1, w: 2, d: 1 },
 };
 /** How far in front of a seat people stop before sitting down. */
 export const SEAT_APPROACH = .5;
 /** Pieces sold in the furniture list. Styling chairs have their own button; the desk cannot be bought twice. */
 export const FURNITURE_IDS = Object.keys(FURNITURE).filter(id => id !== 'station' && id !== 'desk');
 export const CHAIR_PRICE = FURNITURE.station.price;
-export const EXPANSIONS = [{ cost: 1500, requires: 'chairs' }, { cost: 4000, requires: 'expansion' }, { cost: 9000, requires: 'annex' }];
+export const EXPANSIONS = [{ cost: 2000, requires: 'chairs' }, { cost: 5500, requires: 'expansion' }, { cost: 11000, requires: 'annex' }];

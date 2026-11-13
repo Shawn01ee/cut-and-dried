@@ -11,7 +11,7 @@ const index = list => Math.floor(Math.random() * list.length);
 export class CustomerFactory {
   #nextId = 0;
 
-  create(usedNames, { colour, perm, advancedCuts, vipChance, priceMultiplier, patienceMultiplier }) {
+  create(usedNames, { colour, perm, advancedCuts, vipChance, priceMultiplier, patienceMultiplier, villain = null, influencer = null }) {
     const natI = index(NATURAL), nat = NATURAL[natI], L0 = rand(14, 58), w0 = Math.random() < .6 ? rand(0, .4) : rand(.8, 2.4);
     const lab = hexLab(nat[1]); lab.L += rand(-.02, .02);
     const hair = { len: STR.map(s => Math.max(3, L0 * (s.z === 3 ? rand(.8, 1) : 1) + rand(-2.5, 2.5))), lab, wave: w0, damage: rand(0, .5) };
@@ -24,16 +24,19 @@ export class CustomerFactory {
       let wi; do { wi = index(WANT); } while (labDist(hexLab(WANT[wi][1]), lab) < .05);
       col = { t: 'want', i: wi }; targetLab = hexLab(WANT[wi][1]); recolour = true;
     }
-    const rewave = Math.abs(wave - hair.wave) > .4, vip = Math.random() < vipChance;
-    const list = 60 + (recolour ? 90 : 0) + (rewave ? 70 : 0);
-    const free = NAMES.filter(n => !usedNames.has(n));
+    const rewave = Math.abs(wave - hair.wave) > .4, vip = !influencer && Math.random() < vipChance;
+    // Melbourne salon prices in AUD: a cut, plus colour and perm when the order needs them.
+    const list = 85 + (recolour ? 120 : 0) + (rewave ? 110 : 0);
+    const free = NAMES.filter(n => !usedNames.has(n)), name = pick(free.length ? free : NAMES);
+    // An influencer is sponsored: the service is free in exchange for a post.
+    if (influencer) influencer.handle = `@${name.toLowerCase()}.${pick(['hair', 'style', 'daily', 'melb'])}`;
     return new Customer({
-      id: ++this.#nextId, name: pick(free.length ? free : NAMES), hair,
+      id: ++this.#nextId, name, hair,
       order: { shape, L, col, lab: targetLab, wave },
-      price: Math.round(list * priceMultiplier * (vip ? 3 : 1)),
+      price: influencer ? 0 : Math.round(list * priceMultiplier * (vip ? 3 : 1)),
       budget: Math.round(list * rand(.95, 1.6) * (vip ? 3.5 : 1)),
-      patience: rand(80, 130) * (vip ? .8 : 1) * patienceMultiplier,
-      loyalty: rand(0, 40), vip,
+      patience: rand(80, 130) * (vip || influencer ? .8 : 1) * patienceMultiplier,
+      loyalty: rand(0, 40), vip, villain, influencer,
       requestedService: recolour ? 'colour' : rewave ? 'perm' : 'haircut',
     });
   }

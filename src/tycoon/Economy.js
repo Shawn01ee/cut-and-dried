@@ -1,4 +1,4 @@
-const OPERATING = new Set(['rent', 'wages', 'utilities', 'maintenance', 'materials']);
+const OPERATING = new Set(['rent', 'wages', 'utilities', 'maintenance', 'materials', 'hospitality', 'marketing']);
 const blankDay = () => ({ revenue: {}, expenses: {} });
 const pickCosts = (expenses, wanted) => Object.fromEntries(Object.entries(expenses).filter(([k]) => OPERATING.has(k) === wanted));
 

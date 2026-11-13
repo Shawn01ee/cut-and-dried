@@ -1,4 +1,4 @@
-const BRANCHES = [{ id: 'downtown', cost: 8000, income: 300 }, { id: 'premium', cost: 14000, income: 520 }, { id: 'barber', cost: 18000, income: 640 }, { id: 'colour', cost: 25000, income: 900 }];
+const BRANCHES = [{ id: 'downtown', cost: 10000, income: 420 }, { id: 'premium', cost: 18000, income: 720 }, { id: 'barber', cost: 24000, income: 880 }, { id: 'colour', cost: 32000, income: 1250 }];
 
 /** Branches run by themselves and pay out daily according to the brand's reputation. */
 export class Franchise {
