@@ -79,10 +79,18 @@ export class TycoonUI {
     const rows = g.staff.all.filter(s => s.hired).sort((a, b) => b.stats.earn - a.stats.earn), rated = s => { const r = g.reviews.ratingFor(s.name); return r.count ? `★${r.average.toFixed(1)} (${r.count})` : '–'; };
     const hs = g.hospitality, treats = Object.entries(AMENITIES).map(([id, a]) => `<div class="brow"><span>${t('hs.' + id)}</span><span class="dim">${t('hs.cost', a.cost)}</span><span class="sp"></span>${hs.available(id) ? `<span class="seg"><button data-do="amen:${id}" class="${hs.isOffered(id) ? 'sel' : ''}">${t('hs.on')}</button><button data-do="amen:${id}" class="${hs.isOffered(id) ? '' : 'sel'}">${t('hs.off')}</button></span>` : `<span class="dim">${t('hs.needs', t('f.' + a.needs))}</span>`}</div>`).join('');
     return `<div class="bsec"><h4>${t('biz.finance')}</h4>${line('biz.cash', money(e.cash))}${line('biz.rev', money(e.dailyRevenue))}${line('biz.exp', money(-e.dailyOperatingCost))}${line('biz.profit', money(e.dailyProfit))}${e.dailyInvestment ? line('biz.invest', money(-e.dailyInvestment)) : ''}${line('biz.total', g.served)}${line('biz.sat', g.served ? Math.round(g.averageSatisfaction * 100) + '%' : '–')}${line('biz.rep', rep.starText + ' ' + Math.floor(rep.value))}${line('biz.comfort', g.comfort)}${line('biz.regulars', g.regulars)}</div>${costs}${this.#funding()}
+    ${this.#demand()}
     <div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>
     <div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}
     <div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>${branches}
     <div class="bsec"><h4>${t('biz.ladder')}</h4><table class="lad"><tr><th>#</th><th>${t('lad.stylist')}</th><th>${t('lad.done')}</th><th>${t('lad.avg')}</th><th>${t('lad.rating')}</th><th>${t('lad.today')}</th><th>${t('lad.earn')}</th></tr>${rows.map((s, i) => `<tr><td>${i + 1}</td><td style="color:${nameColour(s)}">${rankMark(s)}${this.i18n.name(s.name)}</td><td>${s.stats.served}</td><td>${s.stats.served ? Math.round(s.stats.sum / s.stats.served * 100) + '%' : '–'}</td><td>${rated(s)}</td><td>$${s.today.earn.toLocaleString()}</td><td>$${s.stats.earn.toLocaleString()}</td></tr>`).join('')}</table></div>`;
+  }
+  /** Where today's clients come from. */
+  #demand() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, { add, mult } = g.demandParts, f1 = v => (Math.round(v * 10) / 10).toString(), x = v => '×' + (Math.round(v * 100) / 100);
+    const rows = Object.entries(add).map(([k, v]) => `<div class="brow"><span>${t('demand.' + k)}</span><span class="sp"></span><span>${f1(v)}</span></div>`).join('');
+    const today = Math.round(g.dailyDemand * g.clock.hours / 8);
+    return `<div class="bsec"><h4>${t('demand.title')}</h4>${rows}<div class="dim">${t('demand.mult', x(mult.price), x(mult.marketing), x(mult.reviews), x(mult.rival))}</div><div class="brow"><span>${t('demand.total', g.clock.hours)}</span><span class="sp"></span><b class="gold">${t('demand.people', today)}</b></div></div>`;
   }
   /** Steppers for tomorrow's opening and closing hours. */
   #hours() {
