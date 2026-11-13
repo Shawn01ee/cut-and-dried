@@ -200,8 +200,6 @@ export class TycoonGame {
     d.staff.forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     (d.support || []).forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     this.layout.restore(d.layout);
-    const refund = this.layout.upgradeOpening();
-    if (refund != null) { this.economy.cash += refund; this.news.push(refund ? 'fin:refitPaid' : 'fin:refit'); }
     (d.reviews?.list || []).forEach(r => { if (r.visit && RENAMED[r.visit.stylist]) r.visit.stylist = RENAMED[r.visit.stylist]; });
     this.marketing.restore(d.marketing); this.reviews.restore(d.reviews); this.hospitality.restore(d.hospitality);
     this.finance.restore(d.finance); this.rival.restore(d.rival); this.regulars = d.regulars || 0; this.staff.restore(d.staffPolicy);

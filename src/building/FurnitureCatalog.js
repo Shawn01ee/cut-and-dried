@@ -4,9 +4,10 @@
  */
 export const FURNITURE = {
   // `chairs` lists each styling chair on a piece as [x, z, quarter turns] in its own frame.
+  // A styling chair is a free-standing seat with its own mirror and partitions; placed side by side they form a styling island.
   station: { price: 300, comfort: 0, w: 3, d: 3, needs: [[0, 1]], chairs: [[0, 0, 0]] },
-  // A free-standing styling island: three seats in a row, each with its own mirror, split by partitions.
-  island: { price: 1500, comfort: 2, w: 9, d: 3, requires: 'chairs', needs: [[-1.5, 1], [0, 1], [1.5, 1]], chairs: [[-1.5, 0, 0], [0, 0, 0], [1.5, 0, 0]] },
+  // A ready-made three-seat island, from saves made before chairs could be lined up into one. No longer sold.
+  island: { price: 1500, comfort: 2, w: 9, d: 3, legacy: true, needs: [[-1.5, 1], [0, 1], [1.5, 1]], chairs: [[-1.5, 0, 0], [0, 0, 0], [1.5, 0, 0]] },
   wardrobe: { price: 350, comfort: 1, w: 2, d: 1, needs: [[0, .6]] },
   // A waist-high oak planter that divides the floor into areas without blocking the view.
   partition: { price: 250, comfort: 1, w: 3, d: 1 },

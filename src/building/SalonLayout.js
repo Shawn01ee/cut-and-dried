@@ -25,15 +25,12 @@ const WALL_SHIFTS = [
 
 /**
  * The salon as it opens on day one: [id, centre x, centre z, quarter turns].
- * A three-seat styling island in the middle, the shampoo booth in the back corner, the dryer and colour bar by the
- * left wall, reception and coat storage by the door with a product table, and a lounge by the front window behind
- * a planter, with a coffee bar.
+ * Kept simple: Lia's chair in the middle of the floor, a shampoo booth in the back corner, the reception desk,
+ * and a bench by the front window. Everything else is bought as the salon grows.
  */
 export const DEFAULT_LAYOUT = [
-  ['island', -.25, -.75, 0], ['shampooBooth', 3.25, -2.25, 3], ['dryer', -3.5, -2.5, 0], ['colour', -3.75, -.75, 0],
-  ['desk', -3.5, 1.25, 1], ['wardrobe', -3.75, 2.5, 1], ['mat', -2, 2.75, 0], ['displayTable', -1, 1.5, 0],
-  ['partition', 1.75, 1.25, 0], ['loungeRug', 1.5, 2, 0], ['bench', .5, 2.75, 2], ['sideTable', 1.75, 2.75, 0], ['bench2', 2.75, 2.75, 2],
-  ['lamp', 3.75, 2.75, 0], ['plant', -.75, 2.75, 0], ['coffeeBar', 3.75, 1, 3],
+  ['station', -.25, -.75, 0], ['shampooBooth', 3.25, -2.25, 3], ['desk', -3.5, 1.25, 1], ['mat', -2, 2.75, 0],
+  ['bench', .5, 2.75, 2], ['loungeRug', .5, 2, 0], ['plant', -.75, 2.75, 0], ['plant', 3.75, 2.75, 0],
 ];
 /** Where extra styling chairs went before furniture could be moved; used to load older saves. */
 /** Branches are simpler copies of the salon: three chairs along the back wall, where their clients are served. */
@@ -119,23 +116,6 @@ export class SalonLayout {
       const cells = this.footprint(id, x, z, r);
       if (cells && this.canOccupy(id, cells)) this.add(id, x, z, r);
     }
-  }
-  /**
-   * Saves from before the styling island opened in the old one-chair salon. A salon still at its first size is refitted
-   * with the new opening interior. Returns null when nothing changed, otherwise what the pieces that did not come with
-   * the new interior cost, so they can be paid back.
-   */
-  upgradeOpening() {
-    if (this.tier !== 0 || this.items.some(it => it.id === 'island')) return null;
-    const old = this.items, given = new Map();
-    this.resetToDefault();
-    DEFAULT_LAYOUT.forEach(([id]) => given.set(id, (given.get(id) || 0) + 1));
-    let refund = 0;
-    for (const it of old) {
-      if (it.id === 'station') continue;
-      if (given.get(it.id) > 0) given.set(it.id, given.get(it.id) - 1); else refund += FURNITURE[it.id].price;
-    }
-    return refund;
   }
   toJSON() { return { version: 2, tier: this.tier, items: this.items.map(({ id, x, z, rotation }) => ({ id, x, z, rotation })) }; }
   restore(data) {

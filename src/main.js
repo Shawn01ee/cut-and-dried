@@ -337,7 +337,7 @@ const STREET=V(4.1,0,4.7),STREET_DOOR=V(-2,0,4.4);
 const ROUTE_IN=[STREET_DOOR,DOOR_OUT,DOOR_IN];
 const ROUTE_OUT=[DOOR_IN,DOOR_OUT,STREET_DOOR,STREET];
 const furnitureView=new FurnitureView(world,SB,terr,game.layout,LAMP),nav=new NavGrid(game.layout);
-const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex)=>nav.wouldConnect(c,ex),canModify:it=>canModify(it),canSell:it=>canSell(it),onChange:()=>{syncFurniture();renderPanel(true);}});
+const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex)=>nav.wouldConnect(c,ex),canModify:it=>canModify(it),canMove:it=>canMove(it),queueMove:(it,x,z,r)=>queueMove(it,x,z,r),canSell:it=>canSell(it),onChange:()=>{syncFurniture();renderPanel(true);}});
 /** A walk to `to` that goes around the furniture. */
 function route(from,to){return [...nav.path(from,to).map(p=>V(p.x,0,p.z)),to.clone()];}
 const custs=[],queue=[];
@@ -370,7 +370,7 @@ function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=
   function arrive(){f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);}
   if(sel===st.i)renderPanel(true);}
 const booths=[],washes=[];
-const freeBooth=()=>booths.find(b=>!b.client&&!pendingMoves.has(b.item)),freeHelper=()=>helpers.find(h=>h.fig.root.visible&&!h.task);
+const freeBooth=()=>booths.find(b=>!b.client&&!pendingMoves.has(b.item)&&!queuedMoves.has(b.item)),freeHelper=()=>helpers.find(h=>h.fig.root.visible&&!h.task);
 /** Shampoo at a free booth: a free assistant washes, otherwise the client's own stylist steps away from the chair to do it. */
 function shampoo(c,st,lead,start,then){const b=freeBooth(),h=freeHelper(),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo')*game.clock.hourLength/60};
   b.client=c;c.inWash=true;if(h)h.task={kind:'wash',T};else st.washing=T;washes.push(T);
@@ -508,6 +508,16 @@ function alignToWalls(expanded=false){const L=game.layout;let moved=false;
   if(moved){syncFurniture();renderPanel(true);}return moved;}
 function canModify(it){if(booths.some(b=>b.item===it&&b.client))return false;if(!FURNITURE[it.id].chairs)return !furnitureView.isOccupied(it);
   const sts=stationsOf(it);return sts.length>0&&sts.every(st=>!st.cust&&!st.washing&&!st.sweep&&(st.state==='free'||st.state==='vacant')&&!(styling&&styling.station===st));}
+/** Chairs and shampoo booths can be moved even while in use; the move waits until they are free. */
+function canMove(it){return canModify(it)||!!FURNITURE[it.id].chairs||!!BOOTH_ANCHORS[it.id];}
+/** Moves the player asked for while a chair or booth was busy: [x, z, quarter turns] for each piece. */
+const queuedMoves=new Map();
+function queueMove(it,x,z,r){queuedMoves.set(it,[x,z,r]);popup(tx('build.queued'),recep.head,'big');syncFurniture();renderPanel(true);}
+function applyQueuedMoves(){const L=game.layout;let moved=false;
+  for(const [it,[x,z,r]] of queuedMoves){if(!L.items.includes(it)){queuedMoves.delete(it);continue;}if(!canModify(it))continue;queuedMoves.delete(it);
+    const cells=L.footprint(it.id,x,z,r);if(!cells||!L.canOccupy(it.id,cells,it)||!nav.wouldConnect({id:it.id,x,z,rotation:r,cells},it))continue;
+    furnitureView.despawn(it);L.move(it,x,z,r);moved=true;}
+  if(moved){syncFurniture();renderPanel(true);}}
 function canSell(it){if(!canModify(it))return false;return !FURNITURE[it.id].chairs||stationsOf(it).every(st=>st.vacant);}
 /** The camera quarter-turn that looks at a client's back, so the mirror never blocks the view. */
 function bestCamK(st){const base=Math.round(camK);let best=base,bd=-2;[0,-1,1,-2,2].forEach(o=>{const k=base+o,a=Math.PI/4+k*Math.PI/2,d=Math.sin(a)*Math.sin(st.yaw)+Math.cos(a)*Math.cos(st.yaw);if(d>bd+1e-6){bd=d;best=k;}});return best;}
@@ -557,7 +567,7 @@ function simStep(dt){simT+=dt;
     if(st.vacant)return;
     if(st.sweep){if(updateSweep(st.sweep,dt))st.sweep=null;}
     else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
-    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen||st.sweep||st.filming||pendingMoves.has(st.item)||(booths.length&&!freeBooth()))return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),vipRoom=st.item.id==='vipRoom',c=(vipRoom&&queue.find(q=>q.state==='wait'&&q.vip))||waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
+    if(st.state==='free'){if(st.sty.restUntil>simT||!game.clock.isOpen||st.sweep||st.filming||pendingMoves.has(st.item)||queuedMoves.has(st.item)||(booths.length&&!freeBooth()))return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),vipRoom=st.item.id==='vipRoom',c=(vipRoom&&queue.find(q=>q.state==='wait'&&q.vip))||waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep&&!st.filming){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
@@ -727,7 +737,7 @@ function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>pop
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:1,options:[{label:tx('inc.keep',cost),run:()=>{game.economy.charge('bonus',cost);e.addStress(-45);}},{label:tx('inc.letGo'),run:()=>{e.quits=true;}}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
   post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
@@ -815,7 +825,7 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
     // The music turns tense while a difficult client is in or around the salon.
     audio.setMood(started&&custs.some(c=>c.villain&&c.state!=='gone')?'tense':'calm');}
-  if((clockT+=dt)>1){clockT=0;drawClock();if(started)alignToWalls();}
+  if((clockT+=dt)>1){clockT=0;drawClock();if(started){alignToWalls();applyQueuedMoves();}}
   renderer.setRenderTarget(rt);renderer.render(scene,cam);
   renderer.setRenderTarget(null);renderer.render(post,postCam);
   if(!booted){booted=true;boot();}}
