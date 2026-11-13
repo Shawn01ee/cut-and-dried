@@ -71,6 +71,20 @@ export const FURNITURE_MODELS = {
     g.box(.32, .04, .32, 0x5f5a68, .72, .62, .4).box(.32, .04, .32, 0x5f5a68, .72, .32, .4).box(.04, .62, .04, 0xbdb9c0, .72, .31, .4).box(.1, .06, .1, 0x8a4fc2, .66, .67, .4).box(.1, .06, .1, 0xc8642a, .79, .67, .45);
     fx.glow(.04, .98, .02, -.48, 1.45, -.755); fx.glow(.04, .98, .02, .48, 1.45, -.755); fx.glow(.5, .04, .02, 0, 2.14, -.755);
   },
+  // the styling island: a glass-block table; colour and perm clients sit round it under ring processors
+  processIsland: (g, fx) => {
+    g.box(2.8, .75, .5, 0xb6d2ec, 0, .375, 0);
+    for (let i = 0; i <= 14; i++) g.box(.015, .75, .52, 0x7fb6f0, -1.4 + i * .2, .375, 0);
+    for (let j = 1; j < 4; j++) g.box(2.82, .015, .52, 0x7fb6f0, 0, j * .19, 0);
+    g.box(2.92, .05, .64, 0x2f6fd6, 0, .775, 0).box(.1, .14, .1, 0xf6f3ee, -1.1, .87, .1).box(.12, .08, .16, 0xe25c8f, 1.05, .84, -.1).box(.2, .03, .14, 0xffd98a, 0, .815, .05);
+    for (const x of [-.75, .75]) for (const sd of [1, -1]) {
+      const z = .55 * sd;
+      g.box(.42, .08, .42, 0x45404f, x, .04, z).box(.12, .38, .12, 0xbdb9c0, x, .27, z).box(.5, .1, .48, 0xc8642a, x, .5, z).box(.48, .32, .08, 0xc8642a, x, .72, z - .24 * sd);
+      g.box(.05, 1.3, .05, 0xbdb9c0, x + .3, .65, z - .3 * sd).box(.05, .05, .3, 0xbdb9c0, x + .3, 1.3, z - .15 * sd)
+        .box(.44, .05, .06, 0xdcd9dc, x, 1.32, z - .2).box(.44, .05, .06, 0xdcd9dc, x, 1.32, z + .2).box(.06, .05, .4, 0xdcd9dc, x - .22, 1.32, z).box(.06, .05, .4, 0xdcd9dc, x + .22, 1.32, z);
+      fx.glow(.36, .02, .32, x, 1.29, z);
+    }
+  },
   // the styling island: a white counter with an arched mirror per seat and partitions between the seats
   island: (g, fx) => {
     g.box(4.4, .85, .5, 0xf6f3ee, 0, .425, -.48).box(4.44, .04, .54, 0xdcd9dc, 0, .87, -.48);

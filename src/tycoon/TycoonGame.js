@@ -25,6 +25,8 @@ export const STARTING_CASH = 2000;
 const LEGACY_IDS = { jun: 'owen', sean: 'owen', shawn: 'owen', jules: 'daniel', sophie: 'ruby', max: 'hugo' };
 // Stylists who were renamed, so their old reviews still count for them.
 const RENAMED = { Jules: 'Daniel', Shawn: 'Owen' };
+/** How much each new review moves the salon's reputation, by its stars. */
+export const REVIEW_REP = { 5: .6, 4: .25, 3: 0, 2: -.6, 1: -1.2 };
 /** Opening hours the owner can set: open from 7 to 12, close from 15 to 23, 6 to 12 hours a day. Changes apply from the next morning. */
 export const HOURS_RANGE = { open: [7, 12], close: [15, 23], length: [6, 12] };
 const blankIncidents = () => ({ refunds: 0, discounts: 0, dashed: 0 });
@@ -147,10 +149,19 @@ export class TycoonGame {
   }
   customerGaveUp(customer) { this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day)); }
   customerTurnedAway(customer) { this.#post(this.reviews.turnedAway(customer, this.clock.day)); }
-  #post(review) { if (review) this.bus.emit('review:new', review); return review; }
+  /** A new review: it moves the reputation by its stars and goes on the board. */
+  #post(review) { if (review) { review.rep = REVIEW_REP[review.stars] ?? 0; this.reputation.add(review.rep); this.bus.emit('review:new', review); } return review; }
   /** Who handles reviews: the receptionist, who runs marketing, or Lia herself without one. */
   get reviewManager() { const r = this.staff.receptionist; return r.hired ? { name: r.name, role: 'desk', skill: r.skills.marketing || 0 } : { name: this.staff.owner.name, role: 'owner', skill: 0 }; }
-  replyToReview(id, kind) { const r = this.reviews.reply(id, kind, this.reviewManager); if (r && r.rep) this.reputation.add(r.rep); return r; }
+  /** Answers a review. A review taken down no longer counts against the reputation; one the client improved counts at its new stars. */
+  replyToReview(id, kind) {
+    const r = this.reviews.reply(id, kind, this.reviewManager); if (!r) return r;
+    let rep = r.rep || 0;
+    if (r.review.removed) rep -= r.review.rep || 0;
+    else if (r.edited) { const now = REVIEW_REP[r.review.stars] ?? 0; rep += now - (r.review.rep || 0); r.review.rep = now; }
+    if (rep) this.reputation.add(rep);
+    return r;
+  }
   /** With auto-replies on, the receptionist answers the day's unanswered reviews at closing. */
   #autoReply() { if (!this.reviews.autoReply || !this.staff.receptionist.hired) return; this.reviews.list.filter(r => !r.replied && !r.removed).forEach(r => this.replyToReview(r.id, r.stars >= 4 ? 'thanks' : r.villain || r.fake ? 'report' : 'apology')); }
   post(channel) { return this.marketing.post(channel, this.clock.day, this.reelQuality, this.marketingPower); }

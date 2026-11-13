@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FURNITURE, SEAT_APPROACH } from '../building/FurnitureCatalog.js';
+import { FURNITURE, seatApproach } from '../building/FurnitureCatalog.js';
 import { FURNITURE_MODELS } from './furnitureModels.js';
 import { V } from '../core/math.js';
 
@@ -11,8 +11,9 @@ export class FurnitureView {
   #ghostOk = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .6, depthWrite: false });
   #ghostBad = new THREE.MeshLambertMaterial({ color: 0xd8314a, transparent: true, opacity: .6, depthWrite: false });
 
-  constructor(world, Builder, seats, layout, glow) {
-    Object.assign(this, { world, Builder, seats, layout, glow });
+  /** `seats` collects waiting seats; `procSeats` the styling-island seats used while colour and perm process. */
+  constructor(world, Builder, seats, layout, glow, procSeats = []) {
+    Object.assign(this, { world, Builder, seats, layout, glow, procSeats });
     this.#grid = new THREE.InstancedMesh(box, new THREE.MeshBasicMaterial({ color: 0x8fc25a, transparent: true, opacity: .45, depthWrite: false }), layout.cells.length);
     this.#grid.frustumCulled = false; this.#grid.raycast = noRay; this.#grid.visible = false; world.add(this.#grid);
   }
@@ -29,16 +30,16 @@ export class FurnitureView {
   spawn(item) {
     const group = this.#build(item.id, true), f = FURNITURE[item.id];
     this.#place(group, item.x, item.z, item.rotation); group.userData.item = item; this.world.add(group);
-    const seats = (f.seats || []).map(([lx, lz]) => {
-      const p = this.layout.toWorld(item, lx, lz), a = this.layout.toWorld(item, lx, lz + SEAT_APPROACH);
-      return { pos: V(p.x, 0, p.z), yaw: item.rotation * Math.PI / 2, h: f.seatH || .46, app: [V(a.x, 0, a.z)], occ: null };
+    const seats = (f.seats || []).map(seat => {
+      const [lx, lz, t = 0] = seat, [ax, az] = seatApproach(seat), p = this.layout.toWorld(item, lx, lz), a = this.layout.toWorld(item, ax, az);
+      return { pos: V(p.x, 0, p.z), yaw: (item.rotation + t) * Math.PI / 2, h: f.seatH || .46, app: [V(a.x, 0, a.z)], occ: null, processing: !!f.processing };
     });
-    this.seats.push(...seats);
+    (f.processing ? this.procSeats : this.seats).push(...seats);
     this.#entries.set(item, { group, seats });
   }
   despawn(item) {
     const entry = this.#entries.get(item); if (!entry) return;
-    this.world.remove(entry.group); entry.seats.forEach(s => this.seats.splice(this.seats.indexOf(s), 1)); this.#entries.delete(item);
+    this.world.remove(entry.group); entry.seats.forEach(s => { const list = s.processing ? this.procSeats : this.seats; list.splice(list.indexOf(s), 1); }); this.#entries.delete(item);
   }
   has(item) { return this.#entries.has(item); }
   /** Removes drawings of pieces no longer in the layout. */
