@@ -235,9 +235,14 @@ class Fig{
     this.head=new THREE.Group();this.root.add(this.head);
     const hb=(w,h,d,c,x,y,z)=>{const m=new THREE.Mesh(BOX,M(c));m.scale.set(w,h,d);m.position.set(x,y,z);m.castShadow=true;m.userData.fig=this;this.head.add(m);return m;};
     hb(.24,.27,.25,o.skin,0,0,0);hb(.035,.035,.01,0x1d1a26,-.055,.01,.126);hb(.035,.035,.01,0x1d1a26,.055,.01,.126);hb(.05,.02,.01,0x8a2d3b,0,-.07,.126);
-    if(o.staffHair!=null){const c=o.staffHair;hb(.27,.08,.28,c,0,.14,-.005);hb(.27,.2,.06,c,0,.03,-.125);hb(.03,.14,.2,c,-.13,.06,-.03);hb(.03,.14,.2,c,.13,.06,-.03);
-      if(o.long)hb(.25,.32,.05,c,0,-.18,-.14);if(o.bun)hb(.12,.12,.12,c,0,.2,-.12);
-      if(o.bob){hb(.05,.27,.2,c,-.135,-.035,-.02);hb(.05,.27,.2,c,.135,-.035,-.02);hb(.29,.27,.06,c,0,-.035,-.135);hb(.05,.22,.02,c,-.1,.02,.132);hb(.04,.17,.02,c,.1,.045,.132);hb(.1,.045,.02,c,-.06,.098,.132);}}
+    if(o.staffHair!=null){const c=o.staffHair,hd=o.hairdo||(o.long?'long':o.bob?'bob':o.bun?'bun':'short');
+      if(hd==='curly'){hb(.33,.16,.33,c,0,.15,-.01);hb(.07,.2,.27,c,-.155,.04,-.03);hb(.07,.2,.27,c,.155,.04,-.03);hb(.31,.26,.07,c,0,.02,-.145);hb(.09,.07,.09,c,-.09,.25,.05);hb(.09,.07,.09,c,.08,.25,-.06);hb(.08,.06,.08,c,0,.24,.1);}
+      else if(hd==='buzz'){hb(.255,.035,.265,c,0,.13,-.003);hb(.255,.14,.025,c,0,.06,-.126);hb(.02,.09,.18,c,-.122,.07,-.03);hb(.02,.09,.18,c,.122,.07,-.03);}
+      else{hb(.27,.08,.28,c,0,.14,-.005);hb(.27,.2,.06,c,0,.03,-.125);hb(.03,.14,.2,c,-.13,.06,-.03);hb(.03,.14,.2,c,.13,.06,-.03);}
+      if(hd==='long')hb(.25,.32,.05,c,0,-.18,-.14);if(hd==='bun')hb(.12,.12,.12,c,0,.2,-.12);
+      if(hd==='bob'){hb(.05,.27,.2,c,-.135,-.035,-.02);hb(.05,.27,.2,c,.135,-.035,-.02);hb(.29,.27,.06,c,0,-.035,-.135);hb(.05,.22,.02,c,-.1,.02,.132);hb(.04,.17,.02,c,.1,.045,.132);hb(.1,.045,.02,c,-.06,.098,.132);}}
+    if(o.beard!=null){const c=o.beard;hb(.2,.07,.03,c,0,-.105,.122);hb(.03,.1,.1,c,-.115,-.07,.08);hb(.03,.1,.1,c,.115,-.07,.08);hb(.1,.022,.02,c,0,-.048,.128);}
+    if(o.shades){hb(.21,.05,.02,0x0d0b14,0,.015,.132);hb(.02,.02,.14,0x0d0b14,-.115,.025,.06);hb(.02,.02,.14,0x0d0b14,.115,.025,.06);}
     this.tool=new THREE.Group();this.root.add(this.tool);this.toolKind=null;
     this.pos=V();this.yaw=0;this.mode='stand';this.path=[];this.cb=null;this.phase=rand(0,6);this.seatH=.5;this.footY=.06;this.tilt=0;this.look=0;
     this.handL=null;this.handR=null;this.clapT=0;this.toolAim=null;this.spd=1.25;figs.push(this);}
@@ -314,7 +319,7 @@ const SHIRTS=[0x2f6fd6,0x1fa39a,0xffb15a,0x8a4fc2,0x5f9e45,0xf2a0c0,0x7fb6f0,0xe
 const PANTS=[0x1d1a26,0x2a4478,0x45404f,0x5e3d24,0x16264e];
 const STY=game.staff.candidates,OWNER=game.staff.owner;
 const stations=[];
-STY.forEach(s=>{s.fig=new Fig({skin:pick(SKINS),shirt:0x45404f,pants:0x2e2a38,apron:s.apron,staffHair:s.hair,long:s.long});});
+STY.forEach(s=>{s.fig=new Fig({skin:s.skin??pick(SKINS),shirt:0x45404f,pants:0x2e2a38,apron:s.apron,staffHair:s.hair,hairdo:s.hairdo,shades:s.shades,beard:s.beard?s.hair:null});});
 OWNER.fig=new Fig({skin:0xf6d6bd,shirt:0xdcd9dc,pants:0x1d1a26,staffHair:OWNER.hair,bob:true,sleeveless:true});
 const VAC={name:'Vacant',style:'Vacant',apron:0x5f5a68,spd:1,stats:{served:0,sum:0,earn:0}},OWNER_IDLE=V(-1.2,0,.4);
 STY.forEach(s=>{s.fig.root.visible=false;});
@@ -349,7 +354,7 @@ const colName=o=>o.col.t==='nat'?tx('naturalOf',natName(o.col.i)):wantName(o.col
 function orderText(o){return `${tx('shape.'+o.shape)} · ${o.L} cm (${lenDesc(o.L)}) · ${colName(o)} · ${tx('wave.'+WAVES[o.wave])}`;}
 function spawnCustomer(){
   if(custs.filter(c=>c.state!=='gone').length>=40)return;
-  const c=game.newCustomer(new Set(custs.map(q=>q.name))),fig=new Fig({skin:pick(SKINS),shirt:c.villain?VILLAIN_SHIRT:pick(SHIRTS),pants:c.villain?0x0d0b14:pick(PANTS)});
+  const c=game.newCustomer(new Set(custs.map(q=>q.name))),fig=new Fig({skin:pick(SKINS),shirt:c.villain?VILLAIN_SHIRT:pick(SHIRTS),pants:c.villain?0x0d0b14:pick(PANTS),beard:c.look.beard});
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(STREET);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');
@@ -518,7 +523,16 @@ function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z
   for(let i=booths.length-1;i>=0;i--)if(!items.includes(booths[i].item))booths.splice(i,1);
   items.forEach(it=>{let b=booths.find(x=>x.item===it);if(!b){b={item:it,client:null};booths.push(b);}const A=BOOTH_ANCHORS[it.id];
     Object.assign(b,{seat:w(it,...A.seat),seatApp:w(it,...A.seatApp),seatYaw:dir(it,...A.face),washAt:w(it,...A.washAt),washYaw:dir(it,...A.washFace),idle:w(it,...A.idle),idleYaw:dir(it,0,-1)});});
-  helpers.forEach((h,i)=>{const b=booths[i%Math.max(1,booths.length)];h.booth=b||null;h.idle=b?b.idle.clone().add(V(0,0,i>=booths.length?.6:0)):V(3.6,0,-.85).add(V(-.6*i,0,0));h.idleYaw=b?b.idleYaw:Math.PI;});}
+  // Each assistant keeps a post beside a shampoo booth, facing the room and out of the clients' way;
+  // when no spot by a booth is free they wait beside the reception desk instead.
+  const taken=[],free=p=>{const c=L.nearestCell(p.x,p.z);return !!c&&L.placeable(c)&&!L.occupant(c,null,false)&&!taken.some(q=>q.distanceTo(p)<.45);};
+  const SIDES=[[1.05,.45],[-1.05,.45],[1.05,-.25],[-1.05,-.25],[.85,1.05],[-.85,1.05]],DESK_SIDES=[[1.1,.55],[-1.1,.55],[1.1,1.1],[-1.1,1.1]];
+  helpers.forEach((h,i)=>{const b=booths.length?booths[i%booths.length]:null;h.booth=b;
+    let spot=null,yaw=Math.PI;
+    for(const o of b?[b,...booths.filter(x=>x!==b)]:[]){const q=SIDES.map(([x,z])=>w(o.item,x,z)).find(free);if(q){spot=q;yaw=dir(o.item,0,1);break;}}
+    if(!spot&&desk){const q=DESK_SIDES.map(([x,z])=>w(desk,x,z)).find(free);if(q){spot=q;yaw=dir(desk,0,1);}}
+    if(!spot)spot=V(3.6,0,-.85).add(V(-.6*i,0,0));
+    taken.push(spot);h.idle=spot;h.idleYaw=yaw;});}
 const stationsOf=it=>stations.filter(s=>s.item===it);
 // Pieces waiting to follow a wall: their chairs and booths take no new clients until they have moved.
 /**

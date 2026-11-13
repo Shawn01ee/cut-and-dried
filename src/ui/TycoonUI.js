@@ -2,6 +2,9 @@ import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS } from '../building/F
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
 import { REVIEW_REP } from '../tycoon/TycoonGame.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION } from '../employees/Employee.js';
+import { clamp } from '../core/math.js';
+// Which skill each specialty raises, to highlight it on the card.
+const SPECIAL_SKILL = { cut: 'cutting', colour: 'colouring', perm: 'perming' };
 import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/StaffManager.js';
 import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
@@ -42,15 +45,32 @@ export class TycoonUI {
     }
     const info = owner ? t('staff.ownerLv', e.level, e.experience, e.experienceToNext) + ' · ' + t('staff.you')
       : e.hired ? `${t('staff.pay', e.level, e.salary, Math.round(e.fatigue), e.experience, e.experienceToNext)} · <span class="${level(e.stress)}">${t('staff.stress', Math.round(e.stress))}</span> ${this.#status(e)}` : t('staff.wage', e.salary);
-    const times = `<br>${t('staff.times', e.totalMinutes('cut', g.layout.speedBonus), e.totalMinutes('colour', g.layout.speedBonus), e.totalMinutes('wave', g.layout.speedBonus), e.totalMinutes('dry', g.layout.speedBonus))}`;
-    const r = g.reviews.ratingFor(e.name), perf = e.hired ? `<br>${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
-    return `<div class="brow"><b style="color:${nameColour(e)}">${rankMark(e)}${this.i18n.name(e.name)}</b>${RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`}<span class="sp"></span>${actions}</div><div class="dim">${t('staff.skills', s.cutting, s.colouring, s.perming, s.speed, s.customerService)}${e.specialty ? `<br><span class="gold">${t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100))}</span>` : owner ? `<br><span class="gold">${t('staff.allround')}</span>` : ''}${e.perk ? `<br><span class="good">${t('perk.' + e.perk)}</span>` : ''}${times}<br>${info}${perf}</div>`;
+    const times = `${t('staff.times', e.totalMinutes('cut', g.layout.speedBonus), e.totalMinutes('colour', g.layout.speedBonus), e.totalMinutes('wave', g.layout.speedBonus), e.totalMinutes('dry', g.layout.speedBonus))}`;
+    const r = g.reviews.ratingFor(e.name), perf = e.hired ? `${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
+    const special = SPECIAL_SKILL[e.specialty], stats = [['cut', s.cutting, 'cutting'], ['colour', s.colouring, 'colouring'], ['perm', s.perming, 'perming'], ['speed', s.speed, 'speed'], ['service', s.customerService, 'customerService']];
+    const rows = [[e.specialty ? 'special' : null, `<span class="gold">${e.specialty ? t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100)) : ''}</span>`],
+      [owner ? 'scope' : null, t('staff.allround')], [e.perk ? 'perk' : null, `<span class="good">${e.perk ? t('perk.' + e.perk) : ''}</span>`], ['times', times], [e.hired ? 'state' : 'pay', info], [perf ? 'perf' : null, perf]];
+    return `<div class="scard">${this.#cardHead(e, actions)}${this.#statBars(stats.map(([k, v, key]) => [k, v, key === special]))}${this.#rows(rows)}</div>`;
   }
+  /** Name, grade mark, role and gender, with the action buttons on the right. */
+  #cardHead(e, actions) {
+    const t = (k, ...a) => this.#t(k, ...a), role = RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`;
+    return `<div class="brow"><b style="color:${nameColour(e)}">${rankMark(e)}${this.i18n.name(e.name)}</b>${role}${e.gender ? `<span class="dim">${t('gender.' + e.gender)}</span>` : ''}<span class="sp"></span>${actions}</div>`;
+  }
+  /** Skills as short bars in one line; `hi` marks a specialty. */
+  #statBars(list) {
+    const t = (k, ...a) => this.#t(k, ...a);
+    return `<div class="sk">${list.map(([k, v, hi]) => `<div class="${hi ? 'hi' : ''}"><span>${t('sk.' + k)}</span><b>${v}</b><i style="--v:${clamp(v, 0, 100)}%"></i></div>`).join('')}</div>`;
+  }
+  /** Label and value rows that line up; rows without a label are left out. */
+  #rows(rows) { return `<dl class="kv">${rows.filter(([k]) => k).map(([k, v]) => `<dt>${this.#t('sl.' + k)}</dt><dd>${v}</dd>`).join('')}</dl>`; }
   #supportRow(e) {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, desk = e.effect === 'reception';
     const course = desk && e.hired ? `<button data-do="mtrain:${e.id}" ${(e.skills.marketing || 0) >= 100 || !g.economy.canAfford(g.staff.marketingCourseCost(e)) ? 'disabled' : ''}>${t('staff.mcourse', g.staff.marketingCourseCost(e))}</button>` : '';
     const action = e.hired ? `${course}<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : `<button class="go" data-do="shire:${e.id}" ${!g.economy.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
-    return `<div class="brow"><b style="color:${nameColour(e)}">${rankMark(e)}${this.i18n.name(e.name)}</b>${RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`}<span class="sp"></span>${action}</div><div class="dim">${t('support.' + e.id)}${desk ? '<br>' + t('staff.marketing', e.skills.marketing || 0) : ''}${e.skills.shampoo != null ? '<br>' + t('staff.astats', e.skills.shampoo, e.skills.cleaning, e.skills.speed) + '<br>' + t('staff.aeffect', e.serviceMinutes('shampoo'), this.hooks.sweepMinutes(e.cleaning), (e.washQuality >= .6 ? '+' : '−') + Math.abs(Math.round((e.washQuality - .6) * 25))) : ''}<br>${t('staff.wage', e.salary)}</div>`;
+    const k = e.skills, stats = desk ? [['speed', k.speed], ['service', k.customerService], ['marketing', k.marketing || 0]] : [['shampoo', k.shampoo], ['cleaning', k.cleaning], ['speed', k.speed], ['service', k.customerService]];
+    const effect = desk ? t('support.ruby') : t('staff.aeffect', e.serviceMinutes('shampoo'), this.hooks.sweepMinutes(e.cleaning), (e.washQuality >= .6 ? '+' : '−') + Math.abs(Math.round((e.washQuality - .6) * 25)));
+    return `<div class="scard">${this.#cardHead(e, action)}${this.#statBars(stats)}${this.#rows([['about', desk ? t('support.deskRole') : t('support.' + e.id)], ['effect', effect], ['pay', t('staff.wage', e.salary)]])}</div>`;
   }
   #staff() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff;

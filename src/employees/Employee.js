@@ -17,8 +17,10 @@ const SETTLING_DAYS = 3, SETTLING_PENALTY = 6;
  * `fig` is a rendering handle attached by the scene and never saved.
  */
 export class Employee {
-  constructor({ id, name, role, style, rank = 'designer', unlock = null, specialty = null, perk = null, skills, salary, hireCost = 0, bias = 0, fine = false, single = false, apron, hair, long = false }) {
+  constructor({ id, name, gender = null, hairdo = null, shades = false, beard = false, skin = null, role, style, rank = 'designer', unlock = null, specialty = null, perk = null, skills, salary, hireCost = 0, bias = 0, fine = false, single = false, apron, hair, long = false }) {
     Object.assign(this, { id, name, role, style, rank, unlock, specialty, perk, skills: { ...skills }, salary, hireCost, bias, fine, single, apron, hair, long });
+    // How they look: `hairdo` is short, long, bob, bun, curly or buzz.
+    Object.assign(this, { gender, hairdo: hairdo || (long ? 'long' : 'short'), shades, beard, skin });
     this.stamina = 100; this.experience = 0; this.level = 1; this.status = 'idle'; this.assignedCustomer = null;
     this.hired = false; this.restUntil = 0; this.stats = { served: 0, sum: 0, earn: 0 }; this.today = { served: 0, earn: 0 }; this.fig = null;
     this.stress = 0; this.leaveFrom = 0; this.leaveTo = 0; this.daysEmployed = 0; this.boost = 0;
