@@ -91,12 +91,13 @@ export class SalonLayout {
     }
     return out;
   }
-  occupant(cell, ignore) { return this.items.find(it => it !== ignore && it.cells.includes(cell)) || null; }
+  /** What stands on a cell. Rugs and mats lie under furniture, so with `floor` given only that layer counts. */
+  occupant(cell, ignore, floor = null) { return this.items.find(it => it !== ignore && it.cells.includes(cell) && (floor == null || !!FURNITURE[it.id].walkable === floor)) || null; }
   canOccupy(id, cells, ignore) {
-    const walkable = FURNITURE[id].walkable;
-    return cells.every(c => this.placeable(c) && (walkable || !LANES.some(r => inRect(c, r))) && !this.occupant(c, ignore));
+    const walkable = !!FURNITURE[id].walkable;
+    return cells.every(c => this.placeable(c) && (walkable || !LANES.some(r => inRect(c, r))) && !this.occupant(c, ignore, walkable));
   }
-  openCells(ignore) { return this.cells.filter(c => this.placeable(c) && !LANES.some(r => inRect(c, r)) && !this.occupant(c, ignore)); }
+  openCells(ignore) { return this.cells.filter(c => this.placeable(c) && !LANES.some(r => inRect(c, r)) && !this.occupant(c, ignore, false)); }
   nearestCell(x, z) { let best = null, bestDist = .45; for (const c of this.cells) { const d = Math.hypot(c.x - x, c.z - z); if (d < bestDist) { bestDist = d; best = c; } } return best; }
   add(id, x, z, rotation) { const item = { id, x, z, rotation, cells: this.footprint(id, x, z, rotation) }; this.items.push(item); return item; }
   move(item, x, z, rotation) { Object.assign(item, { x, z, rotation, cells: this.footprint(item.id, x, z, rotation) }); }
