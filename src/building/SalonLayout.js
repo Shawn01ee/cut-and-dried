@@ -6,20 +6,18 @@ const LANES = [[-2.7, -1.3, 2.4, 5.1], [-4.6, 8.7, 4, 5.1]];
 export const POSTS = [[-4.1, -3.3, 4.1, 4.9], [4, 4.6, 3.3, 4], [2.3, 3.1, 5.3, 6.2], [-1.5, -.9, 3.2, 3.7]];
 export const inRect = (c, [a, b, d, e]) => c.x >= a && c.x <= b && c.z >= d && c.z <= e;
 /**
- * Floor areas and the salon size at which each opens. The salon grows backwards first,
- * then into the shop next door, then behind that, so it widens in both directions.
+ * Floor areas and the salon size at which each opens. The salon stays a rectangle and grows
+ * deeper, then wider (the whole shop next door), then deeper again.
  */
-export const ZONE_TIER = { main: 0, back: 1, annex: 2, annexBack: 3 };
+export const ZONE_TIER = { main: 0, back: 1, annex: 2, rear: 3 };
 /**
- * Where an outer wall stood before an expansion, a waist-high oak wall stays with an opening in it,
- * so furniture that stood against the wall still has something behind it.
- * `seg` is [x1, z1, x2, z2] on cell boundaries, `gaps` are the openings along it, `tier` the size it appears at.
+ * When an expansion takes a wall away, furniture that stood against it moves to the new wall:
+ * `side` is which wall, `at` where it stood, and dx/dz how far the new one is.
  */
-export const INNER_WALLS = [
-  { seg: [-4, -3, 4, -3], gaps: [[1.5, 2.5]], tier: 1 },
-  { seg: [4, -3, 4, 3], gaps: [[1.5, 2.5]], tier: 2 },
-  { seg: [4, -5, 4, -3], gaps: [[-4.5, -3.5]], tier: 3 },
-  { seg: [4, -3, 8, -3], gaps: [[5.5, 6.5]], tier: 3 },
+const WALL_SHIFTS = [
+  { tier: 1, side: 'back', at: -3, dx: 0, dz: -2 },
+  { tier: 2, side: 'right', at: 4, dx: 4, dz: 0 },
+  { tier: 3, side: 'back', at: -5, dx: 0, dz: -2 },
 ];
 
 /** The salon as it opens on day one: [id, centre x, centre z, quarter turns]. */
@@ -31,7 +29,7 @@ export const DEFAULT_LAYOUT = [
 ];
 /** Where extra styling chairs went before furniture could be moved; used to load older saves. */
 export const EXTRA_STATIONS = [[-.25, -2.25], [1.75, -2.25], [5.25, -2.25], [7.25, -2.25]];
-const ANNEX_PLANTS = [[6.25, -2.75], [7.75, 2.75]];
+const ANNEX_PLANTS = [[7.75, -4.75], [7.75, 2.75]];
 const turn = (x, z, r) => [[x, z], [z, -x], [-x, -z], [-z, x]][r];
 
 /** What is on the salon floor: the 0.5 m cell grid, every piece of furniture and the salon's size. Pure data. */
@@ -43,8 +41,8 @@ export class SalonLayout {
     const area = (x0, z0, nx, nz, outdoor, zone) => { for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) add(x0 + i * .5, z0 + j * .5, outdoor, zone); };
     area(-3.75, -2.75, 16, 12, false, 'main'); area(-4.25, 3.45, 18, 6, true, 'main');
     area(-3.75, -4.75, 16, 4, false, 'back');
-    area(4.25, -2.75, 8, 12, false, 'annex'); area(4.75, 3.45, 8, 6, true, 'annex');
-    area(4.25, -4.75, 8, 4, false, 'annexBack');
+    area(4.25, -4.75, 8, 16, false, 'annex'); area(4.75, 3.45, 8, 6, true, 'annex');
+    area(-3.75, -6.75, 24, 4, false, 'rear');
   }
   #key(x, z) { return `${Math.round(x * 4)},${Math.round(z * 4)}`; }
   cellAt(x, z) { return this.#index.get(this.#key(x, z)) || null; }
@@ -55,17 +53,15 @@ export class SalonLayout {
   isOpen(c) { return ZONE_TIER[c.zone] <= this.tier; }
   /** Furniture may go here: open floor, plus the pavement from the first expansion. */
   placeable(c) { return this.isOpen(c) && (!c.outdoor || this.tier >= 1) && !POSTS.some(r => inRect(c, r)); }
-  /** True when a step between two neighbouring cells would pass through an inner wall rather than its opening. */
-  stepBlocked(a, b) {
-    return INNER_WALLS.some(({ seg: [x1, z1, x2, z2], gaps, tier }) => {
-      if (this.tier < tier) return false;
-      const alongZ = x1 === x2, line = alongZ ? x1 : z1, crosses = alongZ ? (a.x - line) * (b.x - line) < 0 : (a.z - line) * (b.z - line) < 0;
-      if (!crosses) return false;
-      const m = alongZ ? (a.z + b.z) / 2 : (a.x + b.x) / 2, lo = alongZ ? Math.min(z1, z2) : Math.min(x1, x2), hi = alongZ ? Math.max(z1, z2) : Math.max(x1, x2);
-      return m > lo && m < hi && !gaps.some(([g0, g1]) => m > g0 && m < g1);
-    });
+  /** Edges of an item's footprint. */
+  bounds(item) { const xs = item.cells.map(c => c.x), zs = item.cells.map(c => c.z); return { minX: Math.min(...xs) - .25, maxX: Math.max(...xs) + .25, minZ: Math.min(...zs) - .25, maxZ: Math.max(...zs) + .25 }; }
+  /** Where an item standing against a wall that an expansion removed should go now, or null. */
+  wallShift(item) {
+    if (!item.cells || !item.cells.length) return null;
+    const b = this.bounds(item), near = (a, v) => Math.abs(a - v) < .01;
+    const rule = WALL_SHIFTS.find(r => r.tier <= this.tier && (r.side === 'back' ? near(b.minZ, r.at) && (r.at !== -3 || b.maxX <= 4) : near(b.maxX, r.at) && b.minZ >= -5 && b.maxZ <= 3));
+    return rule ? { x: item.x + rule.dx, z: item.z + rule.dz } : null;
   }
-  #crossesWall(cells) { return cells.some(a => cells.some(b => a !== b && Math.abs(a.x - b.x) + Math.abs(a.z - b.z) <= .5 && this.stepBlocked(a, b))); }
   /** World point of a position given in an item's own frame, where +z is its front. */
   toWorld(item, lx, lz) { const [x, z] = turn(lx, lz, item.rotation); return { x: item.x + x, z: item.z + z }; }
   dims(id, rotation) { const f = FURNITURE[id], w = f.w || 1, d = f.d || 1; return rotation % 2 ? [d, w] : [w, d]; }
@@ -83,7 +79,7 @@ export class SalonLayout {
   occupant(cell, ignore) { return this.items.find(it => it !== ignore && it.cells.includes(cell)) || null; }
   canOccupy(id, cells, ignore) {
     const walkable = FURNITURE[id].walkable;
-    return !this.#crossesWall(cells) && cells.every(c => this.placeable(c) && (walkable || !LANES.some(r => inRect(c, r))) && !this.occupant(c, ignore));
+    return cells.every(c => this.placeable(c) && (walkable || !LANES.some(r => inRect(c, r))) && !this.occupant(c, ignore));
   }
   openCells(ignore) { return this.cells.filter(c => this.placeable(c) && !LANES.some(r => inRect(c, r)) && !this.occupant(c, ignore)); }
   nearestCell(x, z) { let best = null, bestDist = .45; for (const c of this.cells) { const d = Math.hypot(c.x - x, c.z - z); if (d < bestDist) { bestDist = d; best = c; } } return best; }
