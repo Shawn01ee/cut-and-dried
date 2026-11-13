@@ -1,10 +1,14 @@
 import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS } from '../building/FurnitureCatalog.js';
 import { hexCss } from '../rendering/color.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION } from '../employees/Employee.js';
-import { CAMPAIGNS, REEL_COST } from '../tycoon/Marketing.js';
+import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/StaffManager.js';
+import { CAMPAIGNS, CHANNELS } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
+import { INVESTMENTS, LOANS } from '../tycoon/Finance.js';
 
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+const RANK_ORDER = { senior: 0, designer: 1, junior: 2 };
+const level = v => v >= 70 ? 'bad' : v >= 40 ? 'gold' : 'good';
 
 /** Renders the Staff, Build, Business, Promo, Reviews and Growth pages and routes their button presses. */
 export class TycoonUI {
@@ -13,26 +17,44 @@ export class TycoonUI {
 
   key(page) {
     const g = this.game, b = this.build.active;
-    return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.items.length, b && b.id, g.franchise.branches.filter(x => x.open).length, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), s.restUntil > this.hooks.now()]).join(), g.staff.support.map(s => s.hired).join(), g.franchise.branches.map(b => b.clientsToday).join(),
-      g.clock.day, g.marketing.version, g.reviews.version, g.hospitality.version, this.reviewFilter].join('|');
+    return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.items.length, b && b.id, g.franchise.branches.filter(x => x.open).length, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), g.franchise.branches.map(b => b.clientsToday).join(),
+      g.clock.day, g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.regulars, this.reviewFilter].join('|');
   }
   render(page) { return { staff: () => this.#staff(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#reviews(), prog: () => this.#growth() }[page](); }
 
+  #status(e) {
+    const t = (k, ...a) => this.#t(k, ...a), day = this.game.clock.day, tags = [];
+    if (e.onLeave(day)) tags.push(`<span class="gold">${t('st2.leave', e.leaveTo)}</span>`);
+    else if (e.leaveBooked(day)) tags.push(`<span class="gold">${t('st2.leaveSoon')}</span>`);
+    else if (!this.hooks.hasChair(e)) tags.push(`<span class="dim">${t('st2.bench')}</span>`);
+    if (e.settling) tags.push(`<span class="dim">${t('st2.settling')}</span>`);
+    return tags.join(' ');
+  }
   #staffRow(e) {
-    const t = (k, ...a) => this.#t(k, ...a), g = this.game, s = e.effectiveSkills, owner = e === g.staff.owner, now = this.hooks.now();
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, s = e.effectiveSkills, owner = e === g.staff.owner, now = this.hooks.now(), day = g.clock.day, cash = g.economy;
     let actions = '';
-    if (!owner && e.hired) actions = `<button data-do="train:${e.id}" ${!g.economy.canAfford(e.trainingCost) || !e.canTrain || !g.isUnlocked('training') ? 'disabled' : ''}>${t('staff.train', e.trainingCost)}</button><button data-do="rest:${e.id}" ${e.restUntil > now ? 'disabled' : ''}>${t(e.restUntil > now ? 'staff.resting' : 'staff.rest')}</button><button data-do="fire:${e.id}">${t('staff.fire')}</button>`;
-    if (!e.hired) { const seat = this.hooks.hasOpenChair(); actions = `${seat ? '' : `<span class="dim">${t('staff.noChair')}</span>`}<button class="go" data-do="hire:${e.id}" ${!seat || !g.economy.canAfford(e.hireCost) || !g.isUnlocked('staff') ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`; }
-    return `<div class="brow"><b style="color:${hexCss(e.apron)}">${this.i18n.name(e.name)}</b><span class="dim">${t('style.' + e.style)}</span><span class="sp"></span>${actions}</div><div class="dim">${t('staff.skills', s.cutting, s.colouring, s.perming, s.speed, s.customerService)}${e.specialty ? `<br><span class="gold">${t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100))}</span>` : ''}<br>${owner ? t('staff.ownerLv', e.level, e.experience, e.experienceToNext) + ' · ' + t('staff.you') : t('staff.pay', e.level, e.salary, Math.round(e.fatigue), e.experience, e.experienceToNext)}</div>`;
+    if (!owner && e.hired) actions = `<button data-do="train:${e.id}" ${!cash.canAfford(e.trainingCost) || !e.canTrain || !g.isUnlocked('training') ? 'disabled' : ''}>${t('staff.train', e.trainingCost)}</button><button data-do="bonus:${e.id}" ${cash.canAfford(BONUS) ? '' : 'disabled'}>${t('staff.bonus', BONUS)}</button><button data-do="leave:${e.id}" ${e.leaveBooked(day) ? 'disabled' : ''}>${t('staff.leave', LEAVE_DAYS)}</button><button data-do="rest:${e.id}" ${e.restUntil > now || e.onLeave(day) ? 'disabled' : ''}>${t(e.restUntil > now ? 'staff.resting' : 'staff.rest')}</button><button data-do="fire:${e.id}">${t('staff.fire')}</button>`;
+    if (!e.hired) {
+      const locked = !g.isUnlocked('staff') || (e.unlock && !g.isUnlocked(e.unlock)), seat = this.hooks.hasOpenChair();
+      actions = locked ? `<span class="dim">${t('build.lockedAt')}</span>` : `${seat ? '' : `<span class="dim">${t('staff.noChair')}</span>`}<button class="go" data-do="hire:${e.id}" ${!seat || !cash.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
+    }
+    const info = owner ? t('staff.ownerLv', e.level, e.experience, e.experienceToNext) + ' · ' + t('staff.you')
+      : e.hired ? `${t('staff.pay', e.level, e.salary, Math.round(e.fatigue), e.experience, e.experienceToNext)} · <span class="${level(e.stress)}">${t('staff.stress', Math.round(e.stress))}</span> ${this.#status(e)}` : t('staff.wage', e.salary);
+    return `<div class="brow"><b style="color:${hexCss(e.apron)}">${this.i18n.name(e.name)}</b><span class="dim">${t('role.' + e.role)}</span><span class="sp"></span>${actions}</div><div class="dim">${t('staff.skills', s.cutting, s.colouring, s.perming, s.speed, s.customerService)}${e.specialty ? `<br><span class="gold">${t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100))}</span>` : owner ? `<br><span class="gold">${t('staff.allround')}</span>` : ''}<br>${info}</div>`;
   }
   #supportRow(e) {
-    const t = (k, ...a) => this.#t(k, ...a), g = this.game;
-    const action = e.hired ? `<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : `<button class="go" data-do="shire:${e.id}" ${!g.economy.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.rehire', e.hireCost)}</button>`;
-    return `<div class="brow"><b style="color:${hexCss(e.apron)}">${this.i18n.name(e.name)}</b><span class="dim">${t('style.' + e.style)}</span><span class="sp"></span>${action}</div><div class="dim">${t('support.' + e.id)}<br>${t('staff.wage', e.salary)}</div>`;
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, desk = e.effect === 'reception';
+    const course = desk && e.hired ? `<button data-do="mtrain:${e.id}" ${(e.skills.marketing || 0) >= 100 || !g.economy.canAfford(g.staff.marketingCourseCost(e)) ? 'disabled' : ''}>${t('staff.mcourse', g.staff.marketingCourseCost(e))}</button>` : '';
+    const action = e.hired ? `${course}<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : `<button class="go" data-do="shire:${e.id}" ${!g.economy.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.rehire', e.hireCost)}</button>`;
+    return `<div class="brow"><b style="color:${hexCss(e.apron)}">${this.i18n.name(e.name)}</b><span class="dim">${t('role.' + e.role)}</span><span class="sp"></span>${action}</div><div class="dim">${t('support.' + e.id)}${desk ? '<br>' + t('staff.marketing', e.skills.marketing || 0) : ''}<br>${t('staff.wage', e.salary)}</div>`;
   }
   #staff() {
-    const g = this.game;
-    return `<div class="bsec"><h4>${this.#t('tab.staff')}</h4>${g.isUnlocked('staff') ? '' : `<div class="dim">${this.#t('staff.lock')}</div>`}${g.staff.all.map(e => this.#staffRow(e)).join('')}</div><div class="bsec"><h4>${this.#t('staff.support')}</h4>${g.staff.support.map(e => this.#supportRow(e)).join('')}</div>`;
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff;
+    const commission = COMMISSION.map((r, i) => `<button data-do="commission:${i}" class="${st.commission === i ? 'sel' : ''}">${Math.round(r * 100)}%</button>`).join('');
+    const team = [...st.candidates].sort((a, b) => (b.hired - a.hired) || (RANK_ORDER[a.rank] - RANK_ORDER[b.rank]));
+    return `<div class="bsec"><h4>${t('staff.policy')}</h4><div class="brow"><span>${t('staff.commission')}</span><span class="sp"></span><span class="seg">${commission}</span></div>
+      <div class="brow"><span>${t('staff.dinner')}</span><span class="dim">${t('staff.perHead', DINNER_PER_HEAD)}</span><span class="sp"></span><button data-do="dinner" ${!st.hired.length || st.dinnerDay === g.clock.day || !g.economy.canAfford(st.dinnerCost()) ? 'disabled' : ''}>${st.dinnerDay === g.clock.day ? t('staff.dinnerDone') : '$' + st.dinnerCost()}</button></div></div>
+      <div class="bsec"><h4>${t('staff.designers')}</h4>${g.isUnlocked('staff') ? '' : `<div class="dim">${t('staff.lock')}</div>`}${[st.owner, ...team].map(e => this.#staffRow(e)).join('')}</div><div class="bsec"><h4>${t('staff.support')}</h4>${st.support.map(e => this.#supportRow(e)).join('')}</div>`;
   }
   #build() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, l = g.layout, active = this.build.active;
@@ -52,19 +74,37 @@ export class TycoonUI {
     const branches = g.isUnlocked('branches') ? `<div class="bsec"><h4>${t('biz.branch')}</h4>${g.franchise.branches.map((b, i) => `<div class="brow"><span>${t('bn.' + b.id)}</span><span class="sp"></span>${b.open ? `<span class="good">${t('branch.owned')}</span><button data-do="view:${i}">${t('branch.view')}</button>` : `<button class="go" data-do="branch:${i}" ${!e.canAfford(b.cost) ? 'disabled' : ''}>${t('branch.open', b.cost)}</button>`}<span class="dim">${b.open ? t('branch.today', b.clientsToday, b.clientsToday ? Math.round(b.satisfactionSum / b.clientsToday * 100) : 0, b.revenueToday) : t('branch.income', g.franchise.incomeOf(b, rep.value))}</span></div>`).join('')}</div>` : '';
     const rows = g.staff.all.filter(s => s.hired).sort((a, b) => (b.stats.sum / (b.stats.served || 1)) - (a.stats.sum / (a.stats.served || 1)));
     const hs = g.hospitality, treats = Object.entries(AMENITIES).map(([id, a]) => `<div class="brow"><span>${t('hs.' + id)}</span><span class="dim">${t('hs.cost', a.cost)}</span><span class="sp"></span>${hs.available(id) ? `<span class="seg"><button data-do="amen:${id}" class="${hs.isOffered(id) ? 'sel' : ''}">${t('hs.on')}</button><button data-do="amen:${id}" class="${hs.isOffered(id) ? '' : 'sel'}">${t('hs.off')}</button></span>` : `<span class="dim">${t('hs.needs', t('f.' + a.needs))}</span>`}</div>`).join('');
-    return `<div class="bsec"><h4>${t('biz.finance')}</h4>${line('biz.cash', money(e.cash))}${line('biz.rev', money(e.dailyRevenue))}${line('biz.exp', money(-e.dailyOperatingCost))}${line('biz.profit', money(e.dailyProfit))}${e.dailyInvestment ? line('biz.invest', money(-e.dailyInvestment)) : ''}${line('biz.total', g.served)}${line('biz.sat', g.served ? Math.round(g.averageSatisfaction * 100) + '%' : '–')}${line('biz.rep', rep.starText + ' ' + Math.floor(rep.value))}${line('biz.comfort', g.comfort)}</div>${costs}
-    <div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>
+    return `<div class="bsec"><h4>${t('biz.finance')}</h4>${line('biz.cash', money(e.cash))}${line('biz.rev', money(e.dailyRevenue))}${line('biz.exp', money(-e.dailyOperatingCost))}${line('biz.profit', money(e.dailyProfit))}${e.dailyInvestment ? line('biz.invest', money(-e.dailyInvestment)) : ''}${line('biz.total', g.served)}${line('biz.sat', g.served ? Math.round(g.averageSatisfaction * 100) + '%' : '–')}${line('biz.rep', rep.starText + ' ' + Math.floor(rep.value))}${line('biz.comfort', g.comfort)}${line('biz.regulars', g.regulars)}</div>${costs}${this.#funding()}
+    <div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}
     <div class="bsec"><h4>${t('hs.title')}</h4>${treats}</div>${branches}
     <div class="bsec"><h4>${t('biz.ladder')}</h4><table class="lad"><tr><th>#</th><th>${t('lad.stylist')}</th><th>${t('lad.done')}</th><th>${t('lad.avg')}</th><th>${t('lad.earn')}</th></tr>${rows.map((s, i) => `<tr><td>${i + 1}</td><td style="color:${hexCss(s.apron)}">${this.i18n.name(s.name)}</td><td>${s.stats.served}</td><td>${s.stats.served ? Math.round(s.stats.sum / s.stats.served * 100) + '%' : '–'}</td><td>$${s.stats.earn}</td></tr>`).join('')}</table></div>`;
   }
+  #funding() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, f = g.finance, cash = g.economy, lv = g.progression.level;
+    const offers = INVESTMENTS.map((o, i) => `<div class="brow"><span>${t('fin.offer', o.amount.toLocaleString(), Math.round(o.share * 100))}</span><span class="sp"></span>${f.taken.includes(i) ? `<span class="good">${t('fin.taken')}</span>` : lv < o.level ? `<span class="dim">${t('build.lockedAt')}</span>` : `<button data-do="invest:${i}" ${f.canInvest(i, lv) ? '' : 'disabled'}>${t('fin.accept')}</button>`}</div>`).join('');
+    const stake = f.investorShare ? `<div class="brow"><span>${t('fin.stake', Math.round(f.investorShare * 100), f.invested.toLocaleString())}</span><span class="sp"></span><button data-do="buyback" ${cash.canAfford(f.buybackCost) ? '' : 'disabled'}>${t('fin.buyback', f.buybackCost.toLocaleString())}</button></div>` : '';
+    const loan = f.loan ? `<div class="brow"><span>${t('fin.loanNow', f.loan.remaining.toLocaleString(), f.loan.daily, f.loan.daysLeft)}</span><span class="sp"></span><button data-do="repay" ${cash.canAfford(f.loan.remaining) ? '' : 'disabled'}>${t('fin.repay', f.loan.remaining.toLocaleString())}</button></div>`
+      : LOANS.map((l, i) => { const k = f.loanTerms(i); return `<div class="brow"><span>${t('fin.loanOffer', k.amount.toLocaleString(), k.days, k.daily)}</span><span class="sp"></span><button data-do="loan:${i}">${t('fin.borrow')}</button></div>`; }).join('');
+    return `<div class="bsec"><h4>${t('fin.title')}</h4><div class="dim">${t('fin.daniel')}</div>${stake}${offers}<div class="dim" style="margin-top:4px">${t('fin.bank')}</div>${loan}</div>`;
+  }
+  #rival() {
+    const t = (k, ...a) => this.#t(k, ...a), r = this.game.rival;
+    if (!r.open) return '';
+    return `<div class="bsec"><h4>${t('rival.title')}</h4><div class="brow"><b>${r.name}</b><span class="dim">${t('price.' + r.priceLevel)} · ★ ${r.rating.toFixed(1)}</span></div>${r.move ? `<div class="gold">${t('rival.now.' + r.move, r.daysLeft)}</div>` : `<div class="dim">${t('rival.quiet')}</div>`}</div>`;
+  }
   #marketing() {
-    const t = (k, ...a) => this.#t(k, ...a), g = this.game, m = g.marketing, day = g.clock.day, cash = g.economy;
-    const last = m.lastReel ? t(m.lastReel.viral ? 'mk.lastViral' : 'mk.last', m.lastReel.views.toLocaleString(), m.lastReel.gained.toLocaleString()) : t('mk.noReel');
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, m = g.marketing, day = g.clock.day, cash = g.economy, desk = g.staff.receptionist;
+    const channel = id => {
+      const def = CHANNELS[id], ch = m.channels[id], locked = def.unlock && !g.isUnlocked(def.unlock), wait = def.cooldown - (day - ch.lastDay);
+      const last = ch.last ? t(ch.last.viral ? 'mk.lastViral' : 'mk.last', ch.last.views.toLocaleString(), ch.last.gained.toLocaleString()) : t('mk.noReel');
+      const button = locked ? `<span class="dim">${t('build.lockedAt')}</span>` : wait > 0 ? `<span class="dim">${ch.lastDay === day ? t('mk.reelDone') : t('mk.wait', wait)}</span>` : `<button class="go" data-do="post:${id}" ${cash.canAfford(def.cost) ? '' : 'disabled'}>${t('mk.post.' + id)} $${def.cost}</button>`;
+      return `<div class="brow"><b>${t('mk.ch.' + id)}</b><span>${ch.followers.toLocaleString()}</span><span class="dim">${last}</span><span class="sp"></span>${button}</div>`;
+    };
     const campaign = id => { const c = CAMPAIGNS[id], run = m.active.find(a => a.id === id); return `<div class="brow"><span>${t('mk.' + id)}</span><span class="dim">${t('mk.days', c.days)}</span><span class="sp"></span>${run ? `<span class="good">${t('mk.running', run.daysLeft)}</span>` : `<button class="go" data-do="campaign:${id}" ${cash.canAfford(c.cost) ? '' : 'disabled'}>$${c.cost}</button>`}</div>`; };
-    const influencer = !g.isUnlocked('influencer') ? `<span class="dim">${t('build.lockedAt')}</span>` : m.influencerBooked ? `<span class="good">${t('mk.infBooked')}</span>` : `<button class="go" data-do="influencer" ${m.canBookInfluencer(day) ? '' : 'disabled'}>${t('mk.infBook')}</button>`;
+    const influencer = !g.isUnlocked('influencer') ? `<span class="dim">${t('build.lockedAt')}</span>` : !desk.hired ? `<span class="dim">${t('mk.needDesk')}</span>` : m.influencerBooked ? `<span class="good">${t('mk.infBooked')}</span>` : `<button class="go" data-do="influencer" ${m.canBookInfluencer(day) ? '' : 'disabled'}>${t('mk.infBook')}</button>`;
     const buzz = m.active.filter(a => !CAMPAIGNS[a.id]).map(a => `<div class="brow"><span class="gold">${t('mk.buzz.' + a.id)}</span><span class="sp"></span><span class="dim">${t('mk.running', a.daysLeft)}</span></div>`).join('');
-    return `<div class="bsec"><h4>${t('mk.sns')}</h4><div class="brow"><span>${t('mk.followers')}</span><span class="sp"></span><b>${m.followers.toLocaleString()}</b></div>
-      <div class="brow"><span>${t('mk.reel')}</span><span class="dim">${last}</span><span class="sp"></span><button class="go" data-do="reel" ${m.canPostReel(day) ? '' : 'disabled'}>${m.reelDay === day ? t('mk.reelDone') : '$' + REEL_COST}</button></div>${buzz}</div>
+    const manager = desk.hired ? t('mk.manager', this.i18n.name(desk.name), desk.skills.marketing || 0) : t('mk.managerSelf', this.i18n.name(g.staff.owner.name));
+    return `<div class="bsec"><h4>${t('mk.sns')}</h4><div class="brow"><span>${t('mk.followers')}</span><span class="sp"></span><b>${m.followers.toLocaleString()}</b></div><div class="dim">${manager}</div>${Object.keys(CHANNELS).map(channel).join('')}${buzz}</div>
       <div class="bsec"><h4>${t('mk.ads')}</h4>${campaign('flyers')}${campaign('instaAd')}<div class="brow"><span>${t('mk.influencer')}</span><span class="dim">${t('mk.infNote')}</span><span class="sp"></span>${influencer}</div></div>`;
   }
   #reviews() {
@@ -94,9 +134,13 @@ export class TycoonUI {
       expand: () => { if (g.expand()) this.hooks.syncChairs(); },
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
-      reel: () => this.hooks.postReel(), campaign: () => { if (g.marketing.run(value)) this.hooks.spent(); }, influencer: () => g.marketing.bookInfluencer(g.clock.day),
+      post: () => this.hooks.post(value), campaign: () => { if (g.runCampaign(value)) this.hooks.spent(); }, influencer: () => { if (g.staff.receptionist.hired) g.marketing.bookInfluencer(g.clock.day); },
       reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; },
       amen: () => g.hospitality.toggle(value),
+      commission: () => g.staff.setCommission(+value), dinner: () => { if (g.staff.teamDinner(g.clock.day)) this.hooks.spent(); },
+      bonus: () => { if (g.staff.giveBonus(e)) this.hooks.spent(); }, leave: () => g.staff.sendOnLeave(e, g.clock.day), mtrain: () => { if (g.staff.trainMarketing(e)) this.hooks.spent(); },
+      invest: () => { if (g.finance.takeInvestment(+value, g.progression.level)) this.hooks.spent(); }, buyback: () => g.finance.buyBack(),
+      loan: () => { if (g.finance.takeLoan(+value)) this.hooks.spent(); }, repay: () => g.finance.repayLoan(),
     }[action];
     if (run) run();
   }

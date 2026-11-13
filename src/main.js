@@ -397,9 +397,16 @@ function syncSupport(){recep.root.visible=game.staff.hasSupport('reception');jr.
 function syncChairs(){const big=game.layout.tier>=3;annexGroup.visible=big;walls[3].off=big;annexWalls.forEach(w=>{w.off=!big;});if(site<0){camHome.set(big?2.05:0,.55,1.2);viewScale=big?1.3:1;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
-function fireStaff(e){const st=stations.find(x=>x.sty===e);if(!st||st.state!=='free'||!game.staff.fire(e))return;e.fig.root.visible=false;if(OWNER.floating){OWNER.floating=false;st.sty=OWNER;OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
+function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='free')return;if(!game.staff.fire(e))return;e.fig.root.visible=false;if(st)vacate(st);}
+/** A stylist leaves their chair: Lia takes it if she has none, otherwise it stands empty. */
+function vacate(st){const e=st.sty;if(e===OWNER||st.vacant)return;e.fig.root.visible=false;
+  if(OWNER.floating){OWNER.floating=false;st.sty=OWNER;st.state='free';OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
+/** Each morning: stylists on leave give up their chair and stylists who are in take any free one. */
+function syncRoster(){const day=game.clock.day;
+  stations.forEach(st=>{if(!st.vacant&&st.sty!==OWNER&&!st.cust&&(!st.sty.hired||st.sty.onLeave(day)))vacate(st);});
+  game.staff.working(day).forEach(e=>{if(stations.some(s=>s.sty===e))return;const st=openChair();if(st)placeStaff(e,st);});}
 function restoreGame(){const d=game.saves.load();if(!d)return;furnitureView.clear();stations.length=0;game.restore(d);syncFurniture();
-  game.staff.hired.forEach(e=>{const st=openChair();if(st)placeStaff(e,st);else e.hired=false;});}
+  game.staff.hired.forEach(e=>{const st=openChair();if(st)placeStaff(e,st);});}
 /** Keeps stations, seats, the desk and the basin in step with the furniture layout. */
 function syncFurniture(){game.layout.items.forEach(it=>{if(!furnitureView.has(it))furnitureView.spawn(it);});furnitureView.prune(game.layout.items);syncStations();syncAnchors();}
 function syncStations(){const items=game.layout.items.filter(it=>it.id==='station');
@@ -416,7 +423,8 @@ function canModify(it){if(it.id!=='station')return !furnitureView.isOccupied(it)
 function canSell(it){if(!canModify(it))return false;return it.id!=='station'||stations.find(s=>s.item===it).vacant;}
 /** The camera quarter-turn that looks at a client's back, so the mirror never blocks the view. */
 function bestCamK(st){const base=Math.round(camK);let best=base,bd=-2;[0,-1,1,-2,2].forEach(o=>{const k=base+o,a=Math.PI/4+k*Math.PI/2,d=Math.sin(a)*Math.sin(st.yaw)+Math.cos(a)*Math.cos(st.yaw);if(d>bd+1e-6){bd=d;best=k;}});return best;}
-function finishDay(){game.closeDay();audio.play('dayEnd');paused=true;openMenu('day','day');}
+function finishDay(){game.staff.hired.filter(e=>e.quits).forEach(e=>{e.quits=false;fireStaff(e);popup(tx('staff.quit',nm(e.name)),recep.head,'big');});
+  game.closeDay();audio.play('dayEnd');paused=true;openMenu('day','day');}
 function dayTick(dt){if(game.report)return;game.tick(dt);if(!game.clock.isOpen&&queue.length)queue.slice().forEach(c=>leave(c));if(!game.clock.isOpen&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
 game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');queue.slice().forEach(c=>leave(c));});
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
@@ -610,12 +618,16 @@ function pickAt(x,y){if(site>=0)return;if(build.isActive){const q=groundAt(x,y);
   if(best){sel=best.i;$('#panel').classList.remove('min');renderPanel(true);}}
 
 const incidents=new IncidentCard($('#incident'));
-function postReel(){const r=game.postReel();if(!r)return;popup(tx('mk.shooting'),OWNER.fig.head,'');
-  later(1.6,()=>{popup(r.viral?tx('mk.viralPop',r.views.toLocaleString()):tx('mk.reelPop',r.views.toLocaleString(),r.gained.toLocaleString()),OWNER.fig.head,'big');audio.play(r.viral?'levelUp':'happy');});}
+function postOn(channel){const r=game.post(channel);if(!r)return;const name=tx('mk.ch.'+channel),who=game.staff.receptionist.hired?recep.head:OWNER.fig.head;popup(tx('mk.shooting',name),who,'');
+  later(1.6,()=>{popup(r.viral?tx('mk.viralPop',name,r.views.toLocaleString()):tx('mk.postPop',name,r.views.toLocaleString(),r.gained.toLocaleString()),who,'big');audio.play(r.viral?'levelUp':'happy');});}
+/** Morning news: what the rival did overnight, and stylists who have had enough. */
+function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>popup(tx('rival.news.'+k),recep.head,'big')));
+  game.resignations.splice(0).forEach(e=>{if(!e.hired)return;const cost=e.salary*2;audio.play('bad');
+    incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:1,options:[{label:tx('inc.keep',cost),run:()=>{game.economy.charge('bonus',cost);e.addStress(-45);}},{label:tx('inc.letGo'),run:()=>{e.quits=true;}}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
 const ui=new TycoonUI(game,build,i18n,{now:()=>simT,hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
-  postReel,reply:replyToReview,spent:()=>audio.play('cash')});
+  post:postOn,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});
@@ -660,7 +672,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mbtns">${game.saves.has()?`<button class="go big" data-act="start">${tx('m.continue',game.saves.load().day)}</button><button data-act="new">${tx('m.new')}</button>`:`<button class="go big" data-act="new">${tx('m.start')}</button>`}<button data-act="how">${tx('m.how')}</button><button data-act="opts">${tx('m.opts')}</button></div>`;
   else if(menuScreen==='how')h=`<div class="mhead">${tx('m.how')}</div>${HOW[i18n.lang].map(([t,b])=>`<div class="hsec"><h3>${t}</h3>${b}</div>`).join('')}<div class="mbtns side">${backBtn}</div>`;
   else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v,c)).join('');
-    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table><div class="mbtns"><button class="go big" data-act="nextday">${tx('day.next')}</button></div>`;}
+    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table><div class="mbtns"><button class="go big" data-act="nextday">${tx('day.next')}</button></div>`;}
   else h=`<div class="mhead">${tx('m.opts')}</div>${langRow()}
     <div class="mrow"><label>${tx('m.time')}</label>${mSeg('time',TM.map(v=>[v,tx('m.t.'+v)]),timeMode)}</div>
     <div class="mrow"><label>${tx('m.speed')}</label>${mSeg('spd',[[1,'×1'],[3,'×3'],[5,'×5']],speed)}</div>
@@ -671,11 +683,11 @@ function renderMenu(){const top=mbox.scrollTop;let h;
 function openMenu(s,from){menuScreen=s;menuFrom=from;mbox.scrollTop=0;$('#menu').classList.remove('hide');renderMenu();mbox.scrollTop=0;}
 function closeMenu(){$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
-function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();syncBranches();openDay();game.updateProgress();updateHud();renderPanel(true);}
+function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();syncBranches();openDay();syncRoster();morningNews();game.updateProgress();updateHud();renderPanel(true);}
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
-  else if(a==='nextday'){game.nextDay();spawnTimer=1.5;paused=false;closeMenu();updateHud();renderPanel(true);}
+  else if(a==='nextday'){game.nextDay();spawnTimer=1.5;paused=false;closeMenu();syncRoster();morningNews();updateHud();renderPanel(true);}
   else if(a==='how'||a==='opts')openMenu(a,'main');
   else if(a==='back'){if(menuFrom==='game'){paused=false;closeMenu();}else openMenu('main','main');}
   else if(a==='lang')setLang(v);

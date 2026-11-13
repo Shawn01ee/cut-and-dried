@@ -11,7 +11,7 @@ const index = list => Math.floor(Math.random() * list.length);
 export class CustomerFactory {
   #nextId = 0;
 
-  create(usedNames, { colour, perm, advancedCuts, vipChance, priceMultiplier, patienceMultiplier, villain = null, influencer = null }) {
+  create(usedNames, { colour, perm, advancedCuts, vipChance, priceMultiplier, patienceMultiplier, budgetFactor = 1, villain = null, influencer = null }) {
     const natI = index(NATURAL), nat = NATURAL[natI], L0 = rand(14, 58), w0 = Math.random() < .6 ? rand(0, .4) : rand(.8, 2.4);
     const lab = hexLab(nat[1]); lab.L += rand(-.02, .02);
     const hair = { len: STR.map(s => Math.max(3, L0 * (s.z === 3 ? rand(.8, 1) : 1) + rand(-2.5, 2.5))), lab, wave: w0, damage: rand(0, .5) };
@@ -34,7 +34,7 @@ export class CustomerFactory {
       id: ++this.#nextId, name, hair,
       order: { shape, L, col, lab: targetLab, wave },
       price: influencer ? 0 : Math.round(list * priceMultiplier * (vip ? 3 : 1)),
-      budget: Math.round(list * rand(.95, 1.6) * (vip ? 3.5 : 1)),
+      budget: Math.round(list * rand(.95, 1.6) * (vip ? 3.5 : 1) * budgetFactor),
       patience: rand(80, 130) * (vip || influencer ? .8 : 1) * patienceMultiplier,
       loyalty: rand(0, 40), vip, villain, influencer,
       requestedService: recolour ? 'colour' : rewave ? 'perm' : 'haircut',
