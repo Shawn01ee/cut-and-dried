@@ -64,7 +64,7 @@ export class StaffManager {
   /** True when a hired stylist has this special talent. */
   hasPerk(perk) { return this.hired.some(e => e.perk === perk); }
   /** A mentor on the team makes training cheaper. */
-  trainingCostFor(e) { return Math.round(e.trainingCost * (this.hasPerk('mentor') ? .7 : 1)); }
+  trainingCostFor(e) { return Math.round(e.trainingCost * (this.hasPerk('mentor') ? .7 : 1) * (1 - (this.extraTrainingDiscount ? this.extraTrainingDiscount() : 0))); }
   /** Paid training: a block of experience that may lift the stylist a level. Returns levels gained. */
   train(employee) { if (!employee.hired || !employee.canTrain || !this.economy.spend('training', this.trainingCostFor(employee))) return 0; employee.addStress(-5); this.version++; return employee.gainExperience(60); }
   marketingCourseCost(e) { return MARKETING_COURSE + Math.max(0, (e.skills.marketing || 0) - 35) * 10; }

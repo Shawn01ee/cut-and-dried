@@ -19,7 +19,7 @@ import { SalonLayout } from '../building/SalonLayout.js';
 import { rand, clamp } from '../core/math.js';
 
 const PRICE_MULTIPLIER = [.8, 1, 1.5], PRICE_DEMAND = [1.3, 1, .7];
-const MATERIALS = { colour: 18, wave: 14 }, CARD_FEE = .016;
+const MATERIALS = { colour: 18, wave: 14 }, CARD_FEE = .016, SPA_FEE = 45;
 export const STARTING_CASH = 2000;
 // Earlier saves used these ids for the stylist now called Shawn.
 const LEGACY_IDS = { jun: 'shawn', sean: 'shawn', sophie: 'ruby', max: 'hugo' };
@@ -40,6 +40,7 @@ export class TycoonGame {
     this.franchise = new Franchise(this.economy);
     this.operatingCosts = new OperatingCosts(this.economy, this.staff, this.layout, this.progression, this.clock);
     this.marketing = new Marketing(this.economy);
+    this.staff.extraTrainingDiscount = () => this.has('academy') ? .3 : 0;
     this.reviews = new ReviewBoard();
     this.hospitality = new Hospitality(this.economy, this.layout);
     this.finance = new Finance(this.economy);
@@ -67,7 +68,8 @@ export class TycoonGame {
   get comfort() { return this.layout.comfort + (this.staff.hasSupport('tidy') ? 2 : 0) - Math.min(4, Math.floor(this.dirt / 150)); }
   get averageSatisfaction() { return this.served ? this.satisfactionSum / this.served : 0; }
   /** How good a reel filmed right now looks: the latest finished style, the salon and its rating. */
-  get reelQuality() { return clamp(.1 + Math.min(.2, this.staff.hired.filter(e => e.perk === 'trend').length * .1) + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
+  has(id) { return this.layout.items.some(it => it.id === id); }
+  get reelQuality() { return clamp(.1 + (this.has('photoZone') ? .12 : 0) + Math.min(.2, this.staff.hired.filter(e => e.perk === 'trend').length * .1) + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
   /** Chance that someone posts a fake one-star review today; a bigger audience attracts more of them. */
   get trollChance() { return this.progression.level < 2 ? 0 : Math.min(.45, .12 + this.marketing.followers / 4000); }
   updateProgress() { this.progression.update(this.context); }
@@ -90,6 +92,9 @@ export class TycoonGame {
     const result = this.evaluator.evaluate(customer, worker, this.comfort);
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);
     if (customer.vip && worker.perk === 'vip') result.payment = Math.round(result.payment * 1.2);
+    if (customer.vip && customer.vipRoom) result.payment = Math.round(result.payment * 1.25);
+    // A head spa is an add-on the client pays for.
+    if (customer.spa && !customer.influencer) result.payment += SPA_FEE;
     const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + this.comfort * .03 : 1);
     this.reputation.add(gain); worker.recordService(result.satisfaction, result.payment);
     if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate);
@@ -158,7 +163,9 @@ export class TycoonGame {
     this.operatingCosts.accrue(1); this.#autoReply();
     this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours);
     this.finance.closeDay(e.dailyProfit);
-    [this.staff.owner, ...this.staff.working(this.clock.day)].forEach(e => { if (e.gainExperience(5)) this.bus.emit('staff:levelup', e); });
+    // An academy gives everyone a daily lesson.
+    const lesson = this.has('academy') ? 15 : 5;
+    [this.staff.owner, ...this.staff.working(this.clock.day)].forEach(e => { if (e.gainExperience(lesson)) this.bus.emit('staff:levelup', e); });
     const reviews = this.reviews.today(this.clock.day);
     this.report = {
       day: this.clock.day, ...e.closeDay(), reputation: this.reputation.value - this.repAtDayStart,

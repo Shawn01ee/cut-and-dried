@@ -1,7 +1,7 @@
 import { FURNITURE, EXPANSIONS, chairsOn } from './FurnitureCatalog.js';
 
 // The doorway and the pavement walkway: only walkable pieces such as mats may cover them.
-const LANES = [[-2.7, -1.3, 2.4, 5.1], [-4.6, 8.7, 4, 5.1]];
+const LANES = [[-2.7, -1.3, 2.4, 5.1], [-4.6, 12.7, 4, 5.1]];
 // Lamp posts, the clock and the barber pole outside. Nothing goes here and people walk around them.
 export const POSTS = [[-4.1, -3.3, 4.1, 4.9], [4, 4.6, 3.3, 4], [2.3, 3.1, 5.3, 6.2], [-1.5, -.9, 3.2, 3.7]];
 export const inRect = (c, [a, b, d, e]) => c.x >= a && c.x <= b && c.z >= d && c.z <= e;
@@ -9,15 +9,18 @@ export const inRect = (c, [a, b, d, e]) => c.x >= a && c.x <= b && c.z >= d && c
  * Floor areas and the salon size at which each opens. The salon stays a rectangle and grows
  * deeper, then wider (the whole shop next door), then deeper again.
  */
-export const ZONE_TIER = { main: 0, back: 1, annex: 2, rear: 3 };
+export const ZONE_TIER = { main: 0, back: 1, annex: 2, rear: 3, annex2: 4, rear2: 5 };
 /**
  * When an expansion takes a wall away, furniture that stood against it moves to the new wall:
  * `side` is which wall, `at` where it stood, and dx/dz how far the new one is.
  */
+// `span` is the stretch of wall along its length.
 const WALL_SHIFTS = [
-  { tier: 1, side: 'back', at: -3, dx: 0, dz: -2 },
-  { tier: 2, side: 'right', at: 4, dx: 4, dz: 0 },
-  { tier: 3, side: 'back', at: -5, dx: 0, dz: -2 },
+  { tier: 1, side: 'back', at: -3, dx: 0, dz: -2, span: [-4, 4] },
+  { tier: 2, side: 'right', at: 4, dx: 4, dz: 0, span: [-5, 3] },
+  { tier: 3, side: 'back', at: -5, dx: 0, dz: -2, span: [-4, 8] },
+  { tier: 4, side: 'right', at: 8, dx: 4, dz: 0, span: [-7, 3] },
+  { tier: 5, side: 'back', at: -7, dx: 0, dz: -2, span: [-4, 12] },
 ];
 
 /** The salon as it opens on day one: [id, centre x, centre z, quarter turns]. */
@@ -43,11 +46,15 @@ export class SalonLayout {
     area(-3.75, -4.75, 16, 4, false, 'back');
     area(4.25, -4.75, 8, 16, false, 'annex'); area(4.75, 3.45, 8, 6, true, 'annex');
     area(-3.75, -6.75, 24, 4, false, 'rear');
+    area(8.25, -6.75, 8, 20, false, 'annex2'); area(8.75, 3.45, 8, 6, true, 'annex2');
+    area(-3.75, -8.75, 32, 4, false, 'rear2');
   }
   #key(x, z) { return `${Math.round(x * 4)},${Math.round(z * 4)}`; }
   cellAt(x, z) { return this.#index.get(this.#key(x, z)) || null; }
   get chairs() { return this.items.reduce((n, it) => n + chairsOn(it.id), 0); }
-  get maxChairs() { return [1, 3, 6, 9][this.tier]; }
+  get maxChairs() { return [1, 3, 6, 9, 12, 15][this.tier]; }
+  /** How many of a piece the salon has room for at its current size. */
+  maxOf(id) { const m = FURNITURE[id].max; return m == null ? Infinity : Array.isArray(m) ? m[this.tier] : m; }
   get nextExpansion() { return EXPANSIONS[this.tier] || null; }
   /** The cell is part of the salon at its current size. */
   isOpen(c) { return ZONE_TIER[c.zone] <= this.tier; }
@@ -59,7 +66,7 @@ export class SalonLayout {
   wallShift(item) {
     if (!item.cells || !item.cells.length) return null;
     const b = this.bounds(item), near = (a, v) => Math.abs(a - v) < .01;
-    const rule = WALL_SHIFTS.find(r => r.tier <= this.tier && (r.side === 'back' ? near(b.minZ, r.at) && (r.at !== -3 || b.maxX <= 4) : near(b.maxX, r.at) && b.minZ >= -5 && b.maxZ <= 3));
+    const rule = WALL_SHIFTS.find(r => r.tier <= this.tier && (r.side === 'back' ? near(b.minZ, r.at) && b.minX >= r.span[0] && b.maxX <= r.span[1] : near(b.maxX, r.at) && b.minZ >= r.span[0] && b.maxZ <= r.span[1]));
     return rule ? { x: item.x + rule.dx, z: item.z + rule.dz } : null;
   }
   /** World point of a position given in an item's own frame, where +z is its front. */
