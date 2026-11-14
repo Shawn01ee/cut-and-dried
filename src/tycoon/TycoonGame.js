@@ -12,6 +12,7 @@ import { Hospitality } from './Hospitality.js';
 import { Finance } from './Finance.js';
 import { Rival } from './Rival.js';
 import { Missions } from './Missions.js';
+import { MonthlyLedger, MONTH_DAYS, summariseDays } from './MonthlyLedger.js';
 import { SYNERGIES, teamOf } from './Synergies.js';
 import { StaffManager } from '../employees/StaffManager.js';
 import { CustomerFactory } from '../customers/CustomerFactory.js';
@@ -59,7 +60,7 @@ export class TycoonGame {
     this.finance = new Finance(this.economy);
     this.missions = new Missions(this.economy); this.missions.onDone = m => this.bus.emit('mission:done', m);
     // The week so far (one report a working day), the last weekly settlement, and whether today is the day off.
-    this.weekLog = []; this.weekReport = null; this.dayOff = false;
+    this.weekLog = []; this.weekReport = null; this.dayOff = false; this.month = new MonthlyLedger();
     this.rival = new Rival();
     this.customers = new CustomerFactory();
     this.evaluator = new ServiceEvaluator();
@@ -257,6 +258,7 @@ export class TycoonGame {
     this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day);
     this.missions.fill(this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k));
     this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null;
+    if (!this.month.start) this.month.begin(this.#monthSnapshot());
     if (this.isSunday) { this.#dayOff(); return; }
     this.dayOff = false; this.marketing.startDay();
     const move = this.rival.startDay(this.clock.day, this.standing);
@@ -275,20 +277,27 @@ export class TycoonGame {
     this.dayOff = true; this.trollAt = null; this.clock.isOpen = false; this.clock.elapsed = 0;
     this.operatingCosts.chargeDayOff(); this.staff.restDay();
     const sunday = { day: this.clock.day, ...this.economy.closeDay(), served: 0, reputation: 0, reviews: { count: 0, average: 0 }, followers: { change: 0 } };
+    this.month.log(sunday); if (MonthlyLedger.isMonthEnd(this.clock.day)) this.#settleMonth(sunday);
     this.weekReport = this.#weekSummary([...this.weekLog, sunday]); this.weekLog = [];
     this.save();
   }
   /** Adds up a week of daily reports. */
-  #weekSummary(days) {
-    const add = key => days.reduce((acc, d) => { Object.entries(d[key] || {}).forEach(([k, v]) => { acc[k] = (acc[k] || 0) + v; }); return acc; }, {});
-    const sum = f => days.reduce((s, d) => s + (f(d) || 0), 0), count = sum(d => d.reviews.count);
-    return {
-      week: Math.ceil(this.clock.day / 7), from: days[0].day, to: this.clock.day,
-      revenue: add('revenue'), operating: add('operating'), investment: add('investment'), funding: add('funding'),
-      totalRevenue: sum(d => d.totalRevenue), totalOperating: sum(d => d.totalOperating), totalInvestment: sum(d => d.totalInvestment), profit: sum(d => d.profit),
-      served: sum(d => d.served), reviews: { count, average: count ? sum(d => d.reviews.count * d.reviews.average) / count : 0 },
-      reputation: sum(d => d.reputation), followers: sum(d => d.followers.change), days: days.map(d => ({ day: d.day, profit: d.profit })),
-    };
+  #weekSummary(days) { return { week: Math.ceil(this.clock.day / 7), from: days[0].day, to: this.clock.day, ...summariseDays(days) }; }
+  /** What the month is measured against: cash, reviews and what each stylist has made so far. */
+  #monthSnapshot() { return { cash: this.economy.cash, reviews: this.reviews.count, staff: Object.fromEntries(this.staff.all.map(e => [e.name, { earn: e.stats.earn, served: e.stats.served }])) }; }
+  /** The last day of a month: pays the goal if it was met, then settles the month and sets the next goal. */
+  #settleMonth(last) {
+    const goal = this.month.goal, hit = !!goal && this.month.revenueSoFar >= goal.revenue;
+    if (hit) { this.economy.fund('monthGoal', goal.reward); last.funding = { ...last.funding, monthGoal: goal.reward }; }
+    this.month.settle(this.clock.day, this.#monthSnapshot(), hit);
+  }
+  get monthReport() { return this.month.report; }
+  /** Whether a month was settled at the end of today. */
+  get monthClosedToday() { return !!this.month.report && this.month.report.to === this.clock.day; }
+  /** This month's goal and how far along it is. */
+  get monthProgress() {
+    const today = this.report || this.dayOff ? 0 : this.economy.dailyRevenue;
+    return { goal: this.month.goal, revenue: this.month.revenueSoFar + today, day: (this.clock.day - 1) % MONTH_DAYS + 1, month: MonthlyLedger.monthOf(this.clock.day) };
   }
   closeDay() {
     const e = this.economy, sales = this.layout.dailySales * (this.isUnlocked('brandLine') ? 2 : 1);
@@ -307,12 +316,13 @@ export class TycoonGame {
       followers: { now: this.marketing.followers, change: this.marketing.followers - this.followersAtDayStart }, incidents: { ...this.incidents }, served: this.servedToday,
     };
     this.weekLog.push(this.report);
+    this.month.log(this.report); if (MonthlyLedger.isMonthEnd(this.clock.day)) this.#settleMonth(this.report);
     this.recentRevenue.push(this.report.totalRevenue); if (this.recentRevenue.length > 6) this.recentRevenue.shift();
     this.updateProgress(); this.save(); return this.report;
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
@@ -328,5 +338,6 @@ export class TycoonGame {
     this.finance.restore(d.finance); this.rival.restore(d.rival); this.regulars = d.regulars || 0; this.staff.restore(d.staffPolicy);
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
+    this.month.restore(d.month, this.#monthSnapshot());
   }
 }
