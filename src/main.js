@@ -63,10 +63,14 @@ function resize(){
 const cam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,80);
 let camK=0,camAz=Math.PI/4,zoom=1,zoomGoal=1;const camOff=new THREE.Vector2();const EL=Math.atan(1/Math.SQRT2);const camTarget=V(0,.55,1.2);
 let camBlend=0,viewScale=1;const camHome=V(0,.55,1.2),camClose=V(),camPan=V(0,.55,1.2);
+/** Where the player has dragged the view, relative to the salon's home view. Kept within reach of the salon. */
+const panOff=V(),PAN_MAX=9,ZOOM_MIN=.6,ZOOM_MAX=3.2;
+function panBy(dx,dz,now){panOff.x=clamp(panOff.x+dx,-PAN_MAX,PAN_MAX);panOff.z=clamp(panOff.z+dz,-PAN_MAX,PAN_MAX);if(now)camPan.copy(camHome).add(panOff);}
+function recenter(){panOff.set(0,0,0);zoomGoal=1;}
 function updateCam(dt){
   zoom+=(zoomGoal-zoom)*Math.min(1,dt*10);if(Math.abs(zoomGoal-zoom)<1e-3)zoom=zoomGoal;
   const goal=Math.PI/4+camK*Math.PI/2;camAz+=(goal-camAz)*Math.min(1,dt*9);if(Math.abs(goal-camAz)<1e-3)camAz=goal;
-  camBlend+=((styling?1:0)-camBlend)*Math.min(1,dt*6);if(Math.abs((styling?1:0)-camBlend)<.002)camBlend=styling?1:0;camPan.lerp(camHome,Math.min(1,dt*4));camTarget.copy(camPan).lerp(camClose,camBlend);
+  camBlend+=((styling?1:0)-camBlend)*Math.min(1,dt*6);if(Math.abs((styling?1:0)-camBlend)<.002)camBlend=styling?1:0;camPan.lerp(V().copy(camHome).add(panOff),Math.min(1,dt*4));camTarget.copy(camPan).lerp(camClose,camBlend);
   const a=W/H,vh=lerp(Math.max(10.8,12.8/a)*viewScale/zoom,Math.max(2.6,1.7/a),camBlend);
   cam.left=-vh*a/2;cam.right=vh*a/2;cam.top=vh/2;cam.bottom=-vh/2;cam.updateProjectionMatrix();
   cam.position.copy(camTarget).add(V(Math.sin(camAz)*Math.cos(EL),Math.sin(EL),Math.cos(camAz)*Math.cos(EL)).multiplyScalar(40));
@@ -632,10 +636,15 @@ function screenOf(v){_p.copy(v).project(cam);return [(_p.x+1)/2*W*PIX+camOff.x*P
 /** Floating notes rise from whoever they are about. Notes about the same person stack by their real height, and the stack stays clear of the HUD, the panel and the screen edges. */
 function updatePops(dt){if(!pops.length)return;const hud=$('#hud').getBoundingClientRect(),pan=$('#panel').getBoundingClientRect(),groups=new Map();
   for(const p of pops){p.t+=dt;if(p.w==null){p.w=p.el.offsetWidth;p.h=p.el.offsetHeight;}if(!groups.has(p.obj))groups.set(p.obj,[]);groups.get(p.obj).push(p);}
+  const placed=[];
   for(const [obj,g] of groups){const w=obj.getWorldPosition(V()),k=Math.min(1,g[0].t/g[0].life);w.y+=.35+(1-(1-k)*(1-k))*.6;let [x,y]=screenOf(w);
     const W=Math.max(...g.map(p=>p.w)),total=g.reduce((n,p)=>n+p.h+4,-4);x=clamp(x,W/2+8,innerWidth-W/2-8);
     const over=r=>r.width&&x-W/2<r.right&&x+W/2>r.left,lo=(over(hud)?hud.bottom+6:8)+total,hi=over(pan)?pan.top-6:innerHeight-8;
-    y=Math.max(lo,Math.min(y,hi));for(const p of g){p.el.style.left=x+'px';p.el.style.top=y+'px';p.el.style.opacity=clamp((p.life-p.t)*2);y-=p.h+4;}}
+    y=Math.max(lo,Math.min(y,hi));
+    // step clear of notes already placed: up first, below them if there is no room above
+    for(let n=0;n<12;n++){const hit=placed.find(r=>x-W/2<r.R+4&&x+W/2>r.L-4&&y-total<r.B+4&&y>r.T-4);if(!hit)break;y=hit.T-4>=lo?hit.T-4:hit.B+4+total;}
+    placed.push({L:x-W/2,R:x+W/2,T:y-total,B:y});
+    for(const p of g){p.el.style.left=x+'px';p.el.style.top=y+'px';p.el.style.opacity=clamp((p.life-p.t)*2);y-=p.h+4;}}
   for(let i=pops.length-1;i>=0;i--)if(pops[i].t>pops[i].life){pops[i].el.remove();pops.splice(i,1);}
   custs.forEach(c=>{if(c.state==='wait'){const w=c.fig.head.getWorldPosition(V());w.y+=.3;const [x,y]=screenOf(w);c.tag.style.display='block';c.tag.style.left=x+'px';c.tag.style.top=y+'px';const k=clamp(c.pat/c.maxPat);const i=c.tag.firstChild;i.style.width=(k*100)+'%';i.style.background=k>.5?'#8fc25a':k>.25?'#ffb15a':'#d8314a';}
     else if(c.state==='process'&&c.procSeated){const w=c.fig.head.getWorldPosition(V());w.y+=.55;const [x,y]=screenOf(w);c.tag.style.display='block';c.tag.style.left=x+'px';c.tag.style.top=y+'px';const i=c.tag.firstChild;i.style.width=(clamp(1-c.procLeft/c.procTotal)*100)+'%';i.style.background='#7fb6f0';}
@@ -772,12 +781,18 @@ function drawPV(cv,h,skin,tint=0){if(!cv)return;const g=cv.getContext('2d');g.im
   const side=(h.len[7]+h.len[8]+h.len[9]+h.len[10])/4,capW=side<4?14:20;
   g.fillStyle=labCss(lab,.93);g.fillRect(24-capW/2,7,capW,13);g.fillRect(24-capW/2+1,6,capW-2,1);
   [7,8,9,10,11,12].forEach(j=>strand(j,3,.86));}
+/** The chair list in the HUD: up to ten chairs show in full; more fold into one line the player can open. */
+let hudOpen=null;try{hudOpen=JSON.parse(localStorage.getItem('cd.hudOpen'));}catch{hudOpen=null;}
+function hudChairs(list,row){const busy=list.filter(s=>s.cust).length,open=hudOpen??list.length<=10;
+  const head=`<div class="hsum"><span>${tx('hud.chairs',list.length,busy)}</span><button class="htog" data-hud="toggle">${tx(open?'hud.fold':'hud.unfold')}</button></div>`;
+  return head+(open?`<table class="foot">${list.map(row).join('')}</table>`:'');}
+$('#hud').addEventListener('pointerdown',e=>{if(!e.target.closest('[data-hud]'))return;e.preventDefault();hudOpen=!(hudOpen??stations.filter(st=>siteOf(st.item.x)===site).length<=10);try{localStorage.setItem('cd.hudOpen',JSON.stringify(hudOpen));}catch{/* the choice just isn't remembered */}updateHud();});
 function updateHud(){game.syncMissions();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
   $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)}(${tx('wd.'+g.weekday)}) ${g.dayOff?tx('hud.off'):g.clock.timeText}</span></h1>
   <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.rating',g.reviews.count?`★${g.reviews.rating.toFixed(1)} (${g.reviews.count})`:'–')}${row('hud.followers',g.marketing.followers.toLocaleString())}${row('hud.hours',`${g.clock.openHour}:00–${g.clock.closeHour}:00`)}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length+custs.filter(q=>q.state==='process'||q.state==='ready').length} / ${stations.length+terr.length+procSeats.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
-  <table class="foot">${stations.map(st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</td><td class="${st.cust&&st.cust.villain?'bad':''}">${st.cust?(st.cust.vip?'★':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`).join('')}</table>
+  ${hudChairs(stations.filter(st=>siteOf(st.item.x)===site),st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</td><td class="${st.cust&&st.cust.villain?'bad':''}">${st.cust?(st.cust.vip?'★':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`)}
   ${last?`<div class="dim">${tx('hud.last',nm(last.name),Math.round(last.all*100),nm(last.sty),last.mins.toFixed(1))}</div>`:''}`;}
 
 /* controls */
@@ -799,13 +814,20 @@ $('#bAuto').onclick=()=>setAuto(!autoOn);
 $('#bLang').onclick=()=>setLang(i18n.lang==='ko'?'en':'ko');
 $('#bSound').onclick=()=>{audio.toggleMute();syncCtrl();};
 $('#bHelp').onclick=()=>{build.cancel();paused=true;openMenu('how','game');};
-$('#bZo').onclick=()=>zoomGoal=clamp(zoomGoal/1.2,.6,2.2);$('#bZi').onclick=()=>zoomGoal=clamp(zoomGoal*1.2,.6,2.2);
-canvas.addEventListener('wheel',e=>{e.preventDefault();zoomGoal=clamp(zoomGoal*(e.deltaY<0?1.1:1/1.1),.6,2.2);},{passive:false});
-const ptrs=new Map();let pinch0=0,zoom0=1,down=null;
-canvas.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===1)down=[e.clientX,e.clientY];if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]);zoom0=zoomGoal;down=null;}});
-canvas.addEventListener('pointermove',e=>{if(build.isActive){const q=groundAt(e.clientX,e.clientY);if(q)build.hover(q);ghostTip(e.clientX,e.clientY);}else ghostTip();if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===2&&pinch0){const [a,b]=[...ptrs.values()];zoomGoal=clamp(zoom0*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch0,.6,2.2);}});
-const endP=e=>{if(down&&ptrs.size===1&&Math.hypot(e.clientX-down[0],e.clientY-down[1])<10)pickAt(e.clientX,e.clientY);ptrs.delete(e.pointerId);if(ptrs.size<2)pinch0=0;if(!ptrs.size)down=null;};
-canvas.addEventListener('pointerup',endP);canvas.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);down=null;});
+$('#bZo').onclick=()=>zoomGoal=clamp(zoomGoal/1.2,ZOOM_MIN,ZOOM_MAX);$('#bZi').onclick=()=>zoomGoal=clamp(zoomGoal*1.2,ZOOM_MIN,ZOOM_MAX);$('#bCenter').onclick=recenter;
+/** Zooms to `z`, keeping the ground under the screen point (x, y) where it is. */
+function zoomAt(z,x,y){z=clamp(z,ZOOM_MIN,ZOOM_MAX);const p=groundAt(x,y);if(p&&!styling){const k=1-zoom/z;panBy((p.x-camTarget.x)*k,(p.z-camTarget.z)*k,false);}zoomGoal=z;}
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoomAt(zoomGoal*(e.deltaY<0?1.1:1/1.1),e.clientX,e.clientY);},{passive:false});
+const ptrs=new Map();let pinch0=0,zoom0=1,down=null,dragging=false,mid0=null;
+const midOf=()=>{const [a,b]=[...ptrs.values()];return [(a[0]+b[0])/2,(a[1]+b[1])/2];};
+/** Moves the view so the ground under (x0, y0) ends up under (x1, y1). */
+function dragView(x0,y0,x1,y1){const a=groundAt(x0,y0),b=groundAt(x1,y1);if(a&&b)panBy(a.x-b.x,a.z-b.z,true);}
+canvas.addEventListener('pointerdown',e=>{ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===1)down=[e.clientX,e.clientY];if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch0=Math.hypot(a[0]-b[0],a[1]-b[1]);zoom0=zoomGoal;mid0=midOf();down=null;}});
+canvas.addEventListener('pointermove',e=>{if(build.isActive){const q=groundAt(e.clientX,e.clientY);if(q)build.hover(q);ghostTip(e.clientX,e.clientY);}else ghostTip();if(!ptrs.has(e.pointerId))return;const prev=ptrs.get(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptrs.size===2&&pinch0){const [a,b]=[...ptrs.values()],m=midOf();zoomAt(zoom0*Math.hypot(a[0]-b[0],a[1]-b[1])/pinch0,m[0],m[1]);if(mid0)dragView(mid0[0],mid0[1],m[0],m[1]);mid0=m;return;}
+  if(ptrs.size===1&&down&&!styling){if(!dragging&&Math.hypot(e.clientX-down[0],e.clientY-down[1])>6){dragging=true;canvas.classList.add('grabbing');}if(dragging)dragView(prev[0],prev[1],e.clientX,e.clientY);}});
+const endP=e=>{if(down&&ptrs.size===1&&!dragging&&Math.hypot(e.clientX-down[0],e.clientY-down[1])<10)pickAt(e.clientX,e.clientY);ptrs.delete(e.pointerId);if(ptrs.size<2){pinch0=0;mid0=null;}if(!ptrs.size){down=null;dragging=false;canvas.classList.remove('grabbing');}};
+canvas.addEventListener('pointerup',endP);canvas.addEventListener('pointercancel',e=>{ptrs.delete(e.pointerId);down=null;dragging=false;mid0=null;canvas.classList.remove('grabbing');});
 const ray=new THREE.Raycaster();
 const groundPlane=new THREE.Plane(UP,0),_gp=V();
 function groundAt(x,y){const r=canvas.getBoundingClientRect();x-=camOff.x*PIX;y+=camOff.y*PIX;ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);return ray.ray.intersectPlane(groundPlane,_gp)?{x:_gp.x,z:_gp.z}:null;}
@@ -858,7 +880,7 @@ function buildBranchShell(){if(branchShell||!game.layout.branchOpen)return;const
   const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(0,2.4,0);root.add(light);inLights.push(light);}
 /** Opens the second salon, if the game allows it, and shows it. */
 function openBranch(){if(!game.openBranch())return false;buildBranchShell();syncFurniture();renderSites();focusSite(1);audio.play('levelUp');popup(tx('br.opened'),recep.head,'big');return true;}
-function focusSite(i){site=i;build.cancel();if(i===0)syncChairs();else{camHome.set(BRANCH_X,.55,1.2);viewScale=1;}renderSites();renderPanel(true);}
+function focusSite(i){site=i;build.cancel();recenter();if(i===0)syncChairs();else{camHome.set(BRANCH_X,.55,1.2);viewScale=1;}renderSites();renderPanel(true);}
 function renderSites(){const el=$('#sites'),open=game.layout.branchOpen;el.classList.toggle('show',open);
   el.innerHTML=open?[0,1].map(i=>`<button data-site="${i}" class="${site===i?'sel':''}">${tx(i?'site.branch':'site.main')}</button>`).join(''):'';}
 function updateBranchCard(){$('#branchCard').classList.remove('show');}
