@@ -331,6 +331,10 @@ function frameStation(st){const it=st.item,[ox,oz,t]=FURNITURE[it.id].chairs[st.
   Object.assign(st,{yaw,face:yaw+Math.PI,at,rot:v=>v.clone().applyAxisAngle(UP,yaw),chair:at(0,.45),stand:at(0,1.05),approach:at(0,1.35)});}
 function makeStation(item,k){const st={item,k,sty:VAC,vacant:true,cust:null,state:'vacant',plan:null,ops:[],opi:0,timer:0,touched:false,washing:null,sweep:null};frameStation(st);return st;}
 const recep=new Fig({skin:0xc98e66,shirt:0x8a4fc2,pants:0x1d1a26,staffHair:0x2e1d14,bun:true});recep.pos.set(-3.6,0,1.0);recep.yaw=Math.PI/2;recep.mode='sit';recep.seatH=.72;recep.footY=.3;
+// Juno, at the second salon's desk once she is hired
+const recep2=new Fig({skin:0xe7b892,shirt:0x1fa39a,pants:0x1d1a26,staffHair:0x6e4428});recep2.mode='sit';recep2.seatH=.72;recep2.footY=.3;recep2.root.visible=false;
+/** The figure at a salon's front desk. */
+const deskFig=site=>site?recep2:recep;
 // Assistants wash hair at the shampoo booths and sweep up. Each has a figure and at most one job.
 const HELPER_LOOKS={hugo:{skin:0xe7b892,shirt:0xffb15a,pants:0x2a4478,staffHair:0x8f5a2e},jin:{skin:0xc98e66,shirt:0x1d1a26,pants:0x2e2a38,staffHair:0x16110f},tess:{skin:0xf6d6bd,shirt:0xdcd9dc,pants:0x2a4478,staffHair:0xc8642a,long:true}};
 const helpers=game.staff.support.filter(e=>e.effect==='tidy').map(e=>{const fig=new Fig({...HELPER_LOOKS[e.id],apron:e.apron});fig.root.visible=false;fig.pos.set(3.6,0,-.85);fig.yaw=Math.PI;return {e,fig,task:null,idle:V(3.6,0,-.85),idleYaw:Math.PI,booth:null};});
@@ -412,9 +416,9 @@ function toIsland(st){const seat=procSeats.find(s=>!s.occ&&siteOf(s.pos.x)===sit
   const f=c.fig;f.walkTo([...route(f.pos,seat.app[0]),seat.pos],()=>{Object.assign(f,{mode:'sit',yaw:seat.yaw,seatH:seat.h,footY:.06});c.procSeated=true;});
   if(sel===st.i)renderPanel(true);return true;}
 /** While a finished client waits at the island, the front desk brings them whatever the salon offers. */
-function islandTreat(c){if(!game.staff.receptionist.hired||c.islandTreated)return;const drink=game.hospitality.topUp(c);if(drink==null)return;c.islandTreated=true;
+function islandTreat(c){const desk=game.staff.receptionistAt(c.site||0);if(!desk||!desk.hired||c.islandTreated)return;const drink=game.hospitality.topUp(c);if(drink==null)return;c.islandTreated=true;
   if(drink)c.fig.setTool(drink==='juice'?'juice':'cup');
-  const what=tx('hs.'+(drink||'snacks'));popup(tx(drink?'proc.treatDrink':'proc.treatSnack',nm(recepName()),i18n.lang==='en'?what.toLowerCase():what),c.fig.head,'');}
+  const what=tx('hs.'+(drink||'snacks'));popup(tx(drink?'proc.treatDrink':'proc.treatSnack',nm(desk.name),i18n.lang==='en'?what.toLowerCase():what),c.fig.head,'');}
 /** A client whose colour or perm has processed comes back to a chair to finish. */
 function resumeAt(st,c){if(c.procSeat)c.procSeat.occ=null;c.procSeat=null;c.state='toStation';st.cust=c;st.state='await';st.touched=true;
   const f=c.fig;f.walkTo([...route(f.pos,st.approach),st.chair.clone()],()=>{Object.assign(f,{mode:'sit',yaw:st.face,seatH:.55,footY:.17});f.pos.copy(st.chair);c.state='chair';
@@ -461,15 +465,15 @@ function checkout(c,sc){const pay=sc.payment,head=c.fig.head;
     const r=game.finishVisit(c,sc,outcome);const ip=r.influencerPost;if(ip)popup(tx('inf.post.'+ip.tier,ip.followers.toLocaleString(),ip.days,Math.round(ip.demand*100)),head,'big');c.state='paid';leave(c);};
   if(c.influencer){popup(tx('inf.sponsored'),recep.head,'');settle(0);return;}
   if(c.villain==='dasher'){
-    if(game.staff.hasSupport('reception')&&Math.random()<.85){popup(tx('vil.caught',nm(recepName())),recep.head,'big');settle(pay);return;}
+    if(game.staff.hasSupport('reception',c.site||0)&&Math.random()<.85){popup(tx('vil.caught',nm(recepName(c.site||0))),deskFig(c.site||0).head,'big');settle(pay);return;}
     audio.play('bad');popup(tx('vil.dashed',pay),head,'big');game.finishVisit(c,sc,{dashed:true});c.state='paid';c.fig.spd=3.4;leave(c);return;}
   if(c.villain==='complainer'&&sc.satisfaction<.72){audio.play('bad');
     incidents.show({title:tx('inc.complain.t',nm(c.name)),text:tx('inc.complain'),options:[{label:tx('inc.refund',pay),run:()=>settle(0,{refunded:true})},{label:tx('inc.refuse'),run:()=>settle(pay,{refusedRefund:true})}]});return;}
   if(c.villain==='haggler'){const off=Math.max(5,Math.round(pay*.25));
     incidents.show({title:tx('inc.haggle.t',nm(c.name)),text:tx('inc.haggle',off),options:[{label:tx('inc.discount',off),run:()=>settle(pay-off,{discount:off})},{label:tx('inc.fullPrice'),run:()=>settle(pay,{haggleRefused:true})}]});return;}
   settle(pay);}
-const recepName=()=>game.staff.support.find(e=>e.effect==='reception').name;
-function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,...helpers.map(h=>h.fig),...friends,...STY.map(s=>s.fig),...custs.filter(c=>c.state==='wait').map(c=>c.fig)];who.forEach(f=>{if(n||Math.random()<.3)f.clapT=rand(1.2,1.8);});}
+const recepName=(site=0)=>game.staff.receptionistAt(site).name;
+function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,recep2,...helpers.map(h=>h.fig),...friends,...STY.map(s=>s.fig),...custs.filter(c=>c.state==='wait').map(c=>c.fig)];who.forEach(f=>{if(n||Math.random()<.3)f.clapT=rand(1.2,1.8);});}
 
 /* sweeping: assistants keep the floor clean; without them Lia does it between clients */
 const landedClips=()=>clips.filter(c=>c.alive&&c.landed);
@@ -495,7 +499,7 @@ let started=false,paused=false,booted=false,styling=null,savedCamK=0,lastChair=0
 const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
-function syncSupport(){recep.root.visible=game.staff.receptionist.hired;helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
+function syncSupport(){recep.root.visible=game.staff.receptionist.hired;recep2.root.visible=game.layout.branchOpen&&game.staff.receptionistAt(1).hired&&!!deskAt[1];helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
 const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.2,1.38],[2,-.8,1.55],[4,-.8,1.8],[4,-1.8,1.95]];
 function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;annex2Group.visible=t>=4;rear2Group.visible=t>=5;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site===0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
@@ -543,6 +547,7 @@ const BOOTH_ANCHORS={shampooBooth:{seat:[0,.12],seatApp:[0,1.05],face:[0,1],wash
 function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z);return V(p.x,0,p.z);},dir=(it,x,z)=>{const a=L.toWorld(it,0,0),b=L.toWorld(it,x,z);return Math.atan2(b.x-a.x,b.z-a.z);},desk=L.items.find(it=>it.id==='desk'&&siteOf(it.x)===0);
   deskAt=[0,1].map(site=>{const d=L.items.find(it=>it.id==='desk'&&siteOf(it.x)===site);if(!d)return null;const y=d.rotation*Math.PI/2;return {pay:w(d,0,1.15),payYaw:y+Math.PI};});
   if(desk){const yaw=desk.rotation*Math.PI/2;deskInfo={seat:w(desk,0,-.1),seatYaw:yaw,pay:w(desk,0,1.15),payYaw:yaw+Math.PI};recep.pos.copy(deskInfo.seat);recep.yaw=yaw;}
+  {const d2=L.items.find(it=>it.id==='desk'&&siteOf(it.x)===1);if(d2){recep2.pos.copy(w(d2,0,-.1));recep2.yaw=d2.rotation*Math.PI/2;}recep2.root.visible=!!d2&&L.branchOpen&&game.staff.receptionistAt(1).hired;}
   const items=L.items.filter(it=>BOOTH_ANCHORS[it.id]);
   for(let i=booths.length-1;i>=0;i--)if(!items.includes(booths[i].item))booths.splice(i,1);
   items.forEach(it=>{let b=booths.find(x=>x.item===it);if(!b){b={item:it,client:null};booths.push(b);}const A=BOOTH_ANCHORS[it.id];

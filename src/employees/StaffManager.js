@@ -43,6 +43,8 @@ const DEFINITIONS = [
 
 const SUPPORT = [
   { id: 'ruby', name: 'Ruby', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, startsHired: true },
+  // The second salon's front desk: greets its clients and brings in its passers-by. Hired once it opens.
+  { id: 'juno', name: 'Juno', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', site: 1, skills: { cutting: 0, colouring: 0, perming: 0, speed: 58, customerService: 80, marketing: 45 }, salary: 230, hireCost: 400, apron: 0x1fa39a, hair: 0x6e4428, hairdo: 'bob', skin: 0xe7b892 },
   // Assistants wash and sweep. `shampoo` is how good a wash is, `cleaning` how quickly and widely they sweep.
   { id: 'hugo', name: 'Hugo', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 60, customerService: 60, shampoo: 60, cleaning: 60 }, salary: 140, hireCost: 260, apron: 0x5f9e45 },
   { id: 'jin', name: 'Jin', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 74, customerService: 52, shampoo: 45, cleaning: 84 }, salary: 135, hireCost: 240, apron: 0xffb15a },
@@ -64,17 +66,20 @@ export class StaffManager {
     this.owner.hired = true; this.owner.daysEmployed = Infinity;
     this.candidates = DEFINITIONS.map(d => new Employee(d));
     // Front desk and floor help, never at a styling chair. Only the receptionist is there on day one.
-    this.support = SUPPORT.map(d => Object.assign(new Employee(d), { effect: d.effect, hired: !!d.startsHired }));
+    this.support = SUPPORT.map(d => Object.assign(new Employee(d), { effect: d.effect, site: d.site || 0, hired: !!d.startsHired }));
     this.commission = 0; this.dinnerDay = 0; this.seatShuffle = false; this.version = 0;
   }
   get all() { return [this.owner, ...this.candidates]; }
   get hired() { return this.candidates.filter(e => e.hired); }
-  get receptionist() { return this.support.find(e => e.effect === 'reception'); }
+  /** The first salon's receptionist, who also runs the salon's marketing and reviews. */
+  get receptionist() { return this.receptionistAt(0); }
+  /** The receptionist at a salon's front desk. */
+  receptionistAt(site) { return this.support.find(e => e.effect === 'reception' && e.site === site); }
   /** Hired stylists who are in today rather than on leave. */
   working(day) { return this.hired.filter(e => !e.onLeave(day)); }
   get payroll() { return [...this.hired, ...this.support.filter(e => e.hired)].reduce((sum, e) => sum + e.salary, 0); }
   /** True when someone with this job is hired and at their post (the receptionist can be out filming). */
-  hasSupport(effect) { return this.support.some(e => e.hired && !e.away && e.effect === effect); }
+  hasSupport(effect, site = null) { return this.support.some(e => e.hired && !e.away && e.effect === effect && (site == null || e.site === site)); }
   find(id) { return [...this.all, ...this.support].find(e => e.id === id); }
   hire(employee) { if (employee.hired || !this.economy.spend('recruiting', employee.hireCost)) return false; Object.assign(employee, { hired: true, daysEmployed: 0, stress: 0, leaveFrom: 0, leaveTo: 0 }); this.version++; return true; }
   fire(employee) { if (!employee.hired || employee === this.owner) return false; employee.hired = false; employee.status = 'idle'; this.version++; return true; }
