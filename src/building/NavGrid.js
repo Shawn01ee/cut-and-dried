@@ -3,7 +3,9 @@ import { POSTS, inRect } from './SalonLayout.js';
 
 // The only links through the front wall: the two cells either side of the door.
 const DOOR = [[-2.25, 2.75, -2.25, 3.45], [-1.75, 2.75, -1.75, 3.45]];
-const ENTRANCE = [-2.25, 2.75];
+import { BRANCH_X } from './SalonLayout.js';
+// The doorway of each salon, where people walk in from the street.
+const ENTRANCES = [[-2.25, 2.75], [BRANCH_X - 2.25, 2.75]];
 
 /** Walking routes over the floor grid that go around furniture, plus checks that a layout keeps everything reachable. */
 export class NavGrid {
@@ -58,9 +60,9 @@ export class NavGrid {
 
   /** Cells people can walk to from the door with `items` in place, or null when the door itself is blocked. */
   #reach(items) {
-    const blocked = this.#blocked(items), start = this.layout.cellAt(...ENTRANCE);
-    if (!start || blocked.has(start)) return null;
-    const reached = new Set([start]), queue = [start];
+    const blocked = this.#blocked(items), starts = ENTRANCES.map(e => this.layout.cellAt(...e)).filter(c => c && this.layout.isOpen(c) && !blocked.has(c));
+    if (!starts.length) return null;
+    const reached = new Set(starts), queue = [...starts];
     while (queue.length) for (const [n] of this.#neighbours(queue.shift(), blocked)) if (!reached.has(n)) { reached.add(n); queue.push(n); }
     return reached;
   }

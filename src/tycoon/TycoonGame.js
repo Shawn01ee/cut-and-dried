@@ -4,7 +4,6 @@ import { SaveManager } from '../core/SaveManager.js';
 import { Economy } from './Economy.js';
 import { Reputation } from './Reputation.js';
 import { Progression } from './Progression.js';
-import { Franchise } from './Franchise.js';
 import { OperatingCosts } from './OperatingCosts.js';
 import { Marketing } from './Marketing.js';
 import { ReviewBoard } from './ReviewBoard.js';
@@ -20,7 +19,11 @@ import { rollVillain } from '../customers/Villains.js';
 import { SalonLayout } from '../building/SalonLayout.js';
 import { rand, clamp } from '../core/math.js';
 
-const PRICE_MULTIPLIER = [.8, 1, 1.5], PRICE_DEMAND = [1.3, 1, .7];
+const PRICE_MULTIPLIER = [.8, 1, 1.5, 2.2], PRICE_DEMAND = [1.3, 1, .7, .45];
+/** Opening the second salon: needs level 5, the first salon two expansions big and a good week's takings, then the money. */
+export const BRANCH = { cost: 30000, weekRevenue: 9000, tier: 2 };
+// What the old franchise branches cost, to pay them back to saves from before the second salon.
+const OLD_BRANCH_COST = { downtown: 10000, premium: 18000, barber: 24000, colour: 32000 };
 // People who walk past a salon nobody has heard of yet and come in, per eight hours.
 const WALK_INS = 2.5;
 const MATERIALS = { colour: 18, wave: 14 }, CARD_FEE = .016, SPA_FEE = 45;
@@ -45,7 +48,7 @@ export class TycoonGame {
     this.progression = new Progression(this.bus);
     this.staff = new StaffManager(this.economy);
     this.layout = new SalonLayout(); this.layout.resetToDefault();
-    this.franchise = new Franchise(this.economy);
+    this.recentRevenue = [];
     this.operatingCosts = new OperatingCosts(this.economy, this.staff, this.layout, this.progression, this.clock);
     this.marketing = new Marketing(this.economy);
     this.staff.extraTrainingDiscount = () => this.has('academy') ? .3 : 0;
@@ -67,15 +70,30 @@ export class TycoonGame {
   /** 0 for Monday up to 6 for Sunday; day 1 is a Monday. */
   get weekday() { return (this.clock.day - 1) % 7; }
   get isSunday() { return this.weekday === 6; }
-  get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned }; }
+  get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned, branch: this.layout.branchOpen }; }
+  /** Revenue over the last week of opening days. */
+  get weekRevenue() { return this.recentRevenue.reduce((a, b) => a + b, 0); }
+  /** Where the salon stands on opening the second one. */
+  get branchStatus() {
+    const checks = [
+      { k: 'level', ok: this.isUnlocked('branches'), args: [5] },
+      { k: 'size', ok: this.layout.tier >= BRANCH.tier, args: [BRANCH.tier + 1, this.layout.tier + 1] },
+      { k: 'revenue', ok: this.weekRevenue >= BRANCH.weekRevenue, args: [BRANCH.weekRevenue.toLocaleString(), Math.round(this.weekRevenue).toLocaleString()] },
+    ];
+    return { checks, cost: BRANCH.cost, ready: checks.every(c => c.ok) && this.economy.canAfford(BRANCH.cost) };
+  }
+  openBranch() {
+    if (this.layout.branchOpen || !this.branchStatus.ready || !this.economy.spend('branch', BRANCH.cost)) return false;
+    this.layout.openBranch(); this.updateProgress(); return true;
+  }
   /**
    * Where clients come from, per eight hours: a few passers-by, then more as reputation, comfort, followers and
    * regulars grow (`add`), scaled by prices, marketing, reviews and the rival (`mult`).
    */
   get demandParts() {
     return {
-      add: { walk: WALK_INS, rep: this.reputation.value * .25, comfort: this.comfort * .15, followers: this.marketing.followerClients, regulars: Math.min(15, this.regulars * .12) },
-      mult: { price: PRICE_DEMAND[this.priceLevel], marketing: this.marketing.demandMultiplier, reviews: this.reviews.demandMultiplier, rival: 1 - this.rival.pull(this.standing) },
+      add: { walk: WALK_INS, branch: this.layout.branchOpen ? WALK_INS + this.comfortAt(1) * .15 : 0, rep: this.reputation.value * .25, comfort: this.comfort * .15, followers: this.marketing.followerClients, regulars: Math.min(15, this.regulars * .12) },
+      mult: { price: PRICE_DEMAND[this.priceLevel], marketing: this.marketing.demandMultiplier, reviews: this.reviews.demandMultiplier, rival: 1 - this.rival.pull(this.standing), award: this.isUnlocked('award') ? 1.1 : 1 },
     };
   }
   /** Roughly how many clients want to come per eight hours. There is no cap: seats and chairs decide how many can be served. */
@@ -96,7 +114,7 @@ export class TycoonGame {
     const junior = this.synergies.reduce((n, s) => n + (s.juniorBoost || 0), 0);
     this.staff.candidates.forEach(e => { e.boost = e.hired ? this.staff.baseBoost + (e.rank === 'junior' ? junior : 0) : 0; });
   }
-  get #valueContext() { return { reputation: this.reputation.value, followers: this.marketing.followers, chairs: this.layout.chairs, branches: this.franchise.branches.filter(b => b.open).length }; }
+  get #valueContext() { return { reputation: this.reputation.value, followers: this.marketing.followers, chairs: this.layout.chairs, branches: this.layout.branchOpen ? 1 : 0 }; }
   get valuation() { return this.finance.valuation(this.#valueContext); }
   /** The parts of the salon's value: [part, counted from, dollars]. */
   get valuationParts() { return this.finance.valuationParts(this.#valueContext); }
@@ -107,14 +125,16 @@ export class TycoonGame {
   get marketingPower() { const r = this.staff.receptionist; return r.hired ? .75 + (r.skills.marketing || 0) / 200 : .5; }
   /** Furniture comfort plus a tidy floor while the assistant is employed. */
   /** Furniture comfort, plus a tidy floor while an assistant is employed, minus hair left lying on the floor. */
-  get comfort() { return this.layout.comfort + (this.staff.hasSupport('tidy') ? 2 : 0) - Math.min(4, Math.floor(this.dirt / 150)); }
+  get comfort() { return this.comfortAt(0); }
+  /** Comfort at one salon: its furniture, a tidy floor while an assistant is employed, minus hair left lying around. */
+  comfortAt(site) { return this.layout.comfortAt(site) + (this.staff.hasSupport('tidy') ? 2 : 0) - Math.min(4, Math.floor(this.dirt / 150)); }
   get averageSatisfaction() { return this.served ? this.satisfactionSum / this.served : 0; }
   /** How good a reel filmed right now looks: the latest finished style, the salon and its rating. */
   has(id) { return this.layout.items.some(it => it.id === id); }
   get reelQuality() { return clamp(.1 + this.synergies.reduce((n, x) => n + (x.reel || 0), 0) + (this.has('photoZone') ? .12 : 0) + Math.min(.2, this.staff.hired.filter(e => e.perk === 'trend').length * .1) + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
   /** Chance that someone posts a fake one-star review today; a bigger audience attracts more of them. */
   get trollChance() { return this.progression.level < 2 ? 0 : Math.min(.45, .12 + this.marketing.followers / 4000); }
-  updateProgress() { this.progression.update(this.context); this.syncMissions(); this.#applySynergyBoosts(); }
+  updateProgress() { this.progression.update(this.context); this.layout.branchChairs = this.isUnlocked('branchGrow') ? 9 : 6; this.syncMissions(); this.#applySynergyBoosts(); }
   isUnlocked(feature) { return this.progression.isUnlocked(feature); }
   /** Clients arrive at the same rate whatever the hours, so a longer day brings more of them. `dailyDemand` is per eight hours. */
   nextArrival() { return rand(.8, 1.2) * this.clock.hourLength * 8 / this.dailyDemand; }
@@ -129,20 +149,22 @@ export class TycoonGame {
   }
   shiftHours(which, step) { if (!this.canShiftHours(which, step)) return false; const h = [...this.plannedHours]; h[which] += step; this.setHours(...h); return true; }
   /** A client for the main salon. Branch clients (`walkIn` false) are never influencers or difficult clients. */
-  newCustomer(usedNames, walkIn = true) {
+  /** A client for salon `site`. Branch clients (`walkIn` false) are never influencers or difficult clients. */
+  newCustomer(usedNames, walkIn = true, site = 0) {
     const influencer = walkIn ? this.marketing.takeInfluencer() : null;
     const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
-      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfort * .03) * (this.staff.hasSupport('reception') ? 1.15 : 1),
+      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (site === 0 && this.staff.hasSupport('reception') ? 1.15 : 1),
       villain: walkIn && !influencer ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor,
     });
+    c.site = site;
     if (c.vip) { const k = this.synergies.reduce((m, x) => m * (x.vipPatience || 1), 1); c.pat *= k; c.maxPat *= k; }
     return c;
   }
   serviceProfileOf(worker) { return worker.serviceProfile(this.layout.speedBonus); }
   chargeMaterials(ops) { ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', MATERIALS[op.type]); }); }
   completeService(customer, worker, byOwner) {
-    const syn = this.synergies, result = this.evaluator.evaluate(customer, worker, this.comfort, {
+    const comfort = this.comfortAt(customer.site || 0), syn = this.synergies, result = this.evaluator.evaluate(customer, worker, comfort, {
       satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0), calm: syn.some(s => s.calm),
     });
     if (customer.vip) result.payment = Math.round(result.payment * syn.reduce((k, s) => k * (s.vipPay || 1), 1));
@@ -151,7 +173,7 @@ export class TycoonGame {
     if (customer.vip && customer.vipRoom) result.payment = Math.round(result.payment * 1.25);
     // A head spa is an add-on the client pays for.
     if (customer.spa && !customer.influencer) result.payment += SPA_FEE;
-    const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + this.comfort * .03 : 1);
+    const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + comfort * .03 : 1);
     this.reputation.add(gain); worker.recordService(result.satisfaction, result.payment);
     if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate);
     // A mentor on the team helps everyone else learn faster.
@@ -260,8 +282,8 @@ export class TycoonGame {
     };
   }
   closeDay() {
-    const e = this.economy, sales = this.layout.dailySales, branches = this.franchise.collectDay();
-    if (sales) e.earn('products', sales); if (branches) e.earn('branches', branches);
+    const e = this.economy, sales = this.layout.dailySales * (this.isUnlocked('brandLine') ? 2 : 1);
+    if (sales) e.earn('products', sales);
     this.operatingCosts.accrue(1); this.#autoReply();
     this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours);
     const money = this.finance.closeDay(e.dailyProfit, e.dailyRevenue, this.clock.day);
@@ -276,15 +298,19 @@ export class TycoonGame {
       followers: { now: this.marketing.followers, change: this.marketing.followers - this.followersAtDayStart }, incidents: { ...this.incidents }, served: this.servedToday,
     };
     this.weekLog.push(this.report);
+    this.recentRevenue.push(this.report.totalRevenue); if (this.recentRevenue.length > 6) this.recentRevenue.shift();
     this.updateProgress(); this.save(); return this.report;
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, franchise: this.franchise, marketing: this.marketing, reviews: this.reviews, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog };
+    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
-    this.served = d.served; this.satisfactionSum = d.satisfactionSum; this.priceLevel = d.priceLevel; this.franchise.restore(d.franchise);
+    this.served = d.served; this.satisfactionSum = d.satisfactionSum; this.priceLevel = d.priceLevel; this.recentRevenue = d.recentRevenue || [];
+    // The old self-running branches are gone: pay back what they cost.
+    const refund = (d.franchise || []).reduce((sum, id) => sum + (OLD_BRANCH_COST[id] || 0), 0);
+    if (refund) { this.economy.cash += refund; this.news.push('fin:branchRefund'); }
     d.staff.forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     (d.support || []).forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     this.layout.restore(d.layout);

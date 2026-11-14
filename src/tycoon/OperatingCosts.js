@@ -1,7 +1,7 @@
 import { FURNITURE } from '../building/FurnitureCatalog.js';
 
 // Daily figures in AUD, roughly in line with a Melbourne shopfront.
-const RENT_BY_LEVEL = [0, 160, 190, 240, 310, 390], RENT_PER_EXPANSION = 60;
+const RENT_BY_LEVEL = [0, 160, 190, 240, 310, 390, 450, 520], RENT_PER_EXPANSION = 60, BRANCH_RENT = 260;
 const UTILITIES_BASE = 25, UTILITIES_PER_CHAIR = 12, MAINTENANCE_RATE = .01;
 // A thrifty manager (Lia's talent) keeps utilities and upkeep down.
 export const THRIFT = .85;
@@ -25,7 +25,7 @@ export class OperatingCosts {
   /** A day off: rent and upkeep still fall due, but there are no wages or running costs. */
   chargeDayOff() { const b = this.breakdown; for (const k of ['rent', 'maintenance']) if (b[k]) this.economy.charge(k, b[k]); }
   /** Rent is set each morning, so a level-up or expansion only raises it from the next day. */
-  startDay() { this.#charged = {}; this.#rent = RENT_BY_LEVEL[this.progression.level] + RENT_PER_EXPANSION * this.layout.tier; }
+  startDay() { this.#charged = {}; this.#rent = RENT_BY_LEVEL[this.progression.level] + RENT_PER_EXPANSION * this.layout.tier + (this.layout.branchOpen ? BRANCH_RENT : 0); }
   /** Charges whatever is due for the share of the day worked. Safe to call repeatedly. */
   accrue(fraction) {
     for (const [category, daily] of Object.entries(this.breakdown)) {

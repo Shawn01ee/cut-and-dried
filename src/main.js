@@ -14,10 +14,9 @@ import { FurnitureView } from './rendering/FurnitureView.js';
 import { TycoonUI } from './ui/TycoonUI.js';
 import { PROCESS_MINUTES } from './employees/Employee.js';
 import { nameColour, rankMark } from './ui/nameStyle.js';
-import { BranchScene } from './rendering/BranchScene.js';
 import { NavGrid } from './building/NavGrid.js';
 import { paintSign } from './rendering/pixelFont.js';
-import { BRANCH_LAYOUT } from './building/SalonLayout.js';
+import { BRANCH_X, siteOf } from './building/SalonLayout.js';
 import { FURNITURE } from './building/FurnitureCatalog.js';
 import { CHANNELS } from './tycoon/Marketing.js';
 import { AudioManager } from './audio/AudioManager.js';
@@ -338,10 +337,9 @@ const helpers=game.staff.support.filter(e=>e.effect==='tidy').map(e=>{const fig=
 const friends=[];
 const bench=[];
 const terr=[],procSeats=[];
-const DOOR_IN=V(-2,0,2.45),DOOR_OUT=V(-2,0,3.6);
-const STREET=V(4.1,0,4.7),STREET_DOOR=V(-2,0,4.4);
-const ROUTE_IN=[STREET_DOOR,DOOR_OUT,DOOR_IN];
-const ROUTE_OUT=[DOOR_IN,DOOR_OUT,STREET_DOOR,STREET];
+const DOOR_IN=V(-2,0,2.45);
+/** Each salon's way in from the street: where clients appear, the street door, just outside and just inside. */
+const SITE_DOORS=[0,BRANCH_X].map(x=>({street:V(x+4.1,0,4.7),door:V(x-2,0,4.4),out:V(x-2,0,3.6),inn:V(x-2,0,2.45)}));
 const furnitureView=new FurnitureView(world,SB,terr,game.layout,LAMP,procSeats),nav=new NavGrid(game.layout);
 const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex)=>nav.wouldConnect(c,ex),blockedBy:(c,ex)=>nav.blockedBy(c,ex),canModify:it=>canModify(it),canMove:it=>canMove(it),queueMove:(it,x,z,r)=>queueMove(it,x,z,r),canSell:it=>canSell(it),onChange:()=>{syncFurniture();renderPanel(true);}});
 /** A walk to `to` that goes around the furniture. */
@@ -354,31 +352,34 @@ const colName=o=>o.col.t==='nat'?tx('naturalOf',natName(o.col.i)):wantName(o.col
 function orderText(o){return `${tx('shape.'+o.shape)} · ${o.L} cm (${lenDesc(o.L)}) · ${colName(o)} · ${tx('wave.'+WAVES[o.wave])}`;}
 function spawnCustomer(){
   if(custs.filter(c=>c.state!=='gone').length>=40)return;
-  const c=game.newCustomer(new Set(custs.map(q=>q.name))),fig=new Fig({skin:pick(SKINS),shirt:c.villain?VILLAIN_SHIRT:pick(SHIRTS),pants:c.villain?0x0d0b14:pick(PANTS),beard:c.look.beard});
-  c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(STREET);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
+  const site=pickSite(),D=SITE_DOORS[site],c=game.newCustomer(new Set(custs.map(q=>q.name)),true,site),fig=new Fig({skin:pick(SKINS),shirt:c.villain?VILLAIN_SHIRT:pick(SHIRTS),pants:c.villain?0x0d0b14:pick(PANTS),beard:c.look.beard});
+  c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(D.street);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');
-  fig.walkTo(ROUTE_IN,()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');const seat=bench.find(s=>!s.occ)||terr.find(s=>!s.occ);
+  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
     seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
       // Drinks and snacks are served as soon as the client sits down.
       const drink=game.hospitality.serve(c);if(drink)fig.setTool(drink==='juice'?'juice':'cup');});});
 }
+/** Which salon a new client walks into: in proportion to the stylists at each salon's chairs. */
+function pickSite(){if(!game.layout.branchOpen)return 0;const w=[0,1].map(s=>stations.filter(st=>!st.vacant&&siteOf(st.item.x)===s).length),t=w[0]+w[1];return t&&Math.random()*t>=w[0]?1:0;}
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
-function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos;let pts;
-  pts=(p.x>-4.1&&p.x<(game.layout.tier>=4?12.1:game.layout.tier>=2?8.1:4.1)&&p.z<3.1&&p.z>(game.layout.tier>=5?-9.1:game.layout.tier>=3?-7.1:game.layout.tier>=1?-5.1:-3.1))?[...route(p,DOOR_IN),DOOR_OUT,STREET_DOOR,STREET]:[STREET_DOOR,STREET];
-  if(why==='full')pts=[DOOR_OUT,STREET_DOOR,STREET];
+function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos,site=c.site||0,D=SITE_DOORS[site],T=game.layout.tier;
+  const inside=site?Math.abs(p.x-BRANCH_X)<4.1&&p.z<3.1&&p.z>-3.1:p.x>-4.1&&p.x<(T>=4?12.1:T>=2?8.1:4.1)&&p.z<3.1&&p.z>(T>=5?-9.1:T>=3?-7.1:T>=1?-5.1:-3.1);
+  let pts=inside?[...route(p,D.inn),D.out,D.door,D.street]:[D.door,D.street];
+  if(why==='full')pts=[D.out,D.door,D.street];
   f.walkTo(pts,()=>{c.state='gone';c.fadeOut=1;});}
 function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=c;st.state='await';st.touched=false;st.byOwner=false;st.worker=null;const f=c.fig;
   const start=seat?seat.app[0]:f.pos.clone(),lead=seat?[seat.app[0]]:[],toChair=from=>[...route(from,st.approach),st.chair.clone()];
   // Every client has a shampoo first when the salon has somewhere to do it.
-  if(booths.length&&!c.washed)shampoo(c,st,lead,start,()=>f.walkTo(toChair(f.pos),arrive));else f.walkTo([...lead,...toChair(start)],arrive);
+  if(booths.some(b=>siteOf(b.item.x)===siteOf(st.item.x))&&!c.washed)shampoo(c,st,lead,start,()=>f.walkTo(toChair(f.pos),arrive));else f.walkTo([...lead,...toChair(start)],arrive);
   function arrive(){f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);}
   if(sel===st.i)renderPanel(true);}
 const booths=[],washes=[];
-const freeBooth=()=>booths.find(b=>!b.client&&!pendingMoves.has(b.item)&&!queuedMoves.has(b.item)),freeHelper=()=>helpers.find(h=>h.fig.root.visible&&!h.task);
+const freeBooth=site=>booths.find(b=>!b.client&&siteOf(b.item.x)===site&&!pendingMoves.has(b.item)&&!queuedMoves.has(b.item)),freeHelper=site=>helpers.find(h=>h.fig.root.visible&&!h.task&&siteOf(h.idle.x)===site);
 /** Shampoo at a free booth: a free assistant washes, otherwise the client's own stylist steps away from the chair to do it. */
-function shampoo(c,st,lead,start,then){const b=freeBooth(),h=freeHelper(),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo',game.speedFor('shampoo'))*game.clock.hourLength/60};
+function shampoo(c,st,lead,start,then){const site=siteOf(st.item.x),b=freeBooth(site),h=freeHelper(site),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo',game.speedFor('shampoo'))*game.clock.hourLength/60};
   b.client=c;c.inWash=true;if(h)h.task={kind:'wash',T};else st.washing=T;washes.push(T);
   washer.handL=washer.handR=null;washer.setTool(null);washer.walkTo(route(washer.pos,b.washAt),()=>{washer.yaw=b.washYaw;T.ready=true;});
   c.fig.walkTo([...lead,...route(start,b.seatApp),b.seat.clone()],()=>{Object.assign(c.fig,{mode:'sit',yaw:b.seatYaw,seatH:.5,footY:.2,tilt:-.45});c.fig.pos.copy(b.seat);T.seated=true;audio.play('swish');});}
@@ -402,17 +403,18 @@ function timeOps(ops,worker){ops.forEach(o=>{o.minutes=o.type==='process'?Math.r
  * A processing client moves to a free seat at the styling island, so the chair and stylist are free for someone else.
  * They come back to a chair when it is done. Returns false when no island seat is free.
  */
-function toIsland(st){const seat=procSeats.find(s=>!s.occ);if(!seat)return false;
+function toIsland(st){const seat=procSeats.find(s=>!s.occ&&siteOf(s.pos.x)===siteOf(st.item.x));if(!seat)return false;
   const c=st.cust,op=st.ops[st.opi],w=st.worker;seat.occ=c;
   Object.assign(c,{procSeat:seat,state:'process',procLeft:op.dur-op.t,procTotal:op.dur,procSeated:false,resume:{sty:st.sty,plan:st.plan,ops:st.ops.slice(st.opi+1)}});
   popup(tx('proc.toIsland',tx('proc.of.'+op.of),Math.ceil(op.minutes*(1-clamp(op.t/op.dur)))),c.fig.head,'');
   st.cust=null;st.state='free';st.ops=[];st.opi=0;w.fig.setTool(null);w.fig.handL=w.fig.handR=null;
-  if(w!==st.sty){const home=ownerStation();w.fig.walkTo(route(w.fig.pos,home?home.stand:OWNER_IDLE),()=>w.fig.yaw=home?home.face:Math.PI);}
+  if(w!==st.sty){const home=ownerStation();goTo(w.fig,home?home.stand:OWNER_IDLE,home?home.face:Math.PI);}
   const f=c.fig;f.walkTo([...route(f.pos,seat.app[0]),seat.pos],()=>{Object.assign(f,{mode:'sit',yaw:seat.yaw,seatH:seat.h,footY:.06});c.procSeated=true;});
   if(sel===st.i)renderPanel(true);return true;}
 /** While a finished client waits at the island, the front desk brings them whatever the salon offers. */
 function islandTreat(c){if(!game.staff.receptionist.hired||c.islandTreated)return;const drink=game.hospitality.topUp(c);if(drink==null)return;c.islandTreated=true;
-  if(drink)c.fig.setTool(drink==='juice'?'juice':'cup');popup(tx('proc.treat',nm(recepName())),c.fig.head,'');}
+  if(drink)c.fig.setTool(drink==='juice'?'juice':'cup');
+  const what=tx('hs.'+(drink||'snacks'));popup(tx(drink?'proc.treatDrink':'proc.treatSnack',nm(recepName()),i18n.lang==='en'?what.toLowerCase():what),c.fig.head,'');}
 /** A client whose colour or perm has processed comes back to a chair to finish. */
 function resumeAt(st,c){if(c.procSeat)c.procSeat.occ=null;c.procSeat=null;c.state='toStation';st.cust=c;st.state='await';st.touched=true;
   const f=c.fig;f.walkTo([...route(f.pos,st.approach),st.chair.clone()],()=>{Object.assign(f,{mode:'sit',yaw:st.face,seatH:.55,footY:.17});f.pos.copy(st.chair);c.state='chair';
@@ -450,8 +452,8 @@ function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.se
   c.fig.walkTo([st.at(.55,1.2)],()=>{c.fig.yaw=st.face;audio.play(sc.all>=.6?'happy':'sad');
     popup(`${Math.round(sc.all*100)}% · ${tx(WORDS.find(w=>sc.all>=w[0])[1])}`,c.fig.head,'big');
     later(.6,()=>{c.fig.yaw=st.face-Math.PI*.85;clapAll(sc.all);popup(tx('chairPct',st.i+1,Math.round(sc.all*100)),recep.head,'');});
-    later(2.8,()=>{st.state='free';st.cust=null;{const home=s===st.sty?st:ownerStation();sf.walkTo(route(sf.pos,home?home.stand:OWNER_IDLE),()=>sf.yaw=home?home.face:Math.PI);}if(sel===st.i)renderPanel(true);
-      c.fig.walkTo(route(c.fig.pos,deskInfo.pay),()=>{c.fig.yaw=deskInfo.payYaw;later(1.3,()=>checkout(c,sc));});});});
+    later(2.8,()=>{st.state='free';st.cust=null;{const home=s===st.sty?st:ownerStation();goTo(sf,home?home.stand:OWNER_IDLE,home?home.face:Math.PI);}if(sel===st.i)renderPanel(true);
+      const dk=deskAt[c.site||0]||deskAt[0];c.fig.walkTo(route(c.fig.pos,dk.pay),()=>{c.fig.yaw=dk.payYaw;later(1.3,()=>checkout(c,sc));});});});
   if(sel===st.i)renderPanel(true);}
 /** Paying at the desk. Difficult clients may haggle, demand a refund or run off without paying. */
 function checkout(c,sc){const pay=sc.payment,head=c.fig.head;
@@ -473,19 +475,19 @@ function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,...hel
 const landedClips=()=>clips.filter(c=>c.alive&&c.landed);
 /** Sweeping time and reach follow `cleaning` (0 to 100); Lia and stylists sweep at 50. */
 const sweepTime=cleaning=>3.2*(1.5-cleaning/100);
-function startSweep(fig,cleaning=50){const landed=landedClips();if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
-  const at=a.clone().add(V(.5,0,.45));at.x=clamp(at.x,-3.6,t>=4?11.6:t>=2?7.6:3.6);at.z=clamp(at.z,t>=5?-8.6:t>=3?-6.6:t>=1?-4.6:-2.6,2.6);
+function startSweep(fig,cleaning=50){const S=siteOf(fig.pos.x),landed=landedClips().filter(c=>siteOf(c.p.x)===S);if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
+  const at=a.clone().add(V(.5,0,.45));if(S){at.x=clamp(at.x,BRANCH_X-3.6,BRANCH_X+3.6);at.z=clamp(at.z,-2.6,2.6);}else{at.x=clamp(at.x,-3.6,t>=4?11.6:t>=2?7.6:3.6);at.z=clamp(at.z,t>=5?-8.6:t>=3?-6.6:t>=1?-4.6:-2.6,2.6);}
   const job={kind:'sweep',phase:'walk',fig,aim:a,t:sweepTime(cleaning),r:.8+cleaning/250};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
 /** Advances a sweeping job; true once the patch of floor is clean. */
 function updateSweep(job,dt){if(job.phase!=='work')return false;const f=job.fig,a=job.aim;job.t-=dt;f.toolAim=V(a.x+Math.sin(simT*5)*.35,0,a.z+Math.cos(simT*2.5)*.12);
   f.handR=f.pos.clone().add(V(0,1.02,0)).addScaledVector(fwd(f.yaw),.22).addScaledVector(rgt(f.yaw),.1);f.handL=f.handR.clone().add(V(0,-.22,0)).addScaledVector(fwd(f.yaw),.05);
   if(job.t>0)return false;clips.forEach(c=>{if(c.alive&&c.landed&&Math.hypot(c.p.x-a.x,c.p.z-a.z)<job.r)c.alive=false;});f.handL=f.handR=null;f.toolAim=null;f.setTool(null);return true;}
-function helpersUpdate(dt){const mess=landedClips().length;
+function helpersUpdate(dt){const messAt=site=>landedClips().filter(c=>siteOf(c.p.x)===site).length;
   helpers.forEach(h=>{const f=h.fig,T=h.task;if(!f.root.visible)return;
     if(T&&T.kind==='wash')return;
     if(T&&T.kind==='sweep'){if(updateSweep(T,dt))h.task=null;return;}
     // A keen cleaner picks up the broom sooner.
-    if(mess>40-h.e.cleaning/4&&!helpers.some(o=>o.task&&o.task.kind==='sweep')){h.task=startSweep(f,h.e.cleaning);if(h.task)return;}
+    if(messAt(siteOf(h.idle.x))>40-h.e.cleaning/4&&!helpers.some(o=>o.task&&o.task.kind==='sweep'&&siteOf(o.idle.x)===siteOf(h.idle.x))){h.task=startSweep(f,h.e.cleaning);if(h.task)return;}
     if(!f.path.length&&f.pos.distanceTo(h.idle)>.05){f.handL=f.handR=null;f.walkTo(route(f.pos,h.idle),()=>f.yaw=h.idleYaw);}});}
 
 /* ================= time, weather, timers ================= */
@@ -495,26 +497,30 @@ const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.w
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
 function syncSupport(){recep.root.visible=game.staff.receptionist.hired;helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
 const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.2,1.38],[2,-.8,1.55],[4,-.8,1.8],[4,-1.8,1.95]];
-function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;annex2Group.visible=t>=4;rear2Group.visible=t>=5;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site<0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
+function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;annex2Group.visible=t>=4;rear2Group.visible=t>=5;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site===0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
 function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='free')return;if(!game.staff.fire(e))return;e.fig.root.visible=false;if(st)vacate(st);}
 /** A stylist leaves their chair: Lia takes it if she has none, otherwise it stands empty. */
 function vacate(st){const e=st.sty;if(e===OWNER||st.vacant)return;e.fig.root.visible=false;
-  if(OWNER.floating){OWNER.floating=false;st.sty=OWNER;st.state='free';OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
+  if(OWNER.floating){OWNER.floating=false;st.sty=OWNER;st.state='free';goToChair(OWNER.fig,st);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
+/** A stylist heads to a chair: a walk inside one salon, or straight there when the chair is at the other salon. */
+/** Staff walk within a salon; going to the other salon they simply arrive there. */
+function goTo(f,pos,face){if(siteOf(f.pos.x)!==siteOf(pos.x)){f.path=[];f.pos.copy(pos);f.yaw=face;}else f.walkTo(route(f.pos,pos),()=>f.yaw=face);}
+function goToChair(f,st){goTo(f,st.stand,st.face);}
 /** A chair nobody is being served at, so its stylist can change places. */
 const seatFree=st=>!st.cust&&!st.washing&&!st.sweep&&!st.filming&&(st.state==='free'||st.state==='vacant')&&!(styling&&styling.station===st);
 /** Two chairs trade stylists. */
 function swapSeats(a,b){if(a===b||!seatFree(a)||!seatFree(b))return false;const ea=a.sty,va=a.vacant;
   Object.assign(a,{sty:b.sty,vacant:b.vacant,state:b.vacant?'vacant':'free'});Object.assign(b,{sty:ea,vacant:va,state:va?'vacant':'free'});
-  for(const st of [a,b])if(!st.vacant){const f=st.sty.fig;f.walkTo(route(f.pos,st.stand),()=>f.yaw=st.face);}return true;}
+  for(const st of [a,b])if(!st.vacant)goToChair(st.sty.fig,st);return true;}
 /** The player moves a stylist to chair `i`, trading places with whoever sits there. */
 function moveToSeat(e,i){const to=stations[i],from=stations.find(s=>s.sty===e);if(!to||!from||from===to)return false;
   if(!swapSeats(from,to)){popup(tx('seat.busy'),recep.head,'');audio.play('deny');return false;}return true;}
 /** Each morning: shuffle the chairs if that is the policy, then a VIP specialist on duty takes the VIP room. */
 function morningSeats(){if(game.staff.seatShuffle){const sts=stations.filter(s=>!s.vacant&&seatFree(s)),people=sts.map(s=>s.sty);
     for(let i=people.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[people[i],people[j]]=[people[j],people[i]];}
-    sts.forEach((s,k)=>{s.sty=people[k];const f=s.sty.fig;f.walkTo(route(f.pos,s.stand),()=>f.yaw=s.face);});}
+    sts.forEach((s,k)=>{s.sty=people[k];goToChair(s.sty.fig,s);});}
   const room=stations.find(s=>s.item.id==='vipRoom');if(!room||room.sty.perk==='vip')return;
   const vip=stations.find(s=>s!==room&&!s.vacant&&s.sty.perk==='vip');if(vip)swapSeats(room,vip);}
 /** Each morning: stylists on leave give up their chair and stylists who are in take any free one. */
@@ -531,11 +537,12 @@ function syncStations(){const items=game.layout.items.filter(it=>FURNITURE[it.id
     if(!st){st=makeStation(it,k);stations.push(st);if(!OWNER.floating&&!ownerStation()){st.sty=OWNER;st.vacant=false;st.state='free';if(!started){OWNER.fig.pos.copy(st.stand);OWNER.fig.yaw=st.face;}else OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}return;}
     frameStation(st);const f=st.sty.fig;if(f&&!st.cust&&!st.washing&&!st.sweep&&(st.state==='free'||st.state==='vacant'))f.walkTo(route(f.pos,st.stand),()=>f.yaw=st.face);}));
   stations.forEach((s,i)=>{s.i=i;});}
-let deskInfo=null;
+let deskInfo=null,deskAt=[];
 // Where people stand and sit at a shampoo booth (or an older basin), in the item's own frame.
 const BOOTH_ANCHORS={shampooBooth:{seat:[0,.12],seatApp:[0,1.05],face:[0,1],washAt:[.42,-.2],washFace:[-1,0],idle:[.45,1.15]},spaBooth:{seat:[0,.12],seatApp:[0,1.05],face:[0,1],washAt:[.42,-.2],washFace:[-1,0],idle:[.45,1.15]},
   basin:{seat:[-.45,-.1],seatApp:[-.45,.75],face:[-1,0],washAt:[.05,.5],washFace:[0,-1],idle:[.1,.75]}};
-function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z);return V(p.x,0,p.z);},dir=(it,x,z)=>{const a=L.toWorld(it,0,0),b=L.toWorld(it,x,z);return Math.atan2(b.x-a.x,b.z-a.z);},desk=L.items.find(it=>it.id==='desk');
+function syncAnchors(){const L=game.layout,w=(it,x,z)=>{const p=L.toWorld(it,x,z);return V(p.x,0,p.z);},dir=(it,x,z)=>{const a=L.toWorld(it,0,0),b=L.toWorld(it,x,z);return Math.atan2(b.x-a.x,b.z-a.z);},desk=L.items.find(it=>it.id==='desk'&&siteOf(it.x)===0);
+  deskAt=[0,1].map(site=>{const d=L.items.find(it=>it.id==='desk'&&siteOf(it.x)===site);if(!d)return null;const y=d.rotation*Math.PI/2;return {pay:w(d,0,1.15),payYaw:y+Math.PI};});
   if(desk){const yaw=desk.rotation*Math.PI/2;deskInfo={seat:w(desk,0,-.1),seatYaw:yaw,pay:w(desk,0,1.15),payYaw:yaw+Math.PI};recep.pos.copy(deskInfo.seat);recep.yaw=yaw;}
   const items=L.items.filter(it=>BOOTH_ANCHORS[it.id]);
   for(let i=booths.length-1;i>=0;i--)if(!items.includes(booths[i].item))booths.splice(i,1);
@@ -591,7 +598,7 @@ $('#offday').addEventListener('click',e=>{const b=e.target.closest('[data-off]')
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
 game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');renderPanel(true);});
 game.bus.on('review:new',r=>{if(sel==='rev')game.reviews.markRead();if(r.stars<=2){popup(tx('rv.newLow','★'.repeat(r.stars)),recep.head,'');audio.play('bad');}});
-function openStyling(st){if(site>=0)focusSite(-1);if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=bestCamK(st);document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
+function openStyling(st){if(site!==siteOf(st.item.x))focusSite(siteOf(st.item.x));if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=bestCamK(st);document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
 function closeStyling(confirmed){const s=styling;if(!s)return;styling=null;document.body.classList.remove('closeup');pixScale=1;resize();camK=savedCamK;s.station.sty.fig.root.visible=true;const c=s.customer;c.previewHair=null;c.hm.dirty=true;c.fig.yaw=Math.PI;if(!confirmed){const st=s.station;st.byOwner=false;if(autoOn||st.sty!==OWNER){st.plan=aiPlan(c,st.sty);st.playerPlan=false;st.touched=false;st.timer=2;}}renderPanel(true);}
 function stylingTick(dt){if(!styling)return;const c=styling.customer;c.fig.yaw=angLerp(c.fig.yaw,styling.targetYaw(Math.PI/4+camK*Math.PI/2+Math.PI),Math.min(1,dt*10));c.fig.look=0;}
 let simT=0,speed=1,autoOn=true,timeMode='auto',spawnTimer=1.5;
@@ -635,17 +642,17 @@ function simStep(dt){simT+=dt;
     else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
     if(st.state==='free'){if(st.sty.restUntil>simT||st.sweep||st.filming||pendingMoves.has(st.item)||queuedMoves.has(st.item))return;
       // A client whose colour or perm is done waits at the island for their own stylist; another takes over only if theirs is not at a chair, or after an hour.
-      const done=custs.filter(q=>q.state==='ready'),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>!stations.some(s=>s.sty===q.resume.sty)||simT-q.readyAt>game.clock.hourLength);if(back){resumeAt(st,back);return;}
-      if(!game.clock.isOpen||(booths.length&&!freeBooth()))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.perk==='vip',vipOnDuty=stations.some(s=>!s.vacant&&(s.item.id==='vipRoom'||s.sty.perk==='vip'));
+      const here=siteOf(st.item.x),done=custs.filter(q=>q.state==='ready'&&(q.site||0)===here),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>!stations.some(s=>s.sty===q.resume.sty)||simT-q.readyAt>game.clock.hourLength);if(back){resumeAt(st,back);return;}
+      if(!game.clock.isOpen||(booths.some(b=>siteOf(b.item.x)===here)&&!freeBooth(here)))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.perk==='vip',vipOnDuty=stations.some(s=>!s.vacant&&siteOf(s.item.x)===here&&(s.item.id==='vipRoom'||s.sty.perk==='vip'));
       // VIP clients wait for a VIP chair (the VIP room or a VIP specialist) while one is on duty, unless half their patience is gone.
-      const waiting=queue.filter(q=>q.state==='wait'&&(!q.vip||vipChair||!vipOnDuty||q.pat<q.maxPat*.5));
+      const waiting=queue.filter(q=>q.state==='wait'&&(q.site||0)===here&&(!q.vip||vipChair||!vipOnDuty||q.pat<q.maxPat*.5));
       // A stylist whose client is processing at the island takes a quick cut first, to be free when that client is ready.
       const islandClient=custs.some(q=>(q.state==='process'||q.state==='ready')&&q.resume&&q.resume.sty===st.sty);
       const c=(vipChair&&waiting.find(q=>q.vip))||(islandClient&&waiting.find(q=>q.requestedService==='haircut'))||waiting.slice(0,3).find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep&&!st.filming){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
-      if(!sf.path.length&&sf.pos.distanceTo(st.stand)>.05)sf.walkTo(route(sf.pos,st.stand),()=>sf.yaw=st.face);
+      if(!sf.path.length&&sf.pos.distanceTo(st.stand)>.05)goToChair(sf,st);
       if(st.state==='consult'&&st.cust){const hp=st.cust.fig.head.getWorldPosition(V());sf.handR=hp.clone().add(st.rot(V(Math.sin(simT*2)*.08,.05,.22)));}}});
   updateWashes(dt);helpersUpdate(dt);
   // receptionist watches the latest reveal / door
@@ -653,7 +660,6 @@ function simStep(dt){simT+=dt;
   // spectators look at reveals
   custs.forEach(c=>{if(c.state==='wait'){c.fig.look=rv?angLerp(c.fig.look,.4*Math.sin(simT*.3),.02):Math.sin(simT*.4+c.id)*.3;}
     else if(c.state==='chair'&&!(styling&&styling.customer===c))c.fig.look=Math.sin(simT*.5+c.id)*.15;else c.fig.look=0;});
-  branchScenes.forEach(s=>s.update(dt,simT));
   // figures
   figs.forEach(f=>f.update(dt));
   custs.slice().forEach(c=>{if(c.fadeIn<1){c.fadeIn=Math.min(1,c.fadeIn+dt*2.5);setFade(c.fig,Math.max(.01,c.fadeIn));}
@@ -787,7 +793,7 @@ function groundAt(x,y){const r=canvas.getBoundingClientRect();x-=camOff.x*PIX;y+
 const tipEl=document.createElement('div');tipEl.className='gtip';$('#pops').appendChild(tipEl);
 function ghostTip(x,y){const r=build.isActive&&build.active.reason;if(!r){tipEl.style.display='none';return;}
   const [k,id]=r.split(':');tipEl.textContent=tx('build.why.'+k,id?tx('f.'+id):'');tipEl.style.display='block';tipEl.style.left=x+'px';tipEl.style.top=y+'px';}
-function pickAt(x,y){if(site>=0)return;if(build.isActive){const q=groundAt(x,y);if(q){build.hover(q);const ok=build.commit(q);audio.play(ok?'place':'deny');ghostTip(x,y);if(ok)renderPanel(true);}return;}if(styling)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);
+function pickAt(x,y){if(build.isActive){const q=groundAt(x,y);if(q){build.hover(q);const ok=build.commit(q);audio.play(ok?'place':'deny');ghostTip(x,y);if(ok)renderPanel(true);}return;}if(styling)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);
   if(sel==='build'){const it=furnitureView.pick(ray);if(it&&build.start(it.id,it))renderPanel(true);return;}
   const hits=ray.intersectObjects(world.children,true).filter(h=>h.object.visible&&h.object.parent.visible);if(!hits.length)return;
   const h=hits[0],f=h.object.userData.fig;
@@ -815,37 +821,27 @@ function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>pop
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:1,options:[{label:tx('inc.keep',cost),run:()=>{game.economy.charge('bonus',cost);e.addStress(-45);}},{label:tx('inc.letGo'),run:()=>{e.quits=true;}}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
-  post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e),seats:()=>stations.map(s=>({vip:s.item.id==='vipRoom'})),seatOf:e=>stations.findIndex(s=>s.sty===e),moveSeat:(e,i)=>moveToSeat(e,i)});
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,openBranch,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
+  post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e),seats:()=>{const n=[0,0];return stations.map(s=>{const site=siteOf(s.item.x);return {vip:s.item.id==='vipRoom',site,num:++n[site]};});},seatOf:e=>stations.findIndex(s=>s.sty===e),moveSeat:(e,i)=>moveToSeat(e,i)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});
 
 /* ================= branches: separate salons beside the main one ================= */
-const BRANCH_X=[20,36,52,68],BRANCH_SIGN={downtown:'CIEL DOWNTOWN',premium:'CIEL PREMIUM',barber:'CIEL BARBER',colour:'CIEL COLOUR'};
-const BRANCH_FLOOR={downtown:['#dcd9dc','#bdb9c0'],premium:['#f1dfae','#e8c27a'],barber:['#5f5a68','#45404f'],colour:['#f6d6bd','#f2a0c0']};
-const branchScenes=new Map();let site=-1;
-const branchDeps={
-  makeFig:kind=>kind==='client'?new Fig({skin:pick(SKINS),shirt:pick(SHIRTS),pants:pick(PANTS)})
-    :new Fig({skin:pick(SKINS),shirt:kind==='desk'?pick(SHIRTS):0x45404f,pants:0x2e2a38,apron:kind==='desk'?undefined:pick([0x2f6fd6,0x1fa39a,0xe25c8f,0x8a4fc2,0xffb15a]),staffHair:pick([0x16110f,0x2e1d14,0x6e4428,0xc8642a,0xe8c27a]),long:Math.random()<.4}),
-  makeHair:fig=>new Hair(fig.head,fig),newCustomer:()=>game.newCustomer(new Set(),false),isOpen:()=>game.clock.isOpen,
-  record:(b,sat)=>game.franchise.recordClient(b,sat,game.reputation.value)};
+let site=0,branchShell=null;
 function signTexture(text){const w=Math.max(140,text.length*12+8);return canvasTex(w,22,g=>paintSign(g,w,22,text));}
-/** Builds a copy of the original salon at a branch's plot, with its own sign and floor. */
-function buildBranch(b,i){const root=new THREE.Group();root.position.set(BRANCH_X[i],0,0);world.add(root);
-  const copy=o=>{const c=o.clone();c.visible=true;root.add(c);return c;},mainWalls=walls.slice(0,4),sign=signTexture(BRANCH_SIGN[b.id]);
-  copy(salonMesh);extras.forEach(copy);
-  BRANCH_LAYOUT.forEach(([id,x,z,r])=>furnitureView.buildStatic(id,x,z,r,root));
-  tiledSurface(8,6,...BRANCH_FLOOR[b.id],0,0,root);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7,root);
-  mainWalls.forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});walls.push({n:w.n,full,low,off:false});});
-  const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(0,2.4,0);root.add(light);inLights.push(light);
-  return new BranchScene(b,V(BRANCH_X[i],0,0),branchDeps);}
-function syncBranches(){game.franchise.branches.forEach((b,i)=>{if(b.open&&!branchScenes.has(b.id))branchScenes.set(b.id,buildBranch(b,i));});renderSites();}
-function focusSite(i){site=i;build.cancel();if(i<0)syncChairs();else{camHome.set(BRANCH_X[i],.55,1.2);viewScale=1;}renderSites();renderPanel(true);}
-function renderSites(){const open=game.franchise.branches.map((b,i)=>[b,i]).filter(([b])=>b.open),el=$('#sites');el.classList.toggle('show',open.length>0);
-  el.innerHTML=[`<button data-site="-1" class="${site<0?'sel':''}">${tx('site.main')}</button>`,...open.map(([b,i])=>`<button data-site="${i}" class="${site===i?'sel':''}">${tx('bs.'+b.id)}</button>`)].join('');updateBranchCard();}
-function updateBranchCard(){const el=$('#branchCard');if(site<0){el.classList.remove('show');return;}const b=game.franchise.branches[site];el.classList.add('show');
-  el.innerHTML=`<b class="gold">${tx('bn.'+b.id)}</b><br>${tx('branch.today',b.clientsToday,b.clientsToday?Math.round(b.satisfactionSum/b.clientsToday*100):0,b.revenueToday)}<br><span class="dim">${tx('branch.note')}</span>`;}
+/** The second salon's building: the first salon's shell further down the street, with its own sign and light. */
+function buildBranchShell(){if(branchShell||!game.layout.branchOpen)return;const root=new THREE.Group();root.position.set(BRANCH_X,0,0);world.add(root);branchShell=root;
+  const copy=o=>{const c=o.clone();c.visible=true;root.add(c);return c;},sign=signTexture('CIEL GROUND 2');
+  copy(salonMesh);extras.forEach(copy);salonFloor(8,6,0,0,root);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7,root);
+  walls.slice(0,4).forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});walls.push({n:w.n,full,low,off:false});});
+  const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(0,2.4,0);root.add(light);inLights.push(light);}
+/** Opens the second salon, if the game allows it, and shows it. */
+function openBranch(){if(!game.openBranch())return false;buildBranchShell();syncFurniture();renderSites();focusSite(1);audio.play('levelUp');popup(tx('br.opened'),recep.head,'big');return true;}
+function focusSite(i){site=i;build.cancel();if(i===0)syncChairs();else{camHome.set(BRANCH_X,.55,1.2);viewScale=1;}renderSites();renderPanel(true);}
+function renderSites(){const el=$('#sites'),open=game.layout.branchOpen;el.classList.toggle('show',open);
+  el.innerHTML=open?[0,1].map(i=>`<button data-site="${i}" class="${site===i?'sel':''}">${tx(i?'site.branch':'site.main')}</button>`).join(''):'';}
+function updateBranchCard(){$('#branchCard').classList.remove('show');}
 $('#sites').addEventListener('click',e=>{const b=e.target.closest('[data-site]');if(b)focusSite(+b.dataset.site);});
 
 /* ================= start menu ================= */
@@ -881,7 +877,7 @@ function beginDay(){game.nextDay();spawnTimer=1.5;paused=false;closeMenu();align
 function offdayText(){const o=$('#offday');o.querySelector('.offt').textContent=tx('off.banner');o.querySelector('[data-off="week"]').textContent=tx('off.week');o.querySelector('[data-off="monday"]').textContent=tx('week.monday');}
 function closeMenu(){offdayText();$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
-function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();syncBranches();openDay();alignToWalls();syncRoster();morningSeats();morningNews();game.updateProgress();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
+function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();buildBranchShell();renderSites();openDay();alignToWalls();syncRoster();morningSeats();morningNews();game.updateProgress();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
