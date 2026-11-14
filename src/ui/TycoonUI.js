@@ -21,13 +21,13 @@ const level = v => v >= 70 ? 'bad' : v >= 40 ? 'gold' : 'good';
 
 /** Renders the Staff, Build, Business, Promo, Reviews and Growth pages and routes their button presses. */
 export class TycoonUI {
-  constructor(game, build, i18n, hooks) { Object.assign(this, { game, build, i18n, hooks }); this.reviewFilter = 'all'; this.reviewLimit = 25; this.staffPage = 'team'; this.staffSpec = 'all'; this.staffPerk = 'all'; this.bizPage = 'money'; }
+  constructor(game, build, i18n, hooks) { Object.assign(this, { game, build, i18n, hooks }); this.reviewFilter = 'all'; this.reviewLimit = 25; this.staffPage = 'team'; this.staffRole = 'all'; this.staffSpec = 'all'; this.staffPerk = 'all'; this.bizPage = 'money'; }
   #t(k, ...a) { return this.i18n.t(k, ...a); }
 
   key(page) {
     const g = this.game, b = this.build.active;
     return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
-      g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffSpec, this.staffPerk, this.bizPage].join('|');
+      g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage].join('|');
   }
   render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#reviews(), prog: () => this.#growth() }[page](); }
 
@@ -87,11 +87,12 @@ export class TycoonUI {
   #supportRow(e) {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, desk = e.effect === 'reception';
     const course = desk && e.hired ? `<button data-do="mtrain:${e.id}" ${(e.skills.marketing || 0) >= 100 || !g.economy.canAfford(g.staff.marketingCourseCost(e)) ? 'disabled' : ''}>${t('staff.mcourse', g.staff.marketingCourseCost(e))}</button>` : '';
-    const closed = e.site && !g.layout.branchOpen;
-    const action = e.hired ? `${course}<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : closed ? `<span class="dim">${t('staff.needBranch')}</span>` : `<button class="go" data-do="shire:${e.id}" ${!g.economy.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
+    const desks = [0, ...(g.layout.branchOpen ? [1] : [])].filter(s => !g.staff.receptionistAt(s).hired), afford = g.economy.canAfford(e.hireCost);
+    const hireDesk = desks.length ? desks.map(s => `<button class="go" data-do="rhire:${e.id}.${s}" ${afford ? '' : 'disabled'}>${t('staff.hireDesk', s + 1, e.hireCost)}</button>`).join('') : `<span class="dim">${t(g.layout.branchOpen ? 'staff.desksFull' : 'staff.deskFull1')}</span>`;
+    const action = e.hired ? `${course}<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : desk ? hireDesk : `<button class="go" data-do="shire:${e.id}" ${!afford ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
     const k = e.skills, stats = desk ? [['speed', k.speed], ['service', k.customerService], ['marketing', k.marketing || 0]] : [['shampoo', k.shampoo], ['cleaning', k.cleaning], ['speed', k.speed], ['service', k.customerService]];
-    const effect = desk ? t(e.site ? 'support.juno' : 'support.ruby', Math.round(g.branchDeskReach * 100)) : t('staff.aeffect', e.serviceMinutes('shampoo', g.speedFor('shampoo')), this.hooks.sweepMinutes(e.cleaning), (e.washQuality >= .6 ? '+' : '−') + Math.abs(Math.round((e.washQuality - .6) * 25)));
-    return `<div class="scard">${this.#cardHead(e, action)}${this.#statBars(stats)}${this.#rows([['about', desk ? t(e.site ? 'support.deskRole2' : 'support.deskRole') : t('support.' + e.id)], ['effect', effect], ['pay', t('staff.wage', e.salary)]])}</div>`;
+    const effect = desk ? (e.hired ? t('rc.at', e.site + 1) + ' · ' + t(e.site ? 'support.juno' : 'rc.desk0', Math.round(g.branchDeskReach * 100)) : t('rc.deskAny')) : t('staff.aeffect', e.serviceMinutes('shampoo', g.speedFor('shampoo')), this.hooks.sweepMinutes(e.cleaning), (e.washQuality >= .6 ? '+' : '−') + Math.abs(Math.round((e.washQuality - .6) * 25)));
+    return `<div class="scard">${this.#cardHead(e, action)}${this.#statBars(stats)}${this.#rows([['about', desk ? t('rc.' + e.id) : t('support.' + e.id)], ['effect', effect], ['pay', t('staff.wage', e.salary)]])}</div>`;
   }
   /**
    * The staff tab in three pages: the team (who is hired), hiring (who is available) and the team policy.
@@ -110,13 +111,14 @@ export class TycoonUI {
     const pass = e => (this.staffSpec === 'all' || (e.specialty || 'none') === this.staffSpec) && (this.staffPerk === 'all' || e.perk === this.staffPerk);
     const pool = st.candidates.filter(e => e.hired === onTeam && pass(e)), filtered = this.staffSpec !== 'all' || this.staffPerk !== 'all';
     const groups = [['owner', onTeam && pass(st.owner) ? [st.owner] : []], ...['master', 'senior', 'designer', 'junior'].map(r => [r, pool.filter(e => e.rank === r)])];
-    const support = filtered ? [] : st.support.filter(e => e.hired === onTeam);
+    const role = this.staffRole, designers = role === 'all' || role === 'designer', support = filtered || role === 'designer' ? [] : st.support.filter(e => e.hired === onTeam && (role === 'all' || (role === 'reception') === (e.effect === 'reception')));
     const group = (r, list, row) => list.length ? `<div class="sgroup"><h5>${t('rank.' + r)} <span class="dim">${list.length}</span></h5>${list.map(row).join('')}</div>` : '';
     const seg = (act, cur, opts) => `<span class="seg">${opts.map(([v, l]) => `<button data-do="${act}:${v}" class="${cur === v ? 'sel' : ''}">${l}</button>`).join('')}</span>`;
     const short = k => t(k).split(' · ')[0];
-    const filters = `<div class="sfilt"><div class="brow"><span class="dim">${t('sf.spec')}</span>${seg('sfs', this.staffSpec, [['all', t('sf.all')], ['cut', t('svc.cut')], ['colour', t('svc.colour')], ['perm', t('svc.perm')], ['none', t('style.AllRounder')]])}</div>
+    const roles = `<div class="brow"><span class="dim">${t('sf.role')}</span>${seg('sfr', role, [['all', t('sf.all')], ['designer', t('sf.designers')], ['reception', t('sf.reception')], ['assistant', t('sf.assistant')]])}</div>`;
+    const filters = !designers ? `<div class="sfilt">${roles}</div>` : `<div class="sfilt">${roles}<div class="brow"><span class="dim">${t('sf.spec')}</span>${seg('sfs', this.staffSpec, [['all', t('sf.all')], ['cut', t('svc.cut')], ['colour', t('svc.colour')], ['perm', t('svc.perm')], ['none', t('style.AllRounder')]])}</div>
       <div class="brow"><span class="dim">${t('sf.perk')}</span>${seg('sfp', this.staffPerk, [['all', t('sf.all')], ...['consult', 'calm', 'speed', 'trend', 'vip', 'mentor'].map(p => [p, short('perk.' + p)])])}</div></div>`;
-    const body = groups.map(([r, list]) => group(r, list, e => this.#staffRow(e))).join('') + group('support', support, e => this.#supportRow(e));
+    const body = (designers ? groups.map(([r, list]) => group(r, list, e => this.#staffRow(e))).join('') : '') + group('reception', support.filter(e => e.effect === 'reception'), e => this.#supportRow(e)) + group('assistant', support.filter(e => e.effect !== 'reception'), e => this.#supportRow(e));
     const lock = !onTeam && !g.isUnlocked('staff') ? `<div class="dim">${t('staff.lock')}</div>` : '';
     return `${tabs}<div class="bsec">${filters}${lock}${body || `<div class="dim">${t(onTeam && !filtered ? 'st.noneTeam' : 'sf.none')}</div>`}</div>`;
   }
@@ -277,7 +279,7 @@ export class TycoonUI {
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
       post: () => this.hooks.post(value), campaign: () => { if (g.runCampaign(value)) this.hooks.spent(); }, influencer: () => { if (g.staff.receptionist.hired) g.marketing.bookInfluencer(g.clock.day); },
-      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, stp: () => { this.staffPage = value; }, bzp: () => { this.bizPage = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
+      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, stp: () => { this.staffPage = value; }, sfr: () => { this.staffRole = value; if (value !== 'all' && value !== 'designer') { this.staffSpec = 'all'; this.staffPerk = 'all'; } }, rhire: () => { const [id, site] = value.split('.'), who = g.staff.find(id); if (who && g.staff.hireAt(who, +site)) this.hooks.syncSupport(); }, bzp: () => { this.bizPage = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
       amen: () => g.hospitality.toggle(value), autoreply: () => { g.reviews.autoReply = !g.reviews.autoReply; g.reviews.version++; }, hrs: () => g.shiftHours(value[0] === 'o' ? 0 : 1, value[1] === '+' ? 1 : -1),
       commission: () => g.staff.setCommission(+value), shuffle: () => g.staff.setSeatShuffle(value === '1'),
       seat: () => { const [id, i] = value.split('.'), who = id === 'owner' ? g.staff.owner : g.staff.find(id); if (who) this.hooks.moveSeat(who, +i); }, dinner: () => { if (g.staff.teamDinner(g.clock.day)) this.hooks.spent(); },
