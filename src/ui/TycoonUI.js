@@ -9,6 +9,7 @@ import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/Sta
 import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
+import { ReviewRewards, milestoneBase, ratingMultiplier, streakPay } from '../tycoon/ReviewRewards.js';
 import { INVESTMENTS, LOANS, MISSION, MAX_SHARE } from '../tycoon/Finance.js';
 import { missionWho } from '../tycoon/Missions.js';
 import { SYNERGIES } from '../tycoon/Synergies.js';
@@ -182,6 +183,19 @@ export class TycoonUI {
     return `<div class="bsec"><h4>${t('mk.sns')}</h4><div class="brow"><span>${t('mk.followers')}</span><span class="sp"></span><b>${m.followers.toLocaleString()}</b></div><div class="dim">${manager}</div>${Object.keys(CHANNELS).map(channel).join('')}${buzz}</div>
       <div class="bsec"><h4>${t('mk.ads')}</h4>${campaign('flyers')}${campaign('instaAd')}<div class="brow"><span>${t('mk.influencer')}</span><span class="dim">${t('mk.infNote', INFLUENCER_FEE)}</span><span class="sp"></span>${influencer}</div><div class="dim">${INFLUENCER_POSTS.map(p => t('mk.infTier.' + p.tier, p.min.toLocaleString(), Math.round(p.demand * 100), p.days, Math.abs(p.rep))).join('<br>')}</div></div>`;
   }
+  /** Review milestones and the 5-star streak: where they stand and exactly what the next one pays. */
+  #reviewRewards() {
+    const t = (k, ...a) => this.#t(k, ...a), rv = this.game.reviews, R = this.game.reviewRewards, every = ReviewRewards.streakEvery;
+    const n = ReviewRewards.countOf(rv), base = milestoneBase(R.next), mult = ratingMultiplier(rv.rating);
+    const nextStreak = (Math.floor(R.streak / every) + 1) * every;
+    return `<div class="bsec"><h4>${t('rv.bonusTitle')}</h4>
+      <div class="brow"><span>${t('rv.next', R.next, n)}</span></div>
+      <div class="bar"><div class="tr"><div class="fl" style="width:${Math.round(clamp(n / R.next) * 100)}%;background:#ffd98a"></div></div></div>
+      <div class="brow"><span class="dim">${rv.count ? t('rv.nextPay', base.toLocaleString(), mult.toFixed(2), Math.round(base * mult).toLocaleString()) : t('rv.nextPayNone', base.toLocaleString())}</span></div>
+      <div class="dim">${t('rv.multNote')}</div>
+      <div class="brow"><span>${t('rv.streak', R.streak, R.best)}</span><span class="sp"></span><span class="gold">${t('rv.streakNext', nextStreak, streakPay(nextStreak).toLocaleString())}</span></div>
+      <div class="dim">${t('rv.streakNote')}</div></div>`;
+  }
   #reviews() {
     const t = (k, ...a) => this.#t(k, ...a), rv = this.game.reviews, f = this.reviewFilter, name = n => this.i18n.name(n);
     rv.markRead();
@@ -195,6 +209,7 @@ export class TycoonUI {
     const filters = ['all', 'todo', 'low'].map(k => `<button data-do="rvf:${k}" class="${f === k ? 'sel' : ''}">${t('rv.f.' + k)}</button>`).join('');
     const mgr = this.game.reviewManager, auto = this.game.staff.receptionist.hired ? `<button data-do="autoreply" class="${rv.autoReply ? 'sel' : ''}">${t(rv.autoReply ? 'rv.autoOn' : 'rv.autoOff')}</button>` : '';
     return `<div class="bsec"><h4>${t('rv.title')}</h4><div class="brow"><span class="dim">${t('rv.manager', t(mgr.role === 'desk' ? 'rv.by.desk' : 'rv.by.owner', name(mgr.name)))}</span><span class="sp"></span>${auto}</div><div class="dim">${t('rv.weightNote')} ${t('rv.repNote', [5, 4, 3, 2, 1].map(n => `★${n} ${REVIEW_REP[n] > 0 ? '+' : REVIEW_REP[n] < 0 ? '−' : ''}${Math.abs(REVIEW_REP[n])}`).join(' · '))}</div><div class="brow"><b class="gold">${rv.count ? '★ ' + rv.rating.toFixed(1) : '–'}</b><span class="dim">${t('rv.count', rv.count)}</span></div>${dist}</div>
+      ${this.#reviewRewards()}
       <div class="bsec"><div class="seg" style="margin-bottom:4px">${filters}</div>${page.length ? page.map(row).join('') + more : `<div class="dim">${t('rv.none')}</div>`}</div>`;
   }
   /** Side missions: three requests at a time, each with its progress, bonus and a line from whoever asks. */
