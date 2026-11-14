@@ -84,7 +84,9 @@ export class Employee {
   recordService(satisfaction, payment) { this.stats.served++; this.stats.sum += satisfaction; this.stats.earn += payment; this.today.served++; this.today.earn += payment; }
   toJSON() { return { id: this.id, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
   restore(data) {
-    Object.assign(this, { skills: { ...this.skills, ...data.skills }, experience: data.experience, level: data.level, hired: data.hired, stats: data.stats });
+    // Someone who has never worked here keeps today's skills, so balance changes reach older saves too.
+    const worked = data.hired || data.level > 1 || data.experience > 0 || (data.stats && data.stats.served > 0);
+    Object.assign(this, { skills: worked ? { ...this.skills, ...data.skills } : this.skills, experience: data.experience, level: data.level, hired: data.hired, stats: data.stats });
     // Fields added later default to a settled, rested stylist.
     Object.assign(this, { stress: data.stress || 0, leaveFrom: data.leaveFrom || 0, leaveTo: data.leaveTo || 0, daysEmployed: data.daysEmployed ?? 99 });
   }
