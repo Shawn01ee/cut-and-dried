@@ -597,6 +597,7 @@ game.bus.on('mission:done',m=>{popup(tx('ms.done',tx('ms.t.'+m.kind)),recep.head
 $('#offday').addEventListener('click',e=>{const b=e.target.closest('[data-off]');if(!b)return;if(b.dataset.off==='week')openMenu('week','game');else{game.save();beginDay();}});
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
 game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');renderPanel(true);});
+game.bus.on('review:bonus',b=>{popup(b.kind==='streak'?tx('rv.bonusStreak',b.streak,b.amount.toLocaleString()):tx('rv.bonusMilestone',b.at,b.amount.toLocaleString(),b.rating.toFixed(1),b.mult.toFixed(2)),recep.head,'big');audio.play('cash');renderPanel(true);});
 game.bus.on('review:new',r=>{if(sel==='rev')game.reviews.markRead();if(r.stars<=2){popup(tx('rv.newLow','★'.repeat(r.stars)),recep.head,'');audio.play('bad');}});
 function openStyling(st){if(site!==siteOf(st.item.x))focusSite(siteOf(st.item.x));if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=bestCamK(st);document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
 function closeStyling(confirmed){const s=styling;if(!s)return;styling=null;document.body.classList.remove('closeup');pixScale=1;resize();camK=savedCamK;s.station.sty.fig.root.visible=true;const c=s.customer;c.previewHair=null;c.hm.dirty=true;c.fig.yaw=Math.PI;if(!confirmed){const st=s.station;st.byOwner=false;if(autoOn||st.sty!==OWNER){st.plan=aiPlan(c,st.sty);st.playerPlan=false;st.touched=false;st.timer=2;}}renderPanel(true);}
@@ -618,10 +619,17 @@ function updateLights(dt){const P=PRE[phaseNow()],k=Math.min(1,dt*1.5);
 
 /* ================= popups ================= */
 const pops=[];
-function popup(text,obj,cls){const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:2.6});}
+function popup(text,obj,cls){const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:cls==='big'?4.2:2.6,w:null,h:null});}
 const _p=V();
 function screenOf(v){_p.copy(v).project(cam);return [(_p.x+1)/2*W*PIX+camOff.x*PIX,(1-_p.y)/2*H*PIX-camOff.y*PIX];}
-function updatePops(dt){for(let i=pops.length-1;i>=0;i--){const p=pops[i];p.t+=dt;const w=p.obj.getWorldPosition(V()),k=Math.min(1,p.t/p.life);w.y+=.35+(1-(1-k)*(1-k))*.6;const [x,y]=screenOf(w);p.el.style.left=x+'px';p.el.style.top=y+'px';p.el.style.opacity=clamp((p.life-p.t)*2);if(p.t>p.life){p.el.remove();pops.splice(i,1);}}
+/** Floating notes rise from whoever they are about. Notes about the same person stack by their real height, and the stack stays clear of the HUD, the panel and the screen edges. */
+function updatePops(dt){if(!pops.length)return;const hud=$('#hud').getBoundingClientRect(),pan=$('#panel').getBoundingClientRect(),groups=new Map();
+  for(const p of pops){p.t+=dt;if(p.w==null){p.w=p.el.offsetWidth;p.h=p.el.offsetHeight;}if(!groups.has(p.obj))groups.set(p.obj,[]);groups.get(p.obj).push(p);}
+  for(const [obj,g] of groups){const w=obj.getWorldPosition(V()),k=Math.min(1,g[0].t/g[0].life);w.y+=.35+(1-(1-k)*(1-k))*.6;let [x,y]=screenOf(w);
+    const W=Math.max(...g.map(p=>p.w)),total=g.reduce((n,p)=>n+p.h+4,-4);x=clamp(x,W/2+8,innerWidth-W/2-8);
+    const over=r=>r.width&&x-W/2<r.right&&x+W/2>r.left,lo=(over(hud)?hud.bottom+6:8)+total,hi=over(pan)?pan.top-6:innerHeight-8;
+    y=Math.max(lo,Math.min(y,hi));for(const p of g){p.el.style.left=x+'px';p.el.style.top=y+'px';p.el.style.opacity=clamp((p.life-p.t)*2);y-=p.h+4;}}
+  for(let i=pops.length-1;i>=0;i--)if(pops[i].t>pops[i].life){pops[i].el.remove();pops.splice(i,1);}
   custs.forEach(c=>{if(c.state==='wait'){const w=c.fig.head.getWorldPosition(V());w.y+=.3;const [x,y]=screenOf(w);c.tag.style.display='block';c.tag.style.left=x+'px';c.tag.style.top=y+'px';const k=clamp(c.pat/c.maxPat);const i=c.tag.firstChild;i.style.width=(k*100)+'%';i.style.background=k>.5?'#8fc25a':k>.25?'#ffb15a':'#d8314a';}
     else if(c.state==='process'&&c.procSeated){const w=c.fig.head.getWorldPosition(V());w.y+=.55;const [x,y]=screenOf(w);c.tag.style.display='block';c.tag.style.left=x+'px';c.tag.style.top=y+'px';const i=c.tag.firstChild;i.style.width=(clamp(1-c.procLeft/c.procTotal)*100)+'%';i.style.background='#7fb6f0';}
     else c.tag.style.display='none';});}
@@ -688,12 +696,17 @@ function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span
   if(st.state==='consult')return canAuto(st)?tx('st.auto',Math.max(0,st.timer).toFixed(0)):`<span class="gold">${tx('st.wait')}</span>`;
   if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}% · ${tx('st.left',Math.max(0,Math.ceil(o.minutes*(1-clamp(o.t/o.dur)))))}`;}return tx('st.reveal');}
 function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['syn','tab.syn'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']],unread=game.reviews.unread;
-  tabs.innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${(k==='salon'?typeof sel==='number':sel===k)?'sel':''}">${tx(l)}${k==='rev'&&unread&&sel!=='rev'?`<span class="badge">${unread}</span>`:''}${k==='prog'&&game.missions.claimable?`<span class="badge">${game.missions.claimable}</span>`:''}</button>`).join('')+`<button class="tog" id="bMin">${$('#panel').classList.contains('min')?'▴':'▾'}</button>`;
+  tabs.innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${(k==='salon'?typeof sel==='number':sel===k)?'sel':''}">${tx(l)}${k==='rev'&&unread&&sel!=='rev'?`<span class="badge">${unread>99?'99+':unread}</span>`:''}${k==='prog'&&game.missions.claimable?`<span class="badge">${game.missions.claimable}</span>`:''}</button>`).join('')+`<button class="tog" id="bMin">${$('#panel').classList.contains('min')?'▴':'▾'}</button>`;
   tabs.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{sel=b.dataset.t==='salon'?lastChair:b.dataset.t;$('#panel').classList.remove('min');renderPanel(true);const pb=$('#pbody');pb.classList.remove('fade');void pb.offsetWidth;pb.classList.add('fade');});
   $('#bMin').onclick=()=>{$('#panel').classList.toggle('min');renderTabs();};}
 function swatches(k,cur){return `<button class="sw none ${cur<0?'sel':''}" data-${k}="-1" title="-"></button>`+DYES.map((d,i)=>`<button class="sw ${cur===i?'sel':''}" data-${k}="${i}" title="${dyeName(i)}" style="background:${hexCss(d.h)}"></button>`).join('');}
 function seg(k,list,cur,lab=n=>n){return `<span class="seg">${list.map((n,i)=>`<button data-${k}="${typeof cur==='string'?n:i}" class="${(typeof cur==='string'?n===cur:i===cur)?'sel':''}">${lab(n)}</button>`).join('')}</span>`;}
-function renderPanel(force){if(typeof sel==='number'&&!stations[sel])sel=lastChair=0;
+/** A press on the panel holds back redraws until the click lands, so a payment mid-press cannot swallow the click. */
+let panelHeldAt=0,panelPending=false;
+function releasePanel(){if(!panelHeldAt)return;panelHeldAt=0;setTimeout(()=>{if(panelPending){panelPending=false;renderPanel(true);}},0);}
+$('#panel').addEventListener('pointerdown',()=>{panelHeldAt=performance.now();});
+addEventListener('pointerup',releasePanel);addEventListener('pointercancel',releasePanel);addEventListener('blur',releasePanel);
+function renderPanel(force){if(panelHeldAt&&performance.now()-panelHeldAt<2000){panelPending=true;return;}if(typeof sel==='number'&&!stations[sel])sel=lastChair=0;
   const key=(typeof sel==='number'?(()=>{const st=stations[sel];return [sel,st.state,st.sty.name,st.cust&&st.cust.id,st.opi,game.layout.chairs,!!styling,i18n.lang].join('|');})():ui.key(sel))+'|'+game.reviews.unread;
   if(!force&&key===panelKey){refreshDynamic();return;}panelKey=key;renderTabs();
   if(typeof sel!=='number'){pbody.innerHTML=ui.render(sel);return;}

@@ -7,6 +7,7 @@ import { Progression } from './Progression.js';
 import { OperatingCosts } from './OperatingCosts.js';
 import { Marketing } from './Marketing.js';
 import { ReviewBoard } from './ReviewBoard.js';
+import { ReviewRewards } from './ReviewRewards.js';
 import { Hospitality } from './Hospitality.js';
 import { Finance } from './Finance.js';
 import { Rival } from './Rival.js';
@@ -53,6 +54,7 @@ export class TycoonGame {
     this.marketing = new Marketing(this.economy);
     this.staff.extraTrainingDiscount = () => this.has('academy') ? .3 : 0;
     this.reviews = new ReviewBoard();
+    this.reviewRewards = new ReviewRewards();
     this.hospitality = new Hospitality(this.economy, this.layout);
     this.finance = new Finance(this.economy);
     this.missions = new Missions(this.economy); this.missions.onDone = m => this.bus.emit('mission:done', m);
@@ -214,7 +216,14 @@ export class TycoonGame {
   customerGaveUp(customer) { this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day)); }
   customerTurnedAway(customer) { this.#post(this.reviews.turnedAway(customer, this.clock.day)); }
   /** A new review: it moves the reputation by its stars and goes on the board. */
-  #post(review) { if (review) { if (review.stars === 5 && !review.fake) this.missions.record('five'); review.rep = REVIEW_REP[review.stars] ?? 0; this.reputation.add(review.rep); this.bus.emit('review:new', review); } return review; }
+  #post(review) {
+    if (review) {
+      if (review.stars === 5 && !review.fake) this.missions.record('five');
+      review.rep = REVIEW_REP[review.stars] ?? 0; this.reputation.add(review.rep); this.bus.emit('review:new', review);
+      for (const bonus of this.reviewRewards.onReview(review, this.reviews)) { this.economy.fund('reviewBonus', bonus.amount); this.bus.emit('review:bonus', bonus); }
+    }
+    return review;
+  }
   /** Who handles reviews: the receptionist, who runs marketing, or Lia herself without one. */
   get reviewManager() { const r = this.staff.receptionist; return r.hired ? { name: r.name, role: 'desk', skill: r.skills.marketing || 0 } : { name: this.staff.owner.name, role: 'owner', skill: 0 }; }
   /** Answers a review. A review taken down no longer counts against the reputation; one the client improved counts at its new stars. */
@@ -303,7 +312,7 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
@@ -315,7 +324,7 @@ export class TycoonGame {
     (d.support || []).forEach(s => this.staff.find(LEGACY_IDS[s.id] || s.id)?.restore(s));
     this.layout.restore(d.layout);
     (d.reviews?.list || []).forEach(r => { if (r.visit && RENAMED[r.visit.stylist]) r.visit.stylist = RENAMED[r.visit.stylist]; });
-    this.marketing.restore(d.marketing); this.reviews.restore(d.reviews); this.hospitality.restore(d.hospitality);
+    this.marketing.restore(d.marketing); this.reviews.restore(d.reviews); this.reviewRewards.restore(d.reviewRewards, this.reviews); this.hospitality.restore(d.hospitality);
     this.finance.restore(d.finance); this.rival.restore(d.rival); this.regulars = d.regulars || 0; this.staff.restore(d.staffPolicy);
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];

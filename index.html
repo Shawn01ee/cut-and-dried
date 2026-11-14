@@ -29,7 +29,8 @@ button.on{background:#8a2d3b;border-color:#ff7a3d}
 button.go{background:#24552e;border-color:#8fc25a}
 #panel{position:fixed;left:8px;right:8px;bottom:8px;max-height:47vh;display:flex;flex-direction:column}
 #tabs{display:flex;gap:2px;padding:3px 3px 0}
-#tabs button{flex:1;font-size:16px;padding:4px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tabs button{flex:1 1 auto;font-size:16px;padding:4px 2px;white-space:nowrap}
+@media (max-width:480px){#tabs{gap:2px!important;padding:4px 2px 0!important}#tabs button,html[lang=ko] #tabs button{padding:4px 0;font-size:11px;letter-spacing:-.5px}#tabs .tog{flex:0 0 24px}}
 #tabs button.sel{background:#45404f;border-color:#ffd98a;color:#ffd98a}
 #tabs .tog{flex:0 0 32px}
 #pbody{overflow:auto;padding:5px 8px 8px;font-size:17px;touch-action:pan-y;-webkit-overflow-scrolling:touch}
@@ -58,9 +59,9 @@ input[type=checkbox]{accent-color:#ff7a3d;width:16px;height:16px;vertical-align:
 table.lad{border-collapse:collapse;width:100%;font-size:17px}
 table.lad td,table.lad th{padding:2px 6px;text-align:left;font-weight:400}
 table.lad th{color:#9c98a2;border-bottom:1px solid #45404f}
-#pops{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+#pops{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:4}
 .tag.villain{border-color:#d8314a;box-shadow:0 0 0 1px #d8314a}
-.pop{position:absolute;transform:translate(-50%,-100%);font-family:var(--ft);font-size:12px;white-space:nowrap;background:rgba(13,11,20,.85);border:2px solid #45404f;padding:2px 5px;color:#f6f3ee}
+.pop{position:absolute;transform:translate(-50%,-100%);font-family:var(--ft);font-size:12px;width:max-content;max-width:calc(100vw - 16px);box-sizing:border-box;text-align:center;background:rgba(13,11,20,.85);border:2px solid #45404f;padding:2px 5px;color:#f6f3ee}
 .pop.big{font-size:14px;border-color:#ffd98a;color:#ffd98a}
 .tag{position:absolute;transform:translate(-50%,-100%);width:26px;height:5px;background:#2e2a38;border:1px solid #0d0b14}
 .tag i{display:block;height:100%;background:#8fc25a}
@@ -115,7 +116,7 @@ html[lang=ko] .hsec h3,html[lang=ko] .mhead{font-size:15px}
 html[lang=ko] .hsec li,html[lang=ko] .hsec p{font-size:13px}
 @media (min-width:880px){#panel{left:auto;width:470px;max-height:72vh}#hud{font-size:18px}#hud h1{font-size:16px}}
 @media (min-width:880px){html[lang=ko] #hud{font-size:13px}html[lang=ko] #hud h1{font-size:13px}}
-@media (max-width:420px){#hud{font-size:14px;min-width:0}#hud h1{font-size:12px}#ctrl{max-width:150px}#ctrl button{font-size:15px;padding:3px 5px}}
+@media (max-width:420px){#hud{font-size:14px;min-width:0;max-width:calc(100vw - 172px);box-sizing:border-box}#hud h1{font-size:12px;flex-wrap:wrap;gap:0 8px}#ctrl{max-width:150px}#ctrl button{font-size:15px;padding:3px 5px}}
 body.closeup #hud,body.closeup #ctrl{display:none}
 #sites{position:fixed;left:50%;top:8px;transform:translateX(-50%);display:none;gap:3px;padding:3px}
 #sites.show{display:flex}
@@ -132,7 +133,7 @@ body.closeup #hud,body.closeup #ctrl{display:none}
 body.inmenu #incident{display:none}
 html[lang=ko] #incident{font-size:13px;line-height:1.5}
 @media (max-width:760px){#incident{top:auto;bottom:calc(47vh + 20px)}}
-#tabs .badge{display:inline-block;min-width:13px;margin-left:3px;padding:0 3px;background:#d8314a;color:#fff;font-size:11px;line-height:14px;vertical-align:1px}
+#tabs .badge{display:inline-block;min-width:13px;margin-left:2px;padding:0 2px;box-sizing:border-box;background:#d8314a;color:#fff;font-size:10px;line-height:13px;text-align:center;vertical-align:1px}
 .rv{padding:4px 0;border-bottom:1px solid #2a2633}
 .rv:last-child{border-bottom:0}
 .rv .reply{color:#9c98a2;margin:2px 0 0 10px}
