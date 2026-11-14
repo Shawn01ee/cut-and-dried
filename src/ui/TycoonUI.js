@@ -1,6 +1,6 @@
 import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS } from '../building/FurnitureCatalog.js';
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
-import { portraitURL } from './Portrait.js';
+import { portraitURL, crownURL } from './Portrait.js';
 import { REVIEW_REP } from '../tycoon/TycoonGame.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION } from '../employees/Employee.js';
 import { clamp } from '../core/math.js';
@@ -16,7 +16,6 @@ import { missionWho } from '../tycoon/Missions.js';
 import { SYNERGIES } from '../tycoon/Synergies.js';
 
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
-const RANK_ORDER = { master: 0, senior: 1, designer: 2, junior: 3 };
 const SPEC_STYLE = { cut: 'CutSpecialist', colour: 'ColourSpecialist', perm: 'PermSpecialist' };
 const level = v => v >= 70 ? 'bad' : v >= 40 ? 'gold' : 'good';
 
@@ -55,7 +54,7 @@ export class TycoonUI {
     const special = SPECIAL_SKILL[e.specialty], stats = [['cut', s.cutting, 'cutting'], ['colour', s.colouring, 'colouring'], ['perm', s.perming, 'perming'], ['speed', s.speed, 'speed'], ['service', s.customerService, 'customerService']];
     const rows = [[e.specialty ? 'special' : null, `<span class="gold">${e.specialty ? t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100)) : ''}</span>`],
       [owner ? 'scope' : null, t('staff.allround')], [e.perk ? 'perk' : null, `<span class="good">${e.perk ? t('perk.' + e.perk) : ''}</span>`], ['times', times], [e.hired ? 'state' : 'pay', info], [perf ? 'perf' : null, perf], [this.hooks.seatOf(e) >= 0 ? 'seat' : null, this.#seatChips(e)]];
-    return `<div class="scard">${this.#cardHead(e, actions)}${this.#statBars(stats.map(([k, v, key]) => [k, v, key === special]))}${this.#rows(rows)}</div>`;
+    return `<div class="scard r-${this.#kind(e)}">${this.#cardHead(e, actions)}${this.#statBars(stats.map(([k, v, key]) => [k, v, key === special]))}${this.#rows(rows)}</div>`;
   }
   /** Every team synergy: the ones today's team has first, each with what it needs and what it gives. */
   #synergies() {
@@ -64,11 +63,14 @@ export class TycoonUI {
     return `<div class="bsec"><h4>${t('syn.title', on.size)}</h4><div class="dim">${t('syn.note')}</div>${rows}</div>`;
   }
   /** Name, grade mark, role and gender, with the action buttons on the right. */
+  /** Lia is the owner; everyone else stands by rank. */
+  #kind(e) { return e === this.game.staff.owner ? 'owner' : e.rank; }
   /** A card's head: the pixel portrait, name, role and gender, specialty and talent chips, and the actions. */
   #cardHead(e, actions) {
     const t = (k, ...a) => this.#t(k, ...a), role = RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`;
     const chips = [e.specialty ? `<span class="chip spec">${t('style.' + SPEC_STYLE[e.specialty])}</span>` : e.style === 'AllRounder' ? `<span class="chip">${t('style.AllRounder')}</span>` : '', e.perk ? `<span class="chip perk">${t('perk.' + e.perk).split(' · ')[0]}</span>` : ''].join('');
-    return `<div class="shead"><img class="face r-${e === this.game.staff.owner ? 'owner' : e.rank}" src="${portraitURL(e)}" alt=""><div class="who"><div class="brow"><b style="color:${nameColour(e)}">${rankMark(e)}${this.i18n.name(e.name)}</b>${role}${e.gender ? `<span class="dim">${t('gender.' + e.gender)}</span>` : ''}</div>${chips ? `<div class="chips">${chips}</div>` : ''}</div><div class="act">${actions}</div></div>`;
+    const kind = this.#kind(e), crown = kind === 'owner' ? `<img class="crown" src="${crownURL()}" alt="">` : '';
+    return `<div class="shead"><img class="face r-${kind}" src="${portraitURL(e, kind)}" alt=""><div class="who"><div class="brow"><b style="color:${nameColour(e)}">${crown}${rankMark(e)}${this.i18n.name(e.name)}</b>${kind === 'owner' ? `<span class="chip own">${t('st.ownerTag')}</span>` : role}${e.gender ? `<span class="dim">${t('gender.' + e.gender)}</span>` : ''}</div>${chips ? `<div class="chips">${chips}</div>` : ''}</div><div class="act">${actions}</div></div>`;
   }
   /** Skills as short bars in one line; `hi` marks a specialty. */
   #statBars(list) {
