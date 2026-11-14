@@ -25,7 +25,7 @@ export class TycoonUI {
 
   key(page) {
     const g = this.game, b = this.build.active;
-    return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, Math.round(g.weekRevenue), g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
+    return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
       g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit].join('|');
   }
   render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#reviews(), prog: () => this.#growth() }[page](); }
@@ -114,13 +114,22 @@ export class TycoonUI {
       : `${B.checks.map(c => `<div class="brow"><span class="${c.ok ? 'good' : 'dim'}">${c.ok ? '✓' : '·'} ${t('br.c.' + c.k, ...c.args)}</span></div>`).join('')}<div class="brow"><span class="dim">${t('br.cost', B.cost.toLocaleString())}</span><span class="sp"></span><button class="go" data-do="openBranch" ${B.ready ? '' : 'disabled'}>${t('br.open')}</button></div>`;
     return `<div class="bsec"><h4>${t('br.title')}</h4>${body}<div class="dim">${t('br.note')}</div></div>`;
   }
+  /** This month's revenue goal, how far along it is, and the last monthly settlement. */
+  #month() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, m = g.monthProgress, usd = n => '$' + Math.round(n).toLocaleString();
+    const goal = m.goal ? `<div class="brow"><span>${t('month.goalNow', usd(m.goal.revenue), usd(m.goal.reward))}</span></div>
+      <div class="bar"><div class="tr"><div class="fl" style="width:${Math.round(clamp(m.revenue / m.goal.revenue) * 100)}%;background:${m.revenue >= m.goal.revenue ? '#8fc25a' : '#ffd98a'}"></div></div></div>
+      <div class="brow"><span class="dim">${t('month.goalSoFar', usd(m.revenue), Math.round(m.revenue / m.goal.revenue * 100))}</span></div>` : `<div class="dim">${t('month.noGoal')}</div>`;
+    const last = g.monthReport ? `<div class="brow"><span class="sp"></span><button data-do="monthView">${t('month.last', g.monthReport.month)}</button></div>` : '';
+    return `<div class="bsec"><h4>${t('month.tabTitle', m.month, m.day)}</h4>${goal}<div class="dim">${t('month.goalNote')}</div>${last}</div>`;
+  }
   #business() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, e = g.economy, money = n => (n < 0 ? '−$' : '$') + Math.abs(n), line = (k, v) => `<div class="brow"><span>${t(k)}</span><span class="sp"></span><span>${v}</span></div>`;
     const costs = `<div class="bsec"><h4>${t('biz.opTitle')}</h4>${Object.entries(g.operatingCosts.breakdown).map(([k, v]) => line('led.' + k, `$${e.today.expenses[k] || 0} / $${v}`)).join('')}${line('led.materials', '$' + (e.today.expenses.materials || 0))}<div class="dim">${t('biz.opNote')}</div></div>`;
     const rep = g.reputation, prices = (g.isUnlocked('luxury') ? [0, 1, 2, 3] : [0, 1, 2]).map(i => `<button data-do="price:${i}" class="${g.priceLevel === i ? 'sel' : ''}">${t('price.' + i)}</button>`).join('');
     const rows = g.staff.all.filter(s => s.hired).sort((a, b) => b.stats.earn - a.stats.earn), rated = s => { const r = g.reviews.ratingFor(s.name); return r.count ? `★${r.average.toFixed(1)} (${r.count})` : '–'; };
     const hs = g.hospitality, treats = Object.entries(AMENITIES).map(([id, a]) => `<div class="brow"><span>${t('hs.' + id)}</span><span class="dim">${t('hs.cost', a.cost)}</span><span class="sp"></span>${hs.available(id) ? `<span class="seg"><button data-do="amen:${id}" class="${hs.isOffered(id) ? 'sel' : ''}">${t('hs.on')}</button><button data-do="amen:${id}" class="${hs.isOffered(id) ? '' : 'sel'}">${t('hs.off')}</button></span>` : `<span class="dim">${t('hs.needs', t('f.' + a.needs))}</span>`}</div>`).join('');
-    return `<div class="bsec"><h4>${t('biz.finance')}</h4>${line('biz.cash', money(e.cash))}${line('biz.rev', money(e.dailyRevenue))}${line('biz.exp', money(-e.dailyOperatingCost))}${line('biz.profit', money(e.dailyProfit))}${e.dailyInvestment ? line('biz.invest', money(-e.dailyInvestment)) : ''}${line('biz.total', g.served)}${line('biz.sat', g.served ? Math.round(g.averageSatisfaction * 100) + '%' : '–')}${line('biz.rep', rep.starText + ' ' + Math.floor(rep.value))}${line('biz.comfort', g.comfort)}${line('biz.regulars', g.regulars)}</div>${costs}${this.#funding()}
+    return `<div class="bsec"><h4>${t('biz.finance')}</h4>${line('biz.cash', money(e.cash))}${line('biz.rev', money(e.dailyRevenue))}${line('biz.exp', money(-e.dailyOperatingCost))}${line('biz.profit', money(e.dailyProfit))}${e.dailyInvestment ? line('biz.invest', money(-e.dailyInvestment)) : ''}${line('biz.total', g.served)}${line('biz.sat', g.served ? Math.round(g.averageSatisfaction * 100) + '%' : '–')}${line('biz.rep', rep.starText + ' ' + Math.floor(rep.value))}${line('biz.comfort', g.comfort)}${line('biz.regulars', g.regulars)}</div>${this.#month()}${costs}${this.#funding()}
     ${this.#demand()}
     <div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>
     <div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}
@@ -235,7 +244,7 @@ export class TycoonUI {
       hire: () => this.hooks.hire(e), fire: () => this.hooks.fire(e),
       shire: () => { if (g.staff.hire(e)) this.hooks.syncSupport(); }, sfire: () => { if (g.staff.fire(e)) this.hooks.syncSupport(); }, train: () => { if (g.trainStaff(e)) g.bus.emit('staff:levelup', e); }, claim: () => { if (g.claimMission(+value)) this.hooks.spent(); },
       rest: () => { e.restUntil = this.hooks.now() + 20; e.rest(50); },
-      price: () => { g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), view: () => this.hooks.viewSite(+value),
+      price: () => { g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), monthView: () => this.hooks.openMonth(), view: () => this.hooks.viewSite(+value),
       expand: () => { if (g.expand()) this.hooks.expanded(); },
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
