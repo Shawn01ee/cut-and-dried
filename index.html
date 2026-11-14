@@ -199,6 +199,14 @@ button.on:hover:not(:disabled){background:#a3384a}
 .wbars{display:flex;align-items:flex-end;gap:6px;height:84px;margin:8px 0 10px;padding:0 2px;border-bottom:1px solid #45404f}
 .wbars div{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px}
 .wbars i{display:block;width:100%;background:#8fc25a}.wbars i.neg{background:#ff7a3d}.wbars span{font-size:12px;color:#9c98a2}
+.mcard{border:1px solid #2e2a38;background:#15121d;padding:5px 7px;margin:5px 0}
+.mcard .mt{color:#ffd98a}
+.mcard.done{border-color:#ffd98a;box-shadow:inset 0 0 0 1px #8a6040}
+.mcard.done .go{animation:nudge 1s steps(2) infinite}
+.say{margin-top:4px;padding:3px 6px;background:#221d2c;border-left:3px solid #5f5a68;color:#dcd9dc}
+.say.ruby{border-left-color:#cab0e4}.say.ruby b{color:#cab0e4}.say.lia{border-left-color:#ff9fc4}.say.lia b{color:#ff9fc4}.say.shawn{border-left-color:#8fd0ff}.say.shawn b{color:#8fd0ff}
+.say b{font-weight:400;margin-right:4px}
+@keyframes nudge{50%{translate:0 -2px}}
 @keyframes cardIn{0%{opacity:0;translate:0 10px}100%{opacity:1;translate:0 0}}
 @keyframes fadeUp{0%{opacity:0;translate:0 4px}100%{opacity:1;translate:0 0}}
 @keyframes fadeIn{0%{opacity:0}100%{opacity:1}}

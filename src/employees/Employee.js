@@ -4,9 +4,9 @@ const SPECIALTY_SKILL = { cut: 'cutting', colour: 'colouring', perm: 'perming' }
 const REQUEST_SPECIALTY = { haircut: 'cut', colour: 'colour', perm: 'perm' };
 export const SPECIALTY_BONUS = 10, SPECIALTY_SATISFACTION = .05, MAX_LEVEL = 10;
 /** Standard service times in minutes, for an average stylist. */
-export const BASE_MINUTES = { shampoo: 10, cut: 30, colour: 45, wave: 40, dry: 12 };
+export const BASE_MINUTES = { shampoo: 10, cut: 30, colour: 60, wave: 55, dry: 12 };
 /** Of those, the minutes colour and perm are left to process: the same for everyone, and no stylist is needed. */
-export const PROCESS_MINUTES = { colour: 25, wave: 20 };
+export const PROCESS_MINUTES = { colour: 40, wave: 35 };
 // Assistants wash by their shampoo skill; stylists, who have none, by their speed.
 const SERVICE_SKILL = { cut: 'cutting', colour: 'colouring', wave: 'perming', dry: 'speed', shampoo: 'shampoo' };
 // New starters take a few days to settle into the team.
