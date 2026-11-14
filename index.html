@@ -12,7 +12,7 @@
 :root{--f:'VT323',ui-monospace,monospace;--ft:Silkscreen,monospace}
 html[lang=ko]{--f:'Galmuri11','Apple SD Gothic Neo','Malgun Gothic',sans-serif;--ft:'Galmuri11','Apple SD Gothic Neo','Malgun Gothic',sans-serif}
 html,body{margin:0;height:100%;overflow:hidden;background:#0d0b14;font-family:var(--f);color:#f6f3ee;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
-#c{position:fixed;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:pointer}
+#c{position:fixed;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:grab}
 .card{background:rgba(13,11,20,.86);border:2px solid #45404f;box-shadow:0 0 0 2px #0d0b14}
 #hud{position:fixed;left:8px;top:8px;font-size:16px;line-height:1.05;padding:5px 7px;min-width:220px;max-width:calc(100vw - 30px);pointer-events:none}
 #hud h1{font-family:var(--ft);font-size:14px;font-weight:400;margin:0 0 3px;color:#ffd98a;display:flex;justify-content:space-between;gap:12px;letter-spacing:.5px}
@@ -60,6 +60,9 @@ table.lad{border-collapse:collapse;width:100%;font-size:17px}
 table.lad td,table.lad th{padding:2px 6px;text-align:left;font-weight:400}
 table.lad th{color:#9c98a2;border-bottom:1px solid #45404f}
 #pops{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:4}
+#c.grabbing{cursor:grabbing}
+#hud .hsum{display:flex;align-items:center;gap:8px;margin-top:3px;padding-top:3px;border-top:1px solid #45404f;color:#9c98a2}
+#hud .hsum span{flex:1}#hud .htog{pointer-events:auto;font-size:12px;padding:1px 6px;cursor:pointer}
 .tag.villain{border-color:#d8314a;box-shadow:0 0 0 1px #d8314a}
 .pop{position:absolute;transform:translate(-50%,-100%);font-family:var(--ft);font-size:12px;width:max-content;max-width:calc(100vw - 16px);box-sizing:border-box;text-align:center;background:rgba(13,11,20,.85);border:2px solid #45404f;padding:2px 5px;color:#f6f3ee}
 .pop.big{font-size:14px;border-color:#ffd98a;color:#ffd98a}
@@ -311,7 +314,7 @@ button.on:hover:not(:disabled){background:#a3384a}
   <button id="bRotL" title="Rotate left (Q)">⟲</button><button id="bRotR" title="Rotate right (E)">⟳</button>
   <button id="bTime" title="Time of day">☀ Auto</button>
   <button id="bSpd" title="Speed">×1</button><button id="bAuto" class="on" title="Stylists plan and start on their own">Auto</button>
-  <button id="bZo">−</button><button id="bZi">+</button><button id="bSound"></button><button id="bLang"></button><button id="bHelp">?</button>
+  <button id="bZo">−</button><button id="bZi">+</button><button id="bCenter" title="">⌖</button><button id="bSound"></button><button id="bLang"></button><button id="bHelp">?</button>
 </div>
 <div id="sites" class="card"></div><div id="branchCard" class="card"></div><div id="incident" class="card"></div>
 <div id="panel" class="card"><div id="tabs"></div><div id="pbody"></div></div>
