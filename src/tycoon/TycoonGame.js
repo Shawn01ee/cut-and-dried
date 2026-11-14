@@ -102,7 +102,7 @@ export class TycoonGame {
   get reelQuality() { return clamp(.1 + (this.has('photoZone') ? .12 : 0) + Math.min(.2, this.staff.hired.filter(e => e.perk === 'trend').length * .1) + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
   /** Chance that someone posts a fake one-star review today; a bigger audience attracts more of them. */
   get trollChance() { return this.progression.level < 2 ? 0 : Math.min(.45, .12 + this.marketing.followers / 4000); }
-  updateProgress() { this.progression.update(this.context); }
+  updateProgress() { this.progression.update(this.context); this.syncMissions(); }
   isUnlocked(feature) { return this.progression.isUnlocked(feature); }
   /** Clients arrive at the same rate whatever the hours, so a longer day brings more of them. `dailyDemand` is per eight hours. */
   nextArrival() { return rand(.8, 1.2) * this.clock.hourLength * 8 / this.dailyDemand; }
@@ -193,7 +193,12 @@ export class TycoonGame {
   post(channel) { const f = this.marketing.followers, r = this.marketing.post(channel, this.clock.day, this.reelQuality, this.marketingPower); if (r) { this.missions.record('post'); this.missions.record('followers', this.marketing.followers - f); } return r; }
   runCampaign(id) { const f = this.marketing.followers, ok = this.marketing.run(id, this.marketingPower); if (ok) this.missions.record('followers', this.marketing.followers - f); return ok; }
   trainStaff(e) { const ok = this.staff.train(e); if (ok) this.missions.record('train'); return ok; }
-  claimMission(i) { return this.missions.claim(i, this.progression.level, f => this.isUnlocked(f)); }
+  /** Where the salon stands, for missions that track it. */
+  #missionState(kind) {
+    return { comfort: Math.round(this.comfort), hire: this.staff.hired.length, assistant: this.staff.support.filter(e => e.effect === 'tidy' && e.hired).length, regulars: this.regulars }[kind] ?? 0;
+  }
+  syncMissions() { this.missions.sync(k => this.#missionState(k)); }
+  claimMission(i) { return this.missions.claim(i, this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k)); }
   expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 2) this.layout.addAnnexPlants(); return true; }
   tick(dt) {
     this.clock.tick(dt); this.operatingCosts.accrue(this.clock.workedFraction);
@@ -202,7 +207,7 @@ export class TycoonGame {
   startDay() {
     if (this.nextHours) { this.clock.setHours(...this.nextHours); this.nextHours = null; }
     this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day);
-    this.missions.fill(this.progression.level, f => this.isUnlocked(f));
+    this.missions.fill(this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k));
     this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null;
     if (this.isSunday) { this.#dayOff(); return; }
     this.dayOff = false; this.marketing.startDay();

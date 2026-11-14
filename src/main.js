@@ -583,7 +583,7 @@ function finishDay(){game.staff.hired.filter(e=>e.quits).forEach(e=>{e.quits=fal
   game.closeDay();audio.play('dayEnd');paused=true;openMenu('day','day');}
 function dayTick(dt){if(game.report||game.dayOff)return;game.tick(dt);if(!game.clock.isOpen&&queue.length)queue.slice().forEach(c=>leave(c));if(!game.clock.isOpen&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
 game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');queue.slice().forEach(c=>leave(c));});
-game.bus.on('mission:done',m=>{popup(tx('ms.done',tx('ms.'+m.kind,m.kind==='revenue'?'$'+m.goal.toLocaleString():m.goal)),recep.head,'big');audio.play('levelUp');renderPanel(true);});
+game.bus.on('mission:done',m=>{popup(tx('ms.done',tx('ms.t.'+m.kind)),recep.head,'big');audio.play('levelUp');renderPanel(true);});
 $('#offday').addEventListener('click',e=>{const b=e.target.closest('[data-off]');if(!b)return;if(b.dataset.off==='week')openMenu('week','game');else{game.save();beginDay();}});
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
 game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');renderPanel(true);});
@@ -634,7 +634,10 @@ function simStep(dt){simT+=dt;
       const done=custs.filter(q=>q.state==='ready'),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>simT-q.readyAt>game.clock.hourLength/4);if(back){resumeAt(st,back);return;}
       if(!game.clock.isOpen||(booths.length&&!freeBooth()))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.perk==='vip',vipOnDuty=stations.some(s=>!s.vacant&&(s.item.id==='vipRoom'||s.sty.perk==='vip'));
       // VIP clients wait for a VIP chair (the VIP room or a VIP specialist) while one is on duty, unless half their patience is gone.
-      const waiting=queue.filter(q=>q.state==='wait'&&(!q.vip||vipChair||!vipOnDuty||q.pat<q.maxPat*.5)),c=(vipChair&&waiting.find(q=>q.vip))||waiting.slice(0,3).find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
+      const waiting=queue.filter(q=>q.state==='wait'&&(!q.vip||vipChair||!vipOnDuty||q.pat<q.maxPat*.5));
+      // A stylist whose client is processing at the island takes a quick cut first, to be free when that client is ready.
+      const islandClient=custs.some(q=>(q.state==='process'||q.state==='ready')&&q.resume&&q.resume.sty===st.sty);
+      const c=(vipChair&&waiting.find(q=>q.vip))||(islandClient&&waiting.find(q=>q.requestedService==='haircut'))||waiting.slice(0,3).find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep&&!st.filming){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
@@ -739,7 +742,7 @@ function drawPV(cv,h,skin,tint=0){if(!cv)return;const g=cv.getContext('2d');g.im
   const side=(h.len[7]+h.len[8]+h.len[9]+h.len[10])/4,capW=side<4?14:20;
   g.fillStyle=labCss(lab,.93);g.fillRect(24-capW/2,7,capW,13);g.fillRect(24-capW/2+1,6,capW-2,1);
   [7,8,9,10,11,12].forEach(j=>strand(j,3,.86));}
-function updateHud(){const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
+function updateHud(){game.syncMissions();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
   $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)}(${tx('wd.'+g.weekday)}) ${g.dayOff?tx('hud.off'):g.clock.timeText}</span></h1>

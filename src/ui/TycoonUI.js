@@ -10,6 +10,7 @@ import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS } from '../tycoon
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
 import { INVESTMENTS, LOANS, MISSION, MAX_SHARE } from '../tycoon/Finance.js';
+import { missionWho } from '../tycoon/Missions.js';
 
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 const RANK_ORDER = { master: 0, senior: 1, designer: 2, junior: 3 };
@@ -182,11 +183,16 @@ export class TycoonUI {
     return `<div class="bsec"><h4>${t('rv.title')}</h4><div class="brow"><span class="dim">${t('rv.manager', t(mgr.role === 'desk' ? 'rv.by.desk' : 'rv.by.owner', name(mgr.name)))}</span><span class="sp"></span>${auto}</div><div class="dim">${t('rv.weightNote')} ${t('rv.repNote', [5, 4, 3, 2, 1].map(n => `★${n} ${REVIEW_REP[n] > 0 ? '+' : REVIEW_REP[n] < 0 ? '−' : ''}${Math.abs(REVIEW_REP[n])}`).join(' · '))}</div><div class="brow"><b class="gold">${rv.count ? '★ ' + rv.rating.toFixed(1) : '–'}</b><span class="dim">${t('rv.count', rv.count)}</span></div>${dist}</div>
       <div class="bsec"><div class="seg" style="margin-bottom:4px">${filters}</div>${page.length ? page.map(row).join('') + more : `<div class="dim">${t('rv.none')}</div>`}</div>`;
   }
-  /** Side missions: three at a time, each with its progress and bonus. */
+  /** Side missions: three requests at a time, each with its progress, bonus and a line from whoever asks. */
   #missions() {
-    const t = (k, ...a) => this.#t(k, ...a), M = this.game.missions, money = k => k === 'revenue';
-    const cards = M.open.map((m, i) => { const done = m.progress >= m.goal, f = v => money(m.kind) ? '$' + Math.round(v).toLocaleString() : Math.round(v).toLocaleString();
-      return `<div class="offer"><div class="brow"><b>${t('ms.' + m.kind, f(m.goal))}</b><span class="sp"></span>${done ? `<button class="go" data-do="claim:${i}">${t('ms.claim', m.reward)}</button>` : `<span class="gold">${t('ms.reward', m.reward)}</span>`}</div><div class="meter ${done ? 'gold' : ''}"><i style="width:${Math.round(m.progress / m.goal * 100)}%"></i></div><div class="dim">${f(m.progress)} / ${f(m.goal)}</div></div>`; }).join('');
+    const t = (k, ...a) => this.#t(k, ...a), M = this.game.missions;
+    const cards = M.open.map((m, i) => {
+      const done = m.progress >= m.goal, who = missionWho(m.kind), f = v => m.kind === 'revenue' ? '$' + Math.round(v).toLocaleString() : Math.round(v).toLocaleString();
+      return `<div class="mcard ${done ? 'done' : ''}"><div class="brow"><b class="mt">${t('ms.t.' + m.kind)}</b><span class="sp"></span>${done ? `<button class="go" data-do="claim:${i}">${t('ms.claim', m.reward)}</button>` : `<span class="gold">${t('ms.reward', m.reward)}</span>`}</div>`
+        + `<div>${t('ms.' + m.kind, f(m.goal))}</div><div class="meter ${done ? 'gold' : ''}"><i style="width:${Math.round(m.progress / m.goal * 100)}%"></i></div>`
+        + `<div class="dim">${done ? `<span class="gold">${t('ms.stamp')}</span>` : `${f(m.progress)} / ${f(m.goal)}`}</div>`
+        + `<div class="say ${who}"><b>${t('ms.who.' + who)}</b> ${t('ms.l.' + m.kind + '.' + (m.line || 0))}</div></div>`;
+    }).join('');
     return `<div class="bsec"><h4>${t('ms.title')}</h4><div class="dim">${t('ms.note')}</div>${cards}<div class="dim">${t('ms.total', M.earned.toLocaleString(), M.done)}</div></div>`;
   }
   #growth() {
