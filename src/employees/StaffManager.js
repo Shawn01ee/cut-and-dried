@@ -82,7 +82,7 @@ export class StaffManager {
   startDay(day) {
     // A night's rest clears tiredness, except what long opening hours carry over.
     this.all.forEach(e => { e.stamina = 100 - (e.carry || 0); e.carry = 0; e.restUntil = 0; e.today = { served: 0, earn: 0 }; });
-    this.hired.forEach(e => { e.boost = COMMISSION_BOOST[this.commission]; if (e.onLeave(day)) e.addStress(-35); });
+    this.hired.forEach(e => { e.boost = this.baseBoost; if (e.onLeave(day)) e.addStress(-35); });
     this.version++;
   }
   /** Sunday off: tiredness carried over is gone and everyone unwinds. */
@@ -108,6 +108,8 @@ export class StaffManager {
     this.version++;
     return quitting;
   }
+  /** The skill boost performance pay gives everyone. */
+  get baseBoost() { return COMMISSION_BOOST[this.commission]; }
   /** Whether stylists get a random chair each morning. */
   setSeatShuffle(on) { this.seatShuffle = !!on; this.version++; }
   toJSON() { return { commission: this.commission, seatShuffle: this.seatShuffle }; }

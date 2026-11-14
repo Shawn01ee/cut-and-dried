@@ -62,7 +62,7 @@ export class Employee {
   /** How well this person sweeps, 0 to 100. */
   get cleaning() { return this.skills.cleaning ?? 50; }
   /** The whole service from start to finish, including any processing time. */
-  totalMinutes(type, speedBonus = 1) { return this.serviceMinutes(type, speedBonus) + (PROCESS_MINUTES[type] || 0); }
+  totalMinutes(type, speedBonus = 1, processSpeed = 1) { return this.serviceMinutes(type, speedBonus) + Math.round((PROCESS_MINUTES[type] || 0) / processSpeed); }
   serviceQuality() { const s = this.effectiveSkills; return Math.max(0, ((s.cutting + s.customerService) / 200) * (1 - this.fatigue / 200) * (1 - Math.max(0, this.stress - 60) / 200)); }
   tire(amount) { this.stamina = Math.max(0, this.stamina - amount); }
   rest(amount) { this.stamina = Math.min(100, this.stamina + amount); }

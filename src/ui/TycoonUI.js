@@ -11,6 +11,7 @@ import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
 import { INVESTMENTS, LOANS, MISSION, MAX_SHARE } from '../tycoon/Finance.js';
 import { missionWho } from '../tycoon/Missions.js';
+import { SYNERGIES } from '../tycoon/Synergies.js';
 
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 const RANK_ORDER = { master: 0, senior: 1, designer: 2, junior: 3 };
@@ -24,7 +25,7 @@ export class TycoonUI {
   key(page) {
     const g = this.game, b = this.build.active;
     return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.items.length, b && b.id, g.franchise.branches.filter(x => x.open).length, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), g.franchise.branches.map(b => b.clientsToday).join(),
-      g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.regulars, this.reviewFilter, this.reviewLimit].join('|');
+      g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit].join('|');
   }
   render(page) { return { staff: () => this.#staff(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#reviews(), prog: () => this.#growth() }[page](); }
 
@@ -46,12 +47,18 @@ export class TycoonUI {
     }
     const info = owner ? t('staff.ownerLv', e.level, e.experience, e.experienceToNext) + ' · ' + t('staff.you')
       : e.hired ? `${t('staff.pay', e.level, e.salary, Math.round(e.fatigue), e.experience, e.experienceToNext)} · <span class="${level(e.stress)}">${t('staff.stress', Math.round(e.stress))}</span> ${this.#status(e)}` : t('staff.wage', e.salary);
-    const times = `${t('staff.times', e.totalMinutes('cut', g.layout.speedBonus), e.totalMinutes('colour', g.layout.speedBonus), e.totalMinutes('wave', g.layout.speedBonus), e.totalMinutes('dry', g.layout.speedBonus))}`;
+    const times = `${t('staff.times', e.totalMinutes('cut', g.speedFor('cut'), g.processSpeedFor('cut')), e.totalMinutes('colour', g.speedFor('colour'), g.processSpeedFor('colour')), e.totalMinutes('wave', g.speedFor('wave'), g.processSpeedFor('wave')), e.totalMinutes('dry', g.speedFor('dry'), g.processSpeedFor('dry')))}`;
     const r = g.reviews.ratingFor(e.name), perf = e.hired ? `${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
     const special = SPECIAL_SKILL[e.specialty], stats = [['cut', s.cutting, 'cutting'], ['colour', s.colouring, 'colouring'], ['perm', s.perming, 'perming'], ['speed', s.speed, 'speed'], ['service', s.customerService, 'customerService']];
     const rows = [[e.specialty ? 'special' : null, `<span class="gold">${e.specialty ? t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100)) : ''}</span>`],
       [owner ? 'scope' : null, t('staff.allround')], [e.perk ? 'perk' : null, `<span class="good">${e.perk ? t('perk.' + e.perk) : ''}</span>`], ['times', times], [e.hired ? 'state' : 'pay', info], [perf ? 'perf' : null, perf], [this.hooks.seatOf(e) >= 0 ? 'seat' : null, this.#seatChips(e)]];
     return `<div class="scard">${this.#cardHead(e, actions)}${this.#statBars(stats.map(([k, v, key]) => [k, v, key === special]))}${this.#rows(rows)}</div>`;
+  }
+  /** Every team synergy: the ones today's team has first, each with what it needs and what it gives. */
+  #synergies() {
+    const t = (k, ...a) => this.#t(k, ...a), on = new Set(this.game.synergies.map(s => s.id));
+    const rows = [...SYNERGIES].sort((a, b) => on.has(b.id) - on.has(a.id)).map(s => `<div class="syn ${on.has(s.id) ? 'on' : ''}"><div class="brow"><b>${on.has(s.id) ? '✓ ' : ''}${t('syn.' + s.id)}</b><span class="sp"></span><span class="dim">${t('syn.' + s.id + '.need')}</span></div><div>${t('syn.' + s.id + '.effect')}</div></div>`).join('');
+    return `<div class="bsec"><h4>${t('syn.title', on.size)}</h4><div class="dim">${t('syn.note')}</div>${rows}</div>`;
   }
   /** Name, grade mark, role and gender, with the action buttons on the right. */
   #cardHead(e, actions) {
@@ -75,7 +82,7 @@ export class TycoonUI {
     const course = desk && e.hired ? `<button data-do="mtrain:${e.id}" ${(e.skills.marketing || 0) >= 100 || !g.economy.canAfford(g.staff.marketingCourseCost(e)) ? 'disabled' : ''}>${t('staff.mcourse', g.staff.marketingCourseCost(e))}</button>` : '';
     const action = e.hired ? `${course}<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : `<button class="go" data-do="shire:${e.id}" ${!g.economy.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
     const k = e.skills, stats = desk ? [['speed', k.speed], ['service', k.customerService], ['marketing', k.marketing || 0]] : [['shampoo', k.shampoo], ['cleaning', k.cleaning], ['speed', k.speed], ['service', k.customerService]];
-    const effect = desk ? t('support.ruby') : t('staff.aeffect', e.serviceMinutes('shampoo'), this.hooks.sweepMinutes(e.cleaning), (e.washQuality >= .6 ? '+' : '−') + Math.abs(Math.round((e.washQuality - .6) * 25)));
+    const effect = desk ? t('support.ruby') : t('staff.aeffect', e.serviceMinutes('shampoo', g.speedFor('shampoo')), this.hooks.sweepMinutes(e.cleaning), (e.washQuality >= .6 ? '+' : '−') + Math.abs(Math.round((e.washQuality - .6) * 25)));
     return `<div class="scard">${this.#cardHead(e, action)}${this.#statBars(stats)}${this.#rows([['about', desk ? t('support.deskRole') : t('support.' + e.id)], ['effect', effect], ['pay', t('staff.wage', e.salary)]])}</div>`;
   }
   #staff() {
@@ -85,6 +92,7 @@ export class TycoonUI {
     return `<div class="bsec"><h4>${t('staff.policy')}</h4><div class="brow"><span>${t('staff.commission')}</span><span class="sp"></span><span class="seg">${commission}</span></div>
       <div class="brow"><span>${t('staff.shuffle')}</span><span class="sp"></span><span class="seg"><button data-do="shuffle:0" class="${st.seatShuffle ? '' : 'sel'}">${t('pol.off')}</button><button data-do="shuffle:1" class="${st.seatShuffle ? 'sel' : ''}">${t('pol.on')}</button></span></div><div class="dim">${t('staff.shuffleD')}</div>
       <div class="brow"><span>${t('staff.dinner')}</span><span class="dim">${t('staff.perHead', DINNER_PER_HEAD)}</span><span class="sp"></span><button data-do="dinner" ${!st.hired.length || st.dinnerDay === g.clock.day || !g.economy.canAfford(st.dinnerCost()) ? 'disabled' : ''}>${st.dinnerDay === g.clock.day ? t('staff.dinnerDone') : '$' + st.dinnerCost()}</button></div></div>
+      ${this.#synergies()}
       <div class="bsec"><h4>${t('staff.designers')}</h4>${g.isUnlocked('staff') ? '' : `<div class="dim">${t('staff.lock')}</div>`}${[st.owner, ...team].map(e => this.#staffRow(e)).join('')}</div><div class="bsec"><h4>${t('staff.support')}</h4>${st.support.map(e => this.#supportRow(e)).join('')}</div>`;
   }
   #build() {
