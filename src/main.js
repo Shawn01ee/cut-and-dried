@@ -823,8 +823,18 @@ $('#bSound').onclick=()=>{audio.toggleMute();syncCtrl();};
 $('#bHelp').onclick=()=>{build.cancel();paused=true;openMenu('how','game');};
 $('#bZo').onclick=()=>zoomGoal=clamp(zoomGoal/1.2,ZOOM_MIN,ZOOM_MAX);$('#bZi').onclick=()=>zoomGoal=clamp(zoomGoal*1.2,ZOOM_MIN,ZOOM_MAX);$('#bCenter').onclick=recenter;
 /** Zooms to `z`, keeping the ground under the screen point (x, y) where it is. */
-function zoomAt(z,x,y){z=clamp(z,ZOOM_MIN,ZOOM_MAX);const p=groundAt(x,y);if(p&&!styling){const k=1-zoom/z;panBy((p.x-camTarget.x)*k,(p.z-camTarget.z)*k,false);}zoomGoal=z;}
-canvas.addEventListener('wheel',e=>{e.preventDefault();zoomAt(zoomGoal*(e.deltaY<0?1.1:1/1.1),e.clientX,e.clientY);},{passive:false});
+function zoomAt(z,x,y){z=clamp(z,ZOOM_MIN,ZOOM_MAX);if(z===zoomGoal)return;const p=groundAt(x,y);
+  // measured against where the view is heading, not where it is mid-animation, so quick scrolling cannot overshoot
+  if(p&&!styling){const c=V().copy(camHome).add(panOff),k=1-zoomGoal/z;panBy((p.x-c.x)*k,(p.z-c.z)*k,false);}zoomGoal=z;}
+/**
+ * The wheel: a trackpad pinch (or Ctrl/⌘ + scroll) zooms smoothly by how far the fingers move, a two-finger trackpad scroll moves
+ * the view, and a mouse wheel zooms a small step per notch.
+ */
+canvas.addEventListener('wheel',e=>{e.preventDefault();const unit=e.deltaMode===1?16:e.deltaMode===2?innerHeight:1,dx=e.deltaX*unit,dy=e.deltaY*unit;
+  const trackpad=e.deltaMode===0&&(Math.abs(dx)>0||Math.abs(dy)<40||!Number.isInteger(dy));
+  if(e.ctrlKey||e.metaKey)zoomAt(zoomGoal*Math.exp(clamp(-dy*.006,-.08,.08)),e.clientX,e.clientY);
+  else if(trackpad){if(!styling)dragView(e.clientX,e.clientY,e.clientX-dx,e.clientY-dy);}
+  else zoomAt(zoomGoal*(dy<0?1.08:1/1.08),e.clientX,e.clientY);},{passive:false});
 const ptrs=new Map();let pinch0=0,zoom0=1,down=null,dragging=false,mid0=null;
 const midOf=()=>{const [a,b]=[...ptrs.values()];return [(a[0]+b[0])/2,(a[1]+b[1])/2];};
 /** Moves the view so the ground under (x0, y0) ends up under (x1, y1). */
@@ -986,4 +996,4 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   if(!booted){booted=true;boot();}}
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
