@@ -41,10 +41,16 @@ const DEFINITIONS = [
   { id: 'sena', name: 'Sena', gender: 'f', role: 'Junior Designer', rank: 'junior', style: 'ColourSpecialist', specialty: 'colour', perk: 'consult', skills: { cutting: 44, colouring: 65, perming: 42, speed: 68, customerService: 70 }, salary: 225, hireCost: 550, apron: 0x1d1a26, hair: 0xc8642a, hairdo: 'bob', skin: 0xe7b892 },
 ];
 
+/** Stand-ins for an empty front desk, so callers can simply ask whether its receptionist is hired. */
+const NO_DESK = [0, 1].map(site => Object.freeze({ id: null, name: '', effect: 'reception', site, hired: false, away: false, skills: Object.freeze({ speed: 0, customerService: 0, marketing: 0 }) }));
 const SUPPORT = [
-  { id: 'ruby', name: 'Ruby', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, hair: 0x2e1d14, hairdo: 'bun', skin: 0xc98e66, startsHired: true },
+  { id: 'ruby', name: 'Ruby', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', site: 0, skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, hair: 0x2e1d14, hairdo: 'bun', skin: 0xc98e66, startsHired: true },
   // The second salon's front desk: greets its clients and brings in its passers-by. Hired once it opens.
   { id: 'juno', name: 'Juno', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', site: 1, skills: { cutting: 0, colouring: 0, perming: 0, speed: 58, customerService: 80, marketing: 45 }, salary: 230, hireCost: 400, apron: 0x1fa39a, hair: 0x6e4428, hairdo: 'bob', skin: 0xe7b892 },
+  // More receptionists to choose from: a marketer, a host and a newcomer. Each is posted to a free desk when hired.
+  { id: 'gina', name: 'Gina', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 55, customerService: 66, marketing: 72 }, salary: 270, hireCost: 650, apron: 0xe25c8f, hair: 0x16110f, hairdo: 'long', skin: 0xf6d6bd },
+  { id: 'eden', name: 'Eden', gender: 'm', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 62, customerService: 93, marketing: 30 }, salary: 250, hireCost: 500, apron: 0x2a4478, hair: 0x2e1d14, hairdo: 'short', skin: 0xc98e66 },
+  { id: 'nell', name: 'Nell', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 70, customerService: 68, marketing: 22 }, salary: 150, hireCost: 150, apron: 0xffd98a, hair: 0xc8642a, hairdo: 'bun', skin: 0xf6d6bd },
   // Assistants wash and sweep. `shampoo` is how good a wash is, `cleaning` how quickly and widely they sweep.
   { id: 'hugo', name: 'Hugo', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 60, customerService: 60, shampoo: 60, cleaning: 60 }, salary: 140, hireCost: 260, apron: 0x5f9e45, hair: 0x8f5a2e, skin: 0xe7b892 },
   { id: 'jin', name: 'Jin', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 74, customerService: 52, shampoo: 45, cleaning: 84 }, salary: 135, hireCost: 240, apron: 0xffb15a, hair: 0x16110f, skin: 0xc98e66 },
@@ -71,7 +77,7 @@ export class StaffManager {
     this.owner.hired = true; this.owner.daysEmployed = Infinity;
     this.candidates = DEFINITIONS.map(d => new Employee(d));
     // Front desk and floor help, never at a styling chair. Only the receptionist is there on day one.
-    this.support = SUPPORT.map(d => Object.assign(new Employee(d), { effect: d.effect, site: d.site || 0, hired: !!d.startsHired }));
+    this.support = SUPPORT.map(d => Object.assign(new Employee(d), { effect: d.effect, site: d.site ?? null, hired: !!d.startsHired }));
     this.commission = 0; this.dinnerDay = 0; this.seatShuffle = false; this.version = 0;
   }
   get all() { return [this.owner, ...this.candidates]; }
@@ -79,7 +85,9 @@ export class StaffManager {
   /** The first salon's receptionist, who also runs the salon's marketing and reviews. */
   get receptionist() { return this.receptionistAt(0); }
   /** The receptionist at a salon's front desk. */
-  receptionistAt(site) { return this.support.find(e => e.effect === 'reception' && e.site === site); }
+  receptionistAt(site) { return this.support.find(e => e.effect === 'reception' && e.hired && e.site === site) || NO_DESK[site]; }
+  /** Hires a receptionist for a salon's desk, if that desk is free. */
+  hireAt(e, site) { if (e.effect !== 'reception' || this.receptionistAt(site).hired || !this.hire(e)) return false; e.site = site; this.version++; return true; }
   /** Hired stylists who are in today rather than on leave. */
   working(day) { return this.hired.filter(e => !e.onLeave(day)); }
   get payroll() { return [...this.hired, ...this.support.filter(e => e.hired)].reduce((sum, e) => sum + e.salary, 0); }

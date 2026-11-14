@@ -334,11 +334,18 @@ function frameStation(st){const it=st.item,[ox,oz,t]=FURNITURE[it.id].chairs[st.
   const at=(lx,lz)=>{const [rx,rz]=quarter(lx,lz,t),p=game.layout.toWorld(it,ox+rx,oz+rz);return V(p.x,0,p.z);};
   Object.assign(st,{yaw,face:yaw+Math.PI,at,rot:v=>v.clone().applyAxisAngle(UP,yaw),chair:at(0,.45),stand:at(0,1.05),approach:at(0,1.35)});}
 function makeStation(item,k){const st={item,k,sty:VAC,vacant:true,cust:null,state:'vacant',plan:null,ops:[],opi:0,timer:0,touched:false,washing:null,sweep:null};frameStation(st);return st;}
-const recep=new Fig({skin:0xc98e66,shirt:0x8a4fc2,pants:0x1d1a26,staffHair:0x2e1d14,bun:true});recep.pos.set(-3.6,0,1.0);recep.yaw=Math.PI/2;recep.mode='sit';recep.seatH=.72;recep.footY=.3;
-// Juno, at the second salon's desk once she is hired
-const recep2=new Fig({skin:0xe7b892,shirt:0x1fa39a,pants:0x1d1a26,staffHair:0x6e4428});recep2.mode='sit';recep2.seatH=.72;recep2.footY=.3;recep2.root.visible=false;
+// The figures at the two front desks, dressed as whoever is posted there.
+const DESK_LOOKS={ruby:{skin:0xc98e66,shirt:0x8a4fc2,pants:0x1d1a26,staffHair:0x2e1d14,bun:true},juno:{skin:0xe7b892,shirt:0x1fa39a,pants:0x1d1a26,staffHair:0x6e4428},
+  gina:{skin:0xf6d6bd,shirt:0xe25c8f,pants:0x1d1a26,staffHair:0x16110f,long:true},eden:{skin:0xc98e66,shirt:0x2a4478,pants:0x1d1a26,staffHair:0x2e1d14},nell:{skin:0xf6d6bd,shirt:0xffd98a,pants:0x2a4478,staffHair:0xc8642a,bun:true}};
+function makeDeskFig(id){const f=new Fig(DESK_LOOKS[id]||DESK_LOOKS.ruby);f.mode='sit';f.seatH=.72;f.footY=.3;return f;}
+let recep=makeDeskFig('ruby');recep.pos.set(-3.6,0,1.0);recep.yaw=Math.PI/2;
+let recep2=makeDeskFig('juno');recep2.root.visible=false;
+const deskOwner=['ruby','juno'];
 /** The figure at a salon's front desk. */
 const deskFig=site=>site?recep2:recep;
+/** Swaps a desk's figure when someone else is posted there. */
+function restyleDesks(){[0,1].forEach(site=>{const e=game.staff.receptionistAt(site),id=e.hired?e.id:(site?'juno':'ruby');if(deskOwner[site]===id)return;deskOwner[site]=id;
+  const old=deskFig(site),f=makeDeskFig(id);f.pos.copy(old.pos);f.yaw=old.yaw;f.root.visible=old.root.visible;world.remove(old.root);figs.splice(figs.indexOf(old),1);if(site)recep2=f;else recep=f;});}
 // Assistants wash hair at the shampoo booths and sweep up. Each has a figure and at most one job.
 const HELPER_LOOKS={hugo:{skin:0xe7b892,shirt:0xffb15a,pants:0x2a4478,staffHair:0x8f5a2e},jin:{skin:0xc98e66,shirt:0x1d1a26,pants:0x2e2a38,staffHair:0x16110f},tess:{skin:0xf6d6bd,shirt:0xdcd9dc,pants:0x2a4478,staffHair:0xc8642a,long:true},
   momo:{skin:0xf6d6bd,shirt:0xf6f3ee,pants:0x1d1a26,staffHair:0x16110f,bun:true},dex:{skin:0x6b3e2a,shirt:0x2e2a38,pants:0x1d1a26,staffHair:0x16110f},kit:{skin:0xf6d6bd,shirt:0xffd98a,pants:0x2a4478,staffHair:0xe8c27a},
@@ -506,7 +513,7 @@ const canAuto=st=>autoOn&&!st.touched;
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
 /** Shows who is hired at the desks and on the floor, and shares the assistants out among the basins again. */
-function syncSupport(){if(deskInfo)syncAnchors();recep.root.visible=game.staff.receptionist.hired;recep2.root.visible=game.layout.branchOpen&&game.staff.receptionistAt(1).hired&&!!deskAt[1];helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
+function syncSupport(){restyleDesks();if(deskInfo)syncAnchors();recep.root.visible=game.staff.receptionist.hired;recep2.root.visible=game.layout.branchOpen&&game.staff.receptionistAt(1).hired&&!!deskAt[1];helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
 const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.2,1.38],[2,-.8,1.55],[4,-.8,1.8],[4,-1.8,1.95]];
 function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;annex2Group.visible=t>=4;rear2Group.visible=t>=5;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site===0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
