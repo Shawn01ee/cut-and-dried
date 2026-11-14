@@ -378,7 +378,7 @@ function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=
 const booths=[],washes=[];
 const freeBooth=()=>booths.find(b=>!b.client&&!pendingMoves.has(b.item)&&!queuedMoves.has(b.item)),freeHelper=()=>helpers.find(h=>h.fig.root.visible&&!h.task);
 /** Shampoo at a free booth: a free assistant washes, otherwise the client's own stylist steps away from the chair to do it. */
-function shampoo(c,st,lead,start,then){const b=freeBooth(),h=freeHelper(),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo')*game.clock.hourLength/60};
+function shampoo(c,st,lead,start,then){const b=freeBooth(),h=freeHelper(),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo',game.speedFor('shampoo'))*game.clock.hourLength/60};
   b.client=c;c.inWash=true;if(h)h.task={kind:'wash',T};else st.washing=T;washes.push(T);
   washer.handL=washer.handR=null;washer.setTool(null);washer.walkTo(route(washer.pos,b.washAt),()=>{washer.yaw=b.washYaw;T.ready=true;});
   c.fig.walkTo([...lead,...route(start,b.seatApp),b.seat.clone()],()=>{Object.assign(c.fig,{mode:'sit',yaw:b.seatYaw,seatH:.5,footY:.2,tilt:-.45});c.fig.pos.copy(b.seat);T.seated=true;audio.play('swish');});}
@@ -397,7 +397,7 @@ function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OW
   st.ops=ops;st.opi=0;st.state='work';beginOp(st);renderPanel(true);}
 const TOOLS={colour:'brush',wave:'comb',cut:'scissors',dry:'dryer'};
 /** Minutes and simulated time for each step: the stylist's own times, and the fixed processing times. */
-function timeOps(ops,worker){ops.forEach(o=>{o.minutes=o.type==='process'?PROCESS_MINUTES[o.of]:worker.serviceMinutes(o.type,game.layout.speedBonus);o.dur=o.minutes*game.clock.hourLength/60;});}
+function timeOps(ops,worker){ops.forEach(o=>{o.minutes=o.type==='process'?Math.round(PROCESS_MINUTES[o.of]/game.processSpeedFor(o.of)):worker.serviceMinutes(o.type,game.speedFor(o.type));o.dur=o.minutes*game.clock.hourLength/60;});}
 /**
  * A processing client moves to a free seat at the styling island, so the chair and stylist are free for someone else.
  * They come back to a chair when it is done. Returns false when no island seat is free.
@@ -410,6 +410,9 @@ function toIsland(st){const seat=procSeats.find(s=>!s.occ);if(!seat)return false
   if(w!==st.sty){const home=ownerStation();w.fig.walkTo(route(w.fig.pos,home?home.stand:OWNER_IDLE),()=>w.fig.yaw=home?home.face:Math.PI);}
   const f=c.fig;f.walkTo([...route(f.pos,seat.app[0]),seat.pos],()=>{Object.assign(f,{mode:'sit',yaw:seat.yaw,seatH:seat.h,footY:.06});c.procSeated=true;});
   if(sel===st.i)renderPanel(true);return true;}
+/** While a finished client waits at the island, the front desk brings them whatever the salon offers. */
+function islandTreat(c){if(!game.staff.receptionist.hired||c.islandTreated)return;const drink=game.hospitality.topUp(c);if(drink==null)return;c.islandTreated=true;
+  if(drink)c.fig.setTool(drink==='juice'?'juice':'cup');popup(tx('proc.treat',nm(recepName())),c.fig.head,'');}
 /** A client whose colour or perm has processed comes back to a chair to finish. */
 function resumeAt(st,c){if(c.procSeat)c.procSeat.occ=null;c.procSeat=null;c.state='toStation';st.cust=c;st.state='await';st.touched=true;
   const f=c.fig;f.walkTo([...route(f.pos,st.approach),st.chair.clone()],()=>{Object.assign(f,{mode:'sit',yaw:st.face,seatH:.55,footY:.17});f.pos.copy(st.chair);c.state='chair';
@@ -623,7 +626,7 @@ function simStep(dt){simT+=dt;
   if(game.clock.isOpen){spawnTimer-=dt;if(spawnTimer<=0){spawnCustomer();spawnTimer=game.nextArrival();}}
   dayTick(dt);
   // waiting patience
-  custs.forEach(c=>{if(c.state==='process'&&c.procSeated){c.procLeft-=dt;c.tint=.3;if(c.procLeft<=0){c.state='ready';c.readyAt=simT;c.tint=0;popup(tx('proc.done'),c.fig.head,'');}}});
+  custs.forEach(c=>{if(c.state==='process'&&c.procSeated){c.procLeft-=dt;c.tint=.3;if(c.procLeft<=0){c.state='ready';c.readyAt=simT;c.tint=0;popup(tx('proc.done'),c.fig.head,'');islandTreat(c);}}});
   custs.forEach(c=>{if(c.state==='wait'){c.pat-=dt;if(c.pat<=0){popup(tx('tooSlow'),c.fig.head,'');audio.play('bad');game.customerGaveUp(c);leave(c);}}});
   // stations
   stations.forEach(st=>{
@@ -631,7 +634,8 @@ function simStep(dt){simT+=dt;
     if(st.sweep){if(updateSweep(st.sweep,dt))st.sweep=null;}
     else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
     if(st.state==='free'){if(st.sty.restUntil>simT||st.sweep||st.filming||pendingMoves.has(st.item)||queuedMoves.has(st.item))return;
-      const done=custs.filter(q=>q.state==='ready'),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>simT-q.readyAt>game.clock.hourLength/4);if(back){resumeAt(st,back);return;}
+      // A client whose colour or perm is done waits at the island for their own stylist; another takes over only if theirs is not at a chair, or after an hour.
+      const done=custs.filter(q=>q.state==='ready'),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>!stations.some(s=>s.sty===q.resume.sty)||simT-q.readyAt>game.clock.hourLength);if(back){resumeAt(st,back);return;}
       if(!game.clock.isOpen||(booths.length&&!freeBooth()))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.perk==='vip',vipOnDuty=stations.some(s=>!s.vacant&&(s.item.id==='vipRoom'||s.sty.perk==='vip'));
       // VIP clients wait for a VIP chair (the VIP room or a VIP specialist) while one is on duty, unless half their patience is gone.
       const waiting=queue.filter(q=>q.state==='wait'&&(!q.vip||vipChair||!vipOnDuty||q.pat<q.maxPat*.5));

@@ -7,7 +7,8 @@ import { starsFor } from '../tycoon/ReviewBoard.js';
 
 /** Turns a finished service into the result metrics, the client's satisfaction and a payment. */
 export class ServiceEvaluator {
-  evaluate(customer, worker, comfort) {
+  /** `extra` holds the team's synergies: { satisfaction, calm }. */
+  evaluate(customer, worker, comfort, extra = {}) {
     const { hair, order } = customer, match = score(hair, order);
     const wf = 1 - .12 * hair.wave, target = profile(order.shape, order.L);
     const diff = hair.len.map((l, j) => l * wf - target[j]);
@@ -23,10 +24,10 @@ export class ServiceEvaluator {
     // Difficult clients start harder to please and always find something to pick on.
     const nitpick = customer.villain ? findNitpick({ treated, comfort, wait, priceFit, quality }) : null;
     // A VIP specialist puts VIPs at ease; a calm stylist is not thrown by a difficult client.
-    const expectation = (customer.vip && worker.perk !== 'vip' ? .05 : 0) + (customer.influencer ? .05 : 0) + (villainPenalty(customer.villain) + (nitpick ? nitpick.penalty : 0)) * (worker.perk === 'calm' ? .5 : 1);
+    const expectation = (customer.vip && worker.perk !== 'vip' ? .05 : 0) + (customer.influencer ? .05 : 0) + (villainPenalty(customer.villain) + (nitpick ? nitpick.penalty : 0)) * (worker.perk === 'calm' || extra.calm ? .5 : 1);
     // Treats guarantee a minimum, however the hair turns out; difficult clients honour three quarters of it.
     const floor = satisfactionFloor(treated) * (customer.villain ? .75 : 1);
-    const satisfaction = Math.max(floor, clamp(.62 * match.all + .12 * quality + .1 * wait + .08 * priceFit + .08 * environment + treated * .012 + (customer.washed ? ((customer.washQuality ?? .6) - .6) * .1 : -.05) - expectation + (specialist ? SPECIALTY_SATISFACTION : 0)));
+    const satisfaction = Math.max(floor, clamp(.62 * match.all + .12 * quality + .1 * wait + .08 * priceFit + .08 * environment + treated * .012 + (extra.satisfaction || 0) + (customer.washed ? ((customer.washQuality ?? .6) - .6) * .1 : -.05) - expectation + (specialist ? SPECIALTY_SATISFACTION : 0)));
     // Review stars: the hair sets the base, then everything around it (service) adds or takes away.
     const hairScore = clamp(match.all + (specialist ? .05 : 0));
     const service = clamp(.3 * Math.min(1, treated / 6) + .25 * wait + .2 * clamp((comfort - 4) / 16) + (customer.washed ? .1 + ((customer.washQuality ?? .6) - .6) * .25 : 0) + .15 * clamp((worker.effectiveSkills.customerService - 40) / 60) + (worker.perk === 'consult' ? .15 : 0) + (customer.spa ? .12 : 0) + (customer.vipRoom ? .1 : 0));

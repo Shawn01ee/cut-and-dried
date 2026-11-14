@@ -28,7 +28,7 @@ export class CustomerFactory {
     }
     const rewave = Math.abs(wave - hair.wave) > .4, vip = !influencer && Math.random() < vipChance;
     // Melbourne salon prices in AUD: a cut, plus colour and perm when the order needs them.
-    const list = 85 + (recolour ? 120 : 0) + (rewave ? 110 : 0);
+    const list = 85 + (recolour ? 150 : 0) + (rewave ? 140 : 0);
     const pool = male ? MALE_NAMES : FEMALE_NAMES, free = pool.filter(n => !usedNames.has(n)), name = pick(free.length ? free : pool);
     // An influencer is sponsored: the service is free in exchange for a post.
     if (influencer) influencer.handle = `@${name.toLowerCase()}.${pick(['hair', 'style', 'daily', 'melb'])}`;

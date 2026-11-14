@@ -31,6 +31,18 @@ export class Hospitality {
    * Treats a client who just sat down: they wait longer and enjoy the visit more.
    * Charges the cost and returns the drink they are holding, if any.
    */
+  /**
+   * Another round for a client who is kept waiting, such as at the styling island: it adds to how well they were
+   * looked after and to their patience. Returns the drink served, '' for a snack only, or null when nothing is on offer.
+   */
+  topUp(customer) {
+    const items = this.serving; if (!items.length) return null;
+    customer.treated = (customer.treated || 0) + items.reduce((sum, id) => sum + AMENITIES[id].points, 0);
+    customer.pat *= 1.1; customer.maxPat *= 1.1;
+    this.economy.charge('hospitality', this.costPerClient);
+    const drinks = items.filter(id => DRINKS.includes(id));
+    return drinks.length ? pick(drinks) : '';
+  }
   serve(customer) {
     const items = this.serving;
     customer.treated = items.reduce((sum, id) => sum + AMENITIES[id].points, 0) + this.bonus;

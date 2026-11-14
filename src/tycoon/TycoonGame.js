@@ -12,6 +12,7 @@ import { Hospitality } from './Hospitality.js';
 import { Finance } from './Finance.js';
 import { Rival } from './Rival.js';
 import { Missions } from './Missions.js';
+import { SYNERGIES, teamOf } from './Synergies.js';
 import { StaffManager } from '../employees/StaffManager.js';
 import { CustomerFactory } from '../customers/CustomerFactory.js';
 import { ServiceEvaluator } from '../customers/ServiceEvaluator.js';
@@ -84,6 +85,17 @@ export class TycoonGame {
   }
   /** How Ciel Ground looks from outside, for the rival to react to. */
   /** What Shawn, the CEO, thinks the salon is worth. */
+  /** The synergies today's team has. */
+  get synergies() { const T = teamOf([this.staff.owner, ...this.staff.working(this.clock.day)], this.staff.support); return SYNERGIES.filter(s => s.has(T)); }
+  /** How much quicker a service of `type` goes: equipment, then the team's synergies. */
+  speedFor(type) { return this.layout.speedBonus * this.processSpeedFor(type); }
+  /** How much quicker colour or perm processes: only the team's synergies change that. */
+  processSpeedFor(type) { return this.synergies.reduce((k, s) => k * ((s.speed && s.speed[type]) || 1), 1); }
+  /** Synergy boosts to skills: the base boost from performance pay, plus mentoring for juniors. */
+  #applySynergyBoosts() {
+    const junior = this.synergies.reduce((n, s) => n + (s.juniorBoost || 0), 0);
+    this.staff.candidates.forEach(e => { e.boost = e.hired ? this.staff.baseBoost + (e.rank === 'junior' ? junior : 0) : 0; });
+  }
   get #valueContext() { return { reputation: this.reputation.value, followers: this.marketing.followers, chairs: this.layout.chairs, branches: this.franchise.branches.filter(b => b.open).length }; }
   get valuation() { return this.finance.valuation(this.#valueContext); }
   /** The parts of the salon's value: [part, counted from, dollars]. */
@@ -99,10 +111,10 @@ export class TycoonGame {
   get averageSatisfaction() { return this.served ? this.satisfactionSum / this.served : 0; }
   /** How good a reel filmed right now looks: the latest finished style, the salon and its rating. */
   has(id) { return this.layout.items.some(it => it.id === id); }
-  get reelQuality() { return clamp(.1 + (this.has('photoZone') ? .12 : 0) + Math.min(.2, this.staff.hired.filter(e => e.perk === 'trend').length * .1) + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
+  get reelQuality() { return clamp(.1 + this.synergies.reduce((n, x) => n + (x.reel || 0), 0) + (this.has('photoZone') ? .12 : 0) + Math.min(.2, this.staff.hired.filter(e => e.perk === 'trend').length * .1) + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
   /** Chance that someone posts a fake one-star review today; a bigger audience attracts more of them. */
   get trollChance() { return this.progression.level < 2 ? 0 : Math.min(.45, .12 + this.marketing.followers / 4000); }
-  updateProgress() { this.progression.update(this.context); this.syncMissions(); }
+  updateProgress() { this.progression.update(this.context); this.syncMissions(); this.#applySynergyBoosts(); }
   isUnlocked(feature) { return this.progression.isUnlocked(feature); }
   /** Clients arrive at the same rate whatever the hours, so a longer day brings more of them. `dailyDemand` is per eight hours. */
   nextArrival() { return rand(.8, 1.2) * this.clock.hourLength * 8 / this.dailyDemand; }
@@ -119,16 +131,21 @@ export class TycoonGame {
   /** A client for the main salon. Branch clients (`walkIn` false) are never influencers or difficult clients. */
   newCustomer(usedNames, walkIn = true) {
     const influencer = walkIn ? this.marketing.takeInfluencer() : null;
-    return this.customers.create(usedNames, {
+    const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
       vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfort * .03) * (this.staff.hasSupport('reception') ? 1.15 : 1),
       villain: walkIn && !influencer ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor,
     });
+    if (c.vip) { const k = this.synergies.reduce((m, x) => m * (x.vipPatience || 1), 1); c.pat *= k; c.maxPat *= k; }
+    return c;
   }
   serviceProfileOf(worker) { return worker.serviceProfile(this.layout.speedBonus); }
   chargeMaterials(ops) { ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', MATERIALS[op.type]); }); }
   completeService(customer, worker, byOwner) {
-    const result = this.evaluator.evaluate(customer, worker, this.comfort);
+    const syn = this.synergies, result = this.evaluator.evaluate(customer, worker, this.comfort, {
+      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0), calm: syn.some(s => s.calm),
+    });
+    if (customer.vip) result.payment = Math.round(result.payment * syn.reduce((k, s) => k * (s.vipPay || 1), 1));
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);
     if (customer.vip && worker.perk === 'vip') result.payment = Math.round(result.payment * 1.2);
     if (customer.vip && customer.vipRoom) result.payment = Math.round(result.payment * 1.25);
