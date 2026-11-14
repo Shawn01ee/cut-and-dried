@@ -49,7 +49,7 @@ export class StaffManager {
     this.candidates = DEFINITIONS.map(d => new Employee(d));
     // Front desk and floor help, never at a styling chair. Only the receptionist is there on day one.
     this.support = SUPPORT.map(d => Object.assign(new Employee(d), { effect: d.effect, hired: !!d.startsHired }));
-    this.commission = 0; this.dinnerDay = 0; this.version = 0;
+    this.commission = 0; this.dinnerDay = 0; this.seatShuffle = false; this.version = 0;
   }
   get all() { return [this.owner, ...this.candidates]; }
   get hired() { return this.candidates.filter(e => e.hired); }
@@ -108,6 +108,8 @@ export class StaffManager {
     this.version++;
     return quitting;
   }
-  toJSON() { return { commission: this.commission }; }
-  restore(d) { this.commission = d?.commission || 0; this.version++; }
+  /** Whether stylists get a random chair each morning. */
+  setSeatShuffle(on) { this.seatShuffle = !!on; this.version++; }
+  toJSON() { return { commission: this.commission, seatShuffle: this.seatShuffle }; }
+  restore(d) { this.commission = d?.commission || 0; this.seatShuffle = !!d?.seatShuffle; this.version++; }
 }
