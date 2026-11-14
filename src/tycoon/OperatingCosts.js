@@ -22,6 +22,8 @@ export class OperatingCosts {
       maintenance: Math.round(furnitureValue * MAINTENANCE_RATE * thrift),
     };
   }
+  /** A day off: rent and upkeep still fall due, but there are no wages or running costs. */
+  chargeDayOff() { const b = this.breakdown; for (const k of ['rent', 'maintenance']) if (b[k]) this.economy.charge(k, b[k]); }
   /** Rent is set each morning, so a level-up or expansion only raises it from the next day. */
   startDay() { this.#charged = {}; this.#rent = RENT_BY_LEVEL[this.progression.level] + RENT_PER_EXPANSION * this.layout.tier; }
   /** Charges whatever is due for the share of the day worked. Safe to call repeatedly. */

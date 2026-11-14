@@ -11,6 +11,7 @@ import { ReviewBoard } from './ReviewBoard.js';
 import { Hospitality } from './Hospitality.js';
 import { Finance } from './Finance.js';
 import { Rival } from './Rival.js';
+import { Missions } from './Missions.js';
 import { StaffManager } from '../employees/StaffManager.js';
 import { CustomerFactory } from '../customers/CustomerFactory.js';
 import { ServiceEvaluator } from '../customers/ServiceEvaluator.js';
@@ -50,6 +51,9 @@ export class TycoonGame {
     this.reviews = new ReviewBoard();
     this.hospitality = new Hospitality(this.economy, this.layout);
     this.finance = new Finance(this.economy);
+    this.missions = new Missions(this.economy); this.missions.onDone = m => this.bus.emit('mission:done', m);
+    // The week so far (one report a working day), the last weekly settlement, and whether today is the day off.
+    this.weekLog = []; this.weekReport = null; this.dayOff = false;
     this.rival = new Rival();
     this.customers = new CustomerFactory();
     this.evaluator = new ServiceEvaluator();
@@ -59,6 +63,9 @@ export class TycoonGame {
     // Regular clients come back on their own; stylists who want to quit and rival news wait for the morning.
     this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null;
   }
+  /** 0 for Monday up to 6 for Sunday; day 1 is a Monday. */
+  get weekday() { return (this.clock.day - 1) % 7; }
+  get isSunday() { return this.weekday === 6; }
   get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned }; }
   /**
    * Where clients come from, per eight hours: a few passers-by, then more as reputation, comfort, followers and
@@ -134,16 +141,19 @@ export class TycoonGame {
     const learning = this.staff.hasPerk('mentor') && worker.perk !== 'mentor' ? 1.5 : 1;
     if (worker.gainExperience(Math.round((result.specialist ? 15 : 10) * learning))) this.bus.emit('staff:levelup', worker);
     this.served++; this.servedToday++; this.satisfactionSum += result.satisfaction; this.lastSatisfaction = result.satisfaction;
+    const M = this.missions; M.record('serve'); if (result.satisfaction >= .85) M.record('happy'); if (customer.vip) M.record('vip');
+    if (customer.requestedService === 'colour') M.record('colour'); else if (customer.requestedService === 'perm') M.record('perm');
     return result;
   }
   /** Takes a payment; card payments carry a small processing fee. */
-  receivePayment(amount) { this.economy.earn('services', amount); this.economy.charge('fees', Math.round(amount * CARD_FEE)); this.updateProgress(); }
+  receivePayment(amount) { this.missions.record('revenue', amount); this.economy.earn('services', amount); this.economy.charge('fees', Math.round(amount * CARD_FEE)); this.updateProgress(); }
   /**
    * The visit is over once the client has paid, haggled, demanded a refund or run off.
    * `outcome` says which; returns the review they wrote and any change in followers.
    */
   finishVisit(customer, result, outcome = {}) {
     if (outcome.refusedRefund) this.reputation.add(-1.5);
+    if (customer.villain && !outcome.refunded && !outcome.dashed) this.missions.record('villain');
     if (outcome.refunded) this.incidents.refunds += result.payment;
     if (outcome.discount) this.incidents.discounts += outcome.discount;
     if (outcome.dashed) this.incidents.dashed += result.payment;
@@ -158,19 +168,20 @@ export class TycoonGame {
     let followers = 0, influencerPost = null;
     if (customer.influencer) {
       influencerPost = this.marketing.influencerPosted(customer.influencer, result.satisfaction);
-      followers = influencerPost.followers; this.reputation.add(influencerPost.rep);
+      followers = influencerPost.followers; this.reputation.add(influencerPost.rep); this.missions.record('followers', followers);
     }
     return { review: this.#post(this.reviews.fromService(customer, result, this.clock.day, outcome)), followers, influencerPost };
   }
   customerGaveUp(customer) { this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day)); }
   customerTurnedAway(customer) { this.#post(this.reviews.turnedAway(customer, this.clock.day)); }
   /** A new review: it moves the reputation by its stars and goes on the board. */
-  #post(review) { if (review) { review.rep = REVIEW_REP[review.stars] ?? 0; this.reputation.add(review.rep); this.bus.emit('review:new', review); } return review; }
+  #post(review) { if (review) { if (review.stars === 5 && !review.fake) this.missions.record('five'); review.rep = REVIEW_REP[review.stars] ?? 0; this.reputation.add(review.rep); this.bus.emit('review:new', review); } return review; }
   /** Who handles reviews: the receptionist, who runs marketing, or Lia herself without one. */
   get reviewManager() { const r = this.staff.receptionist; return r.hired ? { name: r.name, role: 'desk', skill: r.skills.marketing || 0 } : { name: this.staff.owner.name, role: 'owner', skill: 0 }; }
   /** Answers a review. A review taken down no longer counts against the reputation; one the client improved counts at its new stars. */
   replyToReview(id, kind) {
     const r = this.reviews.reply(id, kind, this.reviewManager); if (!r) return r;
+    this.missions.record('reply');
     let rep = r.rep || 0;
     if (r.review.removed) rep -= r.review.rep || 0;
     else if (r.edited) { const now = REVIEW_REP[r.review.stars] ?? 0; rep += now - (r.review.rep || 0); r.review.rep = now; }
@@ -179,8 +190,10 @@ export class TycoonGame {
   }
   /** With auto-replies on, the receptionist answers the day's unanswered reviews at closing. */
   #autoReply() { if (!this.reviews.autoReply || !this.staff.receptionist.hired) return; this.reviews.list.filter(r => !r.replied && !r.removed).forEach(r => this.replyToReview(r.id, r.stars >= 4 ? 'thanks' : r.villain || r.fake ? 'report' : 'apology')); }
-  post(channel) { return this.marketing.post(channel, this.clock.day, this.reelQuality, this.marketingPower); }
-  runCampaign(id) { return this.marketing.run(id, this.marketingPower); }
+  post(channel) { const f = this.marketing.followers, r = this.marketing.post(channel, this.clock.day, this.reelQuality, this.marketingPower); if (r) { this.missions.record('post'); this.missions.record('followers', this.marketing.followers - f); } return r; }
+  runCampaign(id) { const f = this.marketing.followers, ok = this.marketing.run(id, this.marketingPower); if (ok) this.missions.record('followers', this.marketing.followers - f); return ok; }
+  trainStaff(e) { const ok = this.staff.train(e); if (ok) this.missions.record('train'); return ok; }
+  claimMission(i) { return this.missions.claim(i, this.progression.level, f => this.isUnlocked(f)); }
   expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 2) this.layout.addAnnexPlants(); return true; }
   tick(dt) {
     this.clock.tick(dt); this.operatingCosts.accrue(this.clock.workedFraction);
@@ -188,16 +201,42 @@ export class TycoonGame {
   }
   startDay() {
     if (this.nextHours) { this.clock.setHours(...this.nextHours); this.nextHours = null; }
-    this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day); this.marketing.startDay();
+    this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day);
+    this.missions.fill(this.progression.level, f => this.isUnlocked(f));
+    this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null;
+    if (this.isSunday) { this.#dayOff(); return; }
+    this.dayOff = false; this.marketing.startDay();
     const move = this.rival.startDay(this.clock.day, this.standing);
     if (move) this.news.push(move);
     // A discounting rival tempts a few regulars away.
     this.regulars = Math.max(0, this.regulars - Math.round(this.regulars * this.rival.discount * .2));
-    this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null;
     this.trollAt = Math.random() < this.trollChance ? rand(.1, .9) * this.clock.dayLength : null;
     this.clock.startDay();
   }
   nextDay() { this.clock.day++; this.startDay(); }
+  /**
+   * Sunday: the salon stays closed. Rent and upkeep still fall due, nobody is paid wages and the team rests.
+   * The week is settled; the player can rearrange the salon and see to the money before Monday.
+   */
+  #dayOff() {
+    this.dayOff = true; this.trollAt = null; this.clock.isOpen = false; this.clock.elapsed = 0;
+    this.operatingCosts.chargeDayOff(); this.staff.restDay();
+    const sunday = { day: this.clock.day, ...this.economy.closeDay(), served: 0, reputation: 0, reviews: { count: 0, average: 0 }, followers: { change: 0 } };
+    this.weekReport = this.#weekSummary([...this.weekLog, sunday]); this.weekLog = [];
+    this.save();
+  }
+  /** Adds up a week of daily reports. */
+  #weekSummary(days) {
+    const add = key => days.reduce((acc, d) => { Object.entries(d[key] || {}).forEach(([k, v]) => { acc[k] = (acc[k] || 0) + v; }); return acc; }, {});
+    const sum = f => days.reduce((s, d) => s + (f(d) || 0), 0), count = sum(d => d.reviews.count);
+    return {
+      week: Math.ceil(this.clock.day / 7), from: days[0].day, to: this.clock.day,
+      revenue: add('revenue'), operating: add('operating'), investment: add('investment'), funding: add('funding'),
+      totalRevenue: sum(d => d.totalRevenue), totalOperating: sum(d => d.totalOperating), totalInvestment: sum(d => d.totalInvestment), profit: sum(d => d.profit),
+      served: sum(d => d.served), reviews: { count, average: count ? sum(d => d.reviews.count * d.reviews.average) / count : 0 },
+      reputation: sum(d => d.reputation), followers: sum(d => d.followers.change), days: days.map(d => ({ day: d.day, profit: d.profit })),
+    };
+  }
   closeDay() {
     const e = this.economy, sales = this.layout.dailySales, branches = this.franchise.collectDay();
     if (sales) e.earn('products', sales); if (branches) e.earn('branches', branches);
@@ -212,13 +251,14 @@ export class TycoonGame {
     this.report = {
       day: this.clock.day, ...e.closeDay(), reputation: this.reputation.value - this.repAtDayStart,
       reviews: { count: reviews.length, average: reviews.length ? reviews.reduce((sum, r) => sum + r.stars, 0) / reviews.length : 0 },
-      followers: { now: this.marketing.followers, change: this.marketing.followers - this.followersAtDayStart }, incidents: { ...this.incidents },
+      followers: { now: this.marketing.followers, change: this.marketing.followers - this.followersAtDayStart }, incidents: { ...this.incidents }, served: this.servedToday,
     };
+    this.weekLog.push(this.report);
     this.updateProgress(); this.save(); return this.report;
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, franchise: this.franchise, marketing: this.marketing, reviews: this.reviews, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] };
+    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, franchise: this.franchise, marketing: this.marketing, reviews: this.reviews, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog };
   }
   restore(d) {
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
@@ -230,5 +270,6 @@ export class TycoonGame {
     this.marketing.restore(d.marketing); this.reviews.restore(d.reviews); this.hospitality.restore(d.hospitality);
     this.finance.restore(d.finance); this.rival.restore(d.rival); this.regulars = d.regulars || 0; this.staff.restore(d.staffPolicy);
     if (d.hours) this.clock.setHours(...d.hours);
+    this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
   }
 }
