@@ -1,9 +1,17 @@
 import { FURNITURE, EXPANSIONS, chairsOn } from './FurnitureCatalog.js';
 
+/** The second salon (2호점) stands further down the street; this is its centre. */
+export const BRANCH_X = 20;
+/** Which salon a point belongs to: 0 the first, 1 the second. */
+export const siteOf = x => x > BRANCH_X - 6 ? 1 : 0;
+const shift = rects => rects.map(([a, b, c, d]) => [a + BRANCH_X, b + BRANCH_X, c, d]);
+
 // The doorway and the pavement walkway: only walkable pieces such as mats may cover them.
-const LANES = [[-2.7, -1.3, 2.4, 5.1], [-4.6, 12.7, 4, 5.1]];
+const MAIN_LANES = [[-2.7, -1.3, 2.4, 5.1], [-4.6, 12.7, 4, 5.1]];
+const LANES = [...MAIN_LANES, ...shift([[-2.7, -1.3, 2.4, 5.1], [-4.6, 4.7, 4, 5.1]])];
 // Lamp posts, the clock and the barber pole outside. Nothing goes here and people walk around them.
-export const POSTS = [[-4.1, -3.3, 4.1, 4.9], [4, 4.6, 3.3, 4], [2.3, 3.1, 5.3, 6.2], [-1.5, -.9, 3.2, 3.7]];
+const MAIN_POSTS = [[-4.1, -3.3, 4.1, 4.9], [4, 4.6, 3.3, 4], [2.3, 3.1, 5.3, 6.2], [-1.5, -.9, 3.2, 3.7]];
+export const POSTS = [...MAIN_POSTS, ...shift(MAIN_POSTS)];
 export const inRect = (c, [a, b, d, e]) => c.x >= a && c.x <= b && c.z >= d && c.z <= e;
 /**
  * Floor areas and the salon size at which each opens. The salon stays a rectangle and grows
@@ -33,12 +41,8 @@ export const DEFAULT_LAYOUT = [
   ['bench', .5, 2.75, 2], ['loungeRug', .5, 2, 0], ['plant', -.75, 2.75, 0], ['plant', 3.75, 2.75, 0],
 ];
 /** Where extra styling chairs went before furniture could be moved; used to load older saves. */
-/** Branches are simpler copies of the salon: three chairs along the back wall, where their clients are served. */
-export const BRANCH_LAYOUT = [
-  ['station', -2.25, -2.25, 0], ['station', -.25, -2.25, 0], ['station', 1.75, -2.25, 0], ['desk', -3.5, 1.25, 1], ['wardrobe', -3.75, 0, 1],
-  ['dryer', -3.5, -2.5, 0], ['shampooBooth', 3.25, -2.25, 3], ['bench', .5, 2.75, 2], ['bench2', 2.75, 2.75, 2], ['loungeRug', 1.5, 2, 0],
-  ['mat', -2, 2.75, 0], ['plant', 3.75, 2.75, 0], ['plant', -.75, 2.75, 0],
-];
+/** What the second salon opens with, in its own frame: [id, x, z, quarter turns]. */
+const BRANCH_START = [['desk', -3.5, 1.25, 1], ['station', -.25, -.75, 0], ['shampooBooth', 3.25, -2.25, 3], ['bench', .5, 2.75, 2], ['mat', -2, 2.75, 0], ['plant', 3.75, 2.75, 0]];
 export const EXTRA_STATIONS = [[-.25, -2.25], [1.75, -2.25], [5.25, -2.25], [7.25, -2.25]];
 const ANNEX_PLANTS = [[7.75, -4.75], [7.75, 2.75]];
 const turn = (x, z, r) => [[x, z], [z, -x], [-x, -z], [-z, x]][r];
@@ -47,7 +51,7 @@ const turn = (x, z, r) => [[x, z], [z, -x], [-x, -z], [-z, x]][r];
 export class SalonLayout {
   #index = new Map();
   constructor() {
-    this.cells = []; this.items = []; this.tier = 0;
+    this.cells = []; this.items = []; this.tier = 0; this.branchOpen = false; this.branchChairs = 6;
     const add = (x, z, outdoor, zone) => { const c = { x, z, outdoor, zone }; this.cells.push(c); this.#index.set(this.#key(x, z), c); };
     const area = (x0, z0, nx, nz, outdoor, zone) => { for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) add(x0 + i * .5, z0 + j * .5, outdoor, zone); };
     area(-3.75, -2.75, 16, 12, false, 'main'); area(-4.25, 3.45, 18, 6, true, 'main');
@@ -56,16 +60,26 @@ export class SalonLayout {
     area(-3.75, -6.75, 24, 4, false, 'rear');
     area(8.25, -6.75, 8, 20, false, 'annex2'); area(8.75, 3.45, 8, 6, true, 'annex2');
     area(-3.75, -8.75, 32, 4, false, 'rear2');
+    area(BRANCH_X - 3.75, -2.75, 16, 12, false, 'branch'); area(BRANCH_X - 4.25, 3.45, 18, 6, true, 'branch');
   }
   #key(x, z) { return `${Math.round(x * 4)},${Math.round(z * 4)}`; }
   cellAt(x, z) { return this.#index.get(this.#key(x, z)) || null; }
   get chairs() { return this.items.reduce((n, it) => n + chairsOn(it.id), 0); }
   get maxChairs() { return [3, 6, 9, 12, 15, 18][this.tier]; }
+  #inSite(site) { return this.items.filter(it => siteOf(it.x) === site); }
+  /** Styling chairs at one salon, and how many it has room for. */
+  chairsAt(site) { return this.#inSite(site).reduce((n, it) => n + chairsOn(it.id), 0); }
+  maxChairsAt(site) { return site ? (this.branchOpen ? this.branchChairs : 0) : this.maxChairs; }
+  /** Whether either salon has room for another chair. */
+  get chairRoom() { return [0, 1].some(s => this.chairsAt(s) < this.maxChairsAt(s)); }
+  countAt(id, site) { return this.#inSite(site).filter(it => it.id === id).length; }
+  /** Comfort of one salon's furniture. */
+  comfortAt(site) { return Math.min(25, this.#inSite(site).reduce((a, it) => a + (FURNITURE[it.id].comfort || 0), 0)); }
   /** How many of a piece the salon has room for at its current size. */
-  maxOf(id) { const m = FURNITURE[id].max; return m == null ? Infinity : Array.isArray(m) ? m[this.tier] : m; }
+  maxOf(id, site = 0) { const m = FURNITURE[id].max; return m == null ? Infinity : Array.isArray(m) ? m[site ? 1 : this.tier] : m; }
   get nextExpansion() { return EXPANSIONS[this.tier] || null; }
   /** The cell is part of the salon at its current size. */
-  isOpen(c) { return ZONE_TIER[c.zone] <= this.tier; }
+  isOpen(c) { return c.zone === 'branch' ? this.branchOpen : ZONE_TIER[c.zone] <= this.tier; }
   /** Furniture may go here: open floor, plus the pavement from the first expansion. */
   placeable(c) { return this.isOpen(c) && (!c.outdoor || this.tier >= 1) && !POSTS.some(r => inRect(c, r)); }
   /** Edges of an item's footprint. */
@@ -102,7 +116,12 @@ export class SalonLayout {
     if (!cells || !cells.every(c => this.placeable(c))) return 'outside';
     const walkable = !!FURNITURE[id].walkable;
     if (!walkable && cells.some(c => LANES.some(r => inRect(c, r)))) return 'lane';
-    return cells.some(c => this.occupant(c, ignore, walkable)) ? 'overlap' : null;
+    if (cells.some(c => this.occupant(c, ignore, walkable))) return 'overlap';
+    // Each salon has its own limits on chairs and on pieces such as shampoo booths.
+    const site = siteOf(cells[0].x), same = ignore && siteOf(ignore.x) === site;
+    if (FURNITURE[id].chairs && this.chairsAt(site) - (same ? chairsOn(ignore.id) : 0) + chairsOn(id) > this.maxChairsAt(site)) return 'chairs';
+    if (this.countAt(id, site) - (same && ignore.id === id ? 1 : 0) >= this.maxOf(id, site)) return 'max';
+    return null;
   }
   openCells(ignore) { return this.cells.filter(c => this.placeable(c) && !LANES.some(r => inRect(c, r)) && !this.occupant(c, ignore, false)); }
   nearestCell(x, z) { let best = null, bestDist = .45; for (const c of this.cells) { const d = Math.hypot(c.x - x, c.z - z); if (d < bestDist) { bestDist = d; best = c; } } return best; }
@@ -112,7 +131,7 @@ export class SalonLayout {
   resetToDefault() { this.items = []; DEFAULT_LAYOUT.forEach(([id, x, z, r]) => this.add(id, x, z, r)); }
   addAnnexPlants() { ANNEX_PLANTS.forEach(([x, z]) => { const cells = this.footprint('plant', x, z, 0); if (cells && this.canOccupy('plant', cells)) this.add('plant', x, z, 0); }); }
   #sum(fn) { return this.items.reduce((a, it) => a + (fn(FURNITURE[it.id]) || 0), 0); }
-  get comfort() { return Math.min(25, this.#sum(f => f.comfort)); }
+  get comfort() { return this.comfortAt(0); }
   get dailySales() { return this.#sum(f => f.dailySales); }
   get speedBonus() { return 1 + this.#sum(f => f.speedBonus); }
   get staffRestRate() { return this.items.some(it => FURNITURE[it.id].staffRest) ? 2 : 1; }
@@ -125,9 +144,11 @@ export class SalonLayout {
       if (cells && this.canOccupy(id, cells)) this.add(id, x, z, r);
     }
   }
-  toJSON() { return { version: 2, tier: this.tier, items: this.items.map(({ id, x, z, rotation }) => ({ id, x, z, rotation })) }; }
+  /** Opens the second salon with the basics: a desk, one chair, a shampoo booth and a bench. */
+  openBranch() { this.branchOpen = true; BRANCH_START.forEach(([id, x, z, r]) => this.add(id, x + BRANCH_X, z, r)); }
+  toJSON() { return { version: 2, tier: this.tier, branchOpen: this.branchOpen, items: this.items.map(({ id, x, z, rotation }) => ({ id, x, z, rotation })) }; }
   restore(data) {
-    this.tier = data.tier;
+    this.tier = data.tier; this.branchOpen = !!data.branchOpen;
     if (data.version === 2) { this.items = []; data.items.forEach(it => { if (FURNITURE[it.id] && this.footprint(it.id, it.x, it.z, it.rotation)) this.add(it.id, it.x, it.z, it.rotation); }); this.#ensureEssentials(); return; }
     // Saves from before furniture could move: start from the default salon and add what was bought.
     this.resetToDefault();
