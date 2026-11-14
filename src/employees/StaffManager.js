@@ -5,10 +5,10 @@ import { Employee } from './Employee.js';
  * Senior designers are the strongest and the most expensive, and only join an established salon.
  */
 const DEFINITIONS = [
-  // Master designer: among the best in Melbourne, and priced like it
+  // Master designers: among the best in Melbourne, and priced like it
   { id: 'daniel', name: 'Daniel', gender: 'm', role: 'Master Designer', rank: 'master', unlock: 'masters', style: 'ColourSpecialist', specialty: 'colour', perk: 'mentor', skills: { cutting: 95, colouring: 94, perming: 93, speed: 76, customerService: 94 }, salary: 600, hireCost: 6500, fine: true, apron: 0x0d0b14, hair: 0x9c98a2, hairdo: 'curly', shades: true, skin: 0x9c6644 },
+  { id: 'somi', name: 'Somi', gender: 'f', role: 'Master Designer', rank: 'master', unlock: 'masters', style: 'ColourSpecialist', specialty: 'colour', perk: 'trend', skills: { cutting: 90, colouring: 97, perming: 86, speed: 72, customerService: 93 }, salary: 560, hireCost: 6000, fine: true, apron: 0x1d1a26, hair: 0x2e1d14, hairdo: 'long', skin: 0xf6d6bd },
   // Senior designers
-  { id: 'somi', name: 'Somi', gender: 'f', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'ColourSpecialist', specialty: 'colour', perk: 'trend', skills: { cutting: 84, colouring: 92, perming: 78, speed: 68, customerService: 90 }, salary: 430, hireCost: 3500, fine: true, apron: 0x1d1a26, hair: 0x2e1d14, hairdo: 'long', skin: 0xf6d6bd },
   { id: 'kai', name: 'Kai', gender: 'm', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'CutSpecialist', specialty: 'cut', perk: 'speed', skills: { cutting: 92, colouring: 76, perming: 74, speed: 80, customerService: 82 }, salary: 420, hireCost: 3300, fine: true, apron: 0x45404f, hair: 0x16110f, hairdo: 'short', skin: 0xe7b892 },
   { id: 'soo', name: 'Soo', gender: 'f', role: 'Senior Designer', rank: 'senior', unlock: 'seniors', style: 'PermSpecialist', specialty: 'perm', perk: 'consult', skills: { cutting: 85, colouring: 80, perming: 92, speed: 66, customerService: 88 }, salary: 420, hireCost: 3300, fine: true, apron: 0x7a5d6e, hair: 0x5e3d24, hairdo: 'long', skin: 0xf6d6bd },
   // Designers
