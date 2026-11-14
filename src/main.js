@@ -504,7 +504,6 @@ function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='fr
 /** A stylist leaves their chair: Lia takes it if she has none, otherwise it stands empty. */
 function vacate(st){const e=st.sty;if(e===OWNER||st.vacant)return;e.fig.root.visible=false;
   if(OWNER.floating){OWNER.floating=false;st.sty=OWNER;st.state='free';goToChair(OWNER.fig,st);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
-/** A stylist heads to a chair: a walk inside one salon, or straight there when the chair is at the other salon. */
 /** Staff walk within a salon; going to the other salon they simply arrive there. */
 function goTo(f,pos,face){if(siteOf(f.pos.x)!==siteOf(pos.x)){f.path=[];f.pos.copy(pos);f.yaw=face;}else f.walkTo(route(f.pos,pos),()=>f.yaw=face);}
 function goToChair(f,st){goTo(f,st.stand,st.face);}
@@ -857,6 +856,21 @@ function renderSites(){const el=$('#sites'),open=game.layout.branchOpen;el.class
 function updateBranchCard(){$('#branchCard').classList.remove('show');}
 $('#sites').addEventListener('click',e=>{const b=e.target.closest('[data-site]');if(b)focusSite(+b.dataset.site);});
 
+/**
+ * Daily profit as bars around a zero line: profit rises in blue, a loss drops in orange, closed Sundays are hatched grey.
+ * Only the best and worst days carry a value; hovering any day shows its own. `label(day, i)` names the x-axis ticks.
+ */
+function profitChart(days,label){const usd=v=>(v<0?'−$':'$')+Math.abs(Math.round(v)).toLocaleString(),closed=d=>(d.day-1)%7===6;
+  const hi=Math.max(0,...days.map(d=>d.profit)),lo=Math.max(0,...days.map(d=>-d.profit)),range=Math.max(1,hi+lo),zero=hi/range*100;
+  const open=days.filter(d=>!closed(d)),best=open.reduce((b,d)=>!b||d.profit>b.profit?d:b,null),worst=open.reduce((b,d)=>!b||d.profit<b.profit?d:b,null);
+  const cols=days.map((d,i)=>{const h=Math.abs(d.profit)/range*100,top=d.profit>=0?zero-h:zero,off=closed(d);
+    const tag=d===best&&d.profit>0?`<b class="mc-v" style="bottom:${100-top}%">${usd(d.profit)}</b>`:d===worst&&d.profit<0?`<b class="mc-v" style="top:${top+h}%">${usd(d.profit)}</b>`:'';
+    const tip=tx('chart.tip',d.day,tx('wd.'+((d.day-1)%7)),usd(d.profit))+(off?' · '+tx('chart.closed'):'');
+    return `<div class="mc-col${i<3?' l':i>days.length-4?' r':''}" data-tip="${tip}"><i class="${off?'off':d.profit<0?'neg':''}" style="top:${top}%;height:max(${d.profit?2:0}px,${h}%)"></i>${tag}</div>`;}).join('');
+  const ys=[[hi,0],[0,zero],[-lo,100]].filter(([v,at],k)=>k===1||(v&&Math.abs(at-zero)>16)).map(([v,at])=>`<span style="top:${at}%">${usd(v)}</span>`).join('');
+  return `<div class="mchart"><div class="mc-y">${ys}</div><div class="mc-plot"><div class="mc-zero" style="top:${zero}%"></div>${cols}</div><div></div><div class="mc-x">${days.map((d,i)=>`<span>${label(d,i)}</span>`).join('')}</div></div>
+    <div class="mc-key"><span><i></i>${tx('chart.profit')}</span><span><i class="neg"></i>${tx('chart.loss')}</span><span><i class="off"></i>${tx('chart.closed')}</span></div>`;}
+
 /* ================= start menu ================= */
 let menuScreen='main',menuFrom='main',monthFrom='panel';
 const mbox=$('#mcard');
@@ -875,11 +889,12 @@ function renderMenu(){const top=mbox.scrollTop;let h;
   else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v,c)).join('');
     h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${dayHours()}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
   else if(menuScreen==='week'){const w=game.weekReport,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v.toLocaleString(),c)).join(''),usd=v=>(v<0?'−$':'$')+Math.abs(v).toLocaleString();
-    const top=Math.max(1,...w.days.map(d=>Math.abs(d.profit))),bars=`<div class="wbars">${w.days.map(d=>`<div title="${usd(d.profit)}"><i class="${d.profit<0?'neg':''}" style="height:${Math.max(3,Math.round(Math.abs(d.profit)/top*100))}%"></i><span>${tx('wd.'+((d.day-1)%7))}</span></div>`).join('')}</div>`;
+    const bars=profitChart(w.days,d=>tx('wd.'+((d.day-1)%7)));
     h=`<div class="mhead">${tx('week.title',w.week,w.from,w.to)}</div><div class="dim">${tx('week.sub')}</div>${bars}<table style="width:100%;border-collapse:collapse">${ledger(w.revenue,'')}${line(tx('day.totalRev'),usd(w.totalRevenue),'gold')}${ledger(w.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+w.totalOperating.toLocaleString(),'gold')}${line(tx('week.profit'),usd(w.profit),w.profit<0?'bad':'good')}${w.totalInvestment?ledger(w.investment,'−','dim'):''}${Object.keys(w.funding).length?ledger(w.funding,'+','good'):''}${line(tx('week.served'),w.served)}${line(tx('day.reviews'),w.reviews.count?tx('day.reviewsV',w.reviews.count,w.reviews.average.toFixed(1)):'–')}${line(tx('day.rep'),(w.reputation>=0?'+':'')+w.reputation.toFixed(1))}${line(tx('day.followers'),(w.followers>=0?'+':'−')+Math.abs(w.followers).toLocaleString())}</table><div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:''}<button class="${game.monthClosedToday?'':'go big'}" data-act="weekfix">${tx('week.fix')}</button><button data-act="monday">${tx('week.monday')}</button></div>`;}
   else if(menuScreen==='month'){const m=game.monthReport,usd=v=>(v<0?'−$':'$')+Math.abs(Math.round(v)).toLocaleString(),line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v.toLocaleString(),c)).join('');
     const vs=(a,b)=>{if(!b)return '';const p=Math.round((a-b)/Math.abs(b)*100);return ` <span class="${p>=0?'good':'bad'}">(${tx('month.vsPrev',(p>=0?'+':'−')+Math.abs(p)+'%')})</span>`;},P=m.prev||{};
-    const top=Math.max(1,...m.days.map(d=>Math.abs(d.profit))),bars=`<div class="wbars mbars">${m.days.map(d=>`<div title="${tx('rv.day',d.day)} ${usd(d.profit)}"><i class="${d.profit<0?'neg':''}" style="height:${Math.max(2,Math.round(Math.abs(d.profit)/top*100))}%"></i><span>${(d.day-m.from)%5===0?d.day:''}</span></div>`).join('')}</div>`;
+    const weeks=[];m.days.forEach(d=>{const k=Math.floor((d.day-m.from)/7),w=weeks[k]||(weeks[k]={from:d.day,to:d.day,revenue:0,profit:0});w.to=d.day;w.revenue+=d.revenue||0;w.profit+=d.profit;});
+    const bars=profitChart(m.days,(d,i)=>i===0||d.day%5===0?d.day:'')+`<table class="mweeks"><tr><th>${tx('month.colWeek')}</th><th>${tx('month.colDays')}</th><th>${tx('month.colRev')}</th><th>${tx('month.colProfit')}</th></tr>${weeks.map((w,k)=>`<tr><td>${tx('month.wk',k+1)}</td><td>${tx('month.days',w.from,w.to)}</td><td>${usd(w.revenue)}</td><td>${usd(w.profit)}</td></tr>`).join('')}</table>`;
     const staff=m.staff.length?m.staff.map((x,i)=>`<div class="brow"><span>${i+1}. <b>${nm(x.name)}</b></span><span class="sp"></span><span class="dim">${tx('month.staffRow',x.served,x.earn.toLocaleString())}</span></div>`).join(''):`<div class="dim">–</div>`;
     const goal=m.goal?`<div class="${m.goal.hit?'good':'dim'}">${tx(m.goal.hit?'month.goalHit':'month.goalMiss',m.goal.revenue.toLocaleString(),m.goal.made.toLocaleString(),m.goal.reward.toLocaleString())}</div>`:'';
     const btns=monthFrom==='day'?`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`:monthFrom==='week'?`<button class="go big" data-act="weekfix">${tx('week.fix')}</button><button data-act="monday">${tx('week.monday')}</button>`:`<button class="go" data-act="back">${tx('m.resume')}</button>`;
