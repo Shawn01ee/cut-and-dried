@@ -93,9 +93,11 @@ export class TycoonGame {
    * Where clients come from, per eight hours: a few passers-by, then more as reputation, comfort, followers and
    * regulars grow (`add`), scaled by prices, marketing, reviews and the rival (`mult`).
    */
+  /** How many of the second salon's passers-by come in: half without a receptionist there, more the better she is at marketing. */
+  get branchDeskReach() { const d = this.staff.receptionistAt(1); return d && d.hired ? .8 + (d.skills.marketing || 0) / 250 : .5; }
   get demandParts() {
     return {
-      add: { walk: WALK_INS, branch: this.layout.branchOpen ? WALK_INS + this.comfortAt(1) * .15 : 0, rep: this.reputation.value * .25, comfort: this.comfort * .15, followers: this.marketing.followerClients, regulars: Math.min(15, this.regulars * .12) },
+      add: { walk: WALK_INS, branch: this.layout.branchOpen ? (WALK_INS + this.comfortAt(1) * .15) * this.branchDeskReach : 0, rep: this.reputation.value * .25, comfort: this.comfort * .15, followers: this.marketing.followerClients, regulars: Math.min(15, this.regulars * .12) },
       mult: { price: PRICE_DEMAND[this.priceLevel], marketing: this.marketing.demandMultiplier, reviews: this.reviews.demandMultiplier, rival: 1 - this.rival.pull(this.standing), award: this.isUnlocked('award') ? 1.1 : 1 },
     };
   }
@@ -157,7 +159,7 @@ export class TycoonGame {
     const influencer = walkIn ? this.marketing.takeInfluencer() : null;
     const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
-      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (site === 0 && this.staff.hasSupport('reception') ? 1.15 : 1),
+      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1),
       villain: walkIn && !influencer ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor,
     });
     c.site = site;

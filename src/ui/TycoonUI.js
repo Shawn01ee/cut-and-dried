@@ -87,10 +87,11 @@ export class TycoonUI {
   #supportRow(e) {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, desk = e.effect === 'reception';
     const course = desk && e.hired ? `<button data-do="mtrain:${e.id}" ${(e.skills.marketing || 0) >= 100 || !g.economy.canAfford(g.staff.marketingCourseCost(e)) ? 'disabled' : ''}>${t('staff.mcourse', g.staff.marketingCourseCost(e))}</button>` : '';
-    const action = e.hired ? `${course}<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : `<button class="go" data-do="shire:${e.id}" ${!g.economy.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
+    const closed = e.site && !g.layout.branchOpen;
+    const action = e.hired ? `${course}<button data-do="sfire:${e.id}">${t('staff.fire')}</button>` : closed ? `<span class="dim">${t('staff.needBranch')}</span>` : `<button class="go" data-do="shire:${e.id}" ${!g.economy.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
     const k = e.skills, stats = desk ? [['speed', k.speed], ['service', k.customerService], ['marketing', k.marketing || 0]] : [['shampoo', k.shampoo], ['cleaning', k.cleaning], ['speed', k.speed], ['service', k.customerService]];
-    const effect = desk ? t('support.ruby') : t('staff.aeffect', e.serviceMinutes('shampoo', g.speedFor('shampoo')), this.hooks.sweepMinutes(e.cleaning), (e.washQuality >= .6 ? '+' : '−') + Math.abs(Math.round((e.washQuality - .6) * 25)));
-    return `<div class="scard">${this.#cardHead(e, action)}${this.#statBars(stats)}${this.#rows([['about', desk ? t('support.deskRole') : t('support.' + e.id)], ['effect', effect], ['pay', t('staff.wage', e.salary)]])}</div>`;
+    const effect = desk ? t(e.site ? 'support.juno' : 'support.ruby', Math.round(g.branchDeskReach * 100)) : t('staff.aeffect', e.serviceMinutes('shampoo', g.speedFor('shampoo')), this.hooks.sweepMinutes(e.cleaning), (e.washQuality >= .6 ? '+' : '−') + Math.abs(Math.round((e.washQuality - .6) * 25)));
+    return `<div class="scard">${this.#cardHead(e, action)}${this.#statBars(stats)}${this.#rows([['about', desk ? t(e.site ? 'support.deskRole2' : 'support.deskRole') : t('support.' + e.id)], ['effect', effect], ['pay', t('staff.wage', e.salary)]])}</div>`;
   }
   /**
    * The staff tab in three pages: the team (who is hired), hiring (who is available) and the team policy.
