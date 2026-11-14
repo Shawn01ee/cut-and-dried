@@ -42,13 +42,18 @@ const DEFINITIONS = [
 ];
 
 const SUPPORT = [
-  { id: 'ruby', name: 'Ruby', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, startsHired: true },
+  { id: 'ruby', name: 'Ruby', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, hair: 0x2e1d14, hairdo: 'bun', skin: 0xc98e66, startsHired: true },
   // The second salon's front desk: greets its clients and brings in its passers-by. Hired once it opens.
   { id: 'juno', name: 'Juno', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', site: 1, skills: { cutting: 0, colouring: 0, perming: 0, speed: 58, customerService: 80, marketing: 45 }, salary: 230, hireCost: 400, apron: 0x1fa39a, hair: 0x6e4428, hairdo: 'bob', skin: 0xe7b892 },
   // Assistants wash and sweep. `shampoo` is how good a wash is, `cleaning` how quickly and widely they sweep.
-  { id: 'hugo', name: 'Hugo', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 60, customerService: 60, shampoo: 60, cleaning: 60 }, salary: 140, hireCost: 260, apron: 0x5f9e45 },
-  { id: 'jin', name: 'Jin', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 74, customerService: 52, shampoo: 45, cleaning: 84 }, salary: 135, hireCost: 240, apron: 0xffb15a },
-  { id: 'tess', name: 'Tess', gender: 'f', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 54, customerService: 72, shampoo: 86, cleaning: 42 }, salary: 155, hireCost: 320, apron: 0x7fb6f0 },
+  { id: 'hugo', name: 'Hugo', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 60, customerService: 60, shampoo: 60, cleaning: 60 }, salary: 140, hireCost: 260, apron: 0x5f9e45, hair: 0x8f5a2e, skin: 0xe7b892 },
+  { id: 'jin', name: 'Jin', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 74, customerService: 52, shampoo: 45, cleaning: 84 }, salary: 135, hireCost: 240, apron: 0xffb15a, hair: 0x16110f, skin: 0xc98e66 },
+  { id: 'tess', name: 'Tess', gender: 'f', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 54, customerService: 72, shampoo: 86, cleaning: 42 }, salary: 155, hireCost: 320, apron: 0x7fb6f0, hair: 0xc8642a, hairdo: 'long', skin: 0xf6d6bd },
+  { id: 'momo', name: 'Momo', gender: 'f', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 48, customerService: 82, shampoo: 95, cleaning: 36 }, salary: 175, hireCost: 380, apron: 0xe25c8f, hair: 0x16110f, hairdo: 'bun', skin: 0xf6d6bd },
+  { id: 'dex', name: 'Dex', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 82, customerService: 50, shampoo: 38, cleaning: 96 }, salary: 145, hireCost: 260, apron: 0x45404f, hair: 0x16110f, hairdo: 'buzz', beard: true, skin: 0x6b3e2a },
+  { id: 'kit', name: 'Kit', gender: 'f', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 64, customerService: 66, shampoo: 48, cleaning: 52 }, salary: 90, hireCost: 100, apron: 0xffd98a, hair: 0xe8c27a, hairdo: 'bob', skin: 0xf6d6bd },
+  { id: 'bao', name: 'Bao', gender: 'm', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 74, customerService: 74, shampoo: 82, cleaning: 80 }, salary: 220, hireCost: 480, apron: 0x2d4a3a, hair: 0x2e1d14, skin: 0xe7b892 },
+  { id: 'lulu', name: 'Lulu', gender: 'f', role: 'Assistant', style: 'Assistant', effect: 'tidy', skills: { cutting: 0, colouring: 0, perming: 0, speed: 92, customerService: 70, shampoo: 64, cleaning: 50 }, salary: 160, hireCost: 300, apron: 0x8a4fc2, hair: 0xb04a6a, hairdo: 'long', skin: 0xc98e66 },
 ];
 
 /** Performance pay as a share of each stylist's takings: steadier staff and a small skill lift, at a cost. */
