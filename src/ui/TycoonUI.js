@@ -27,7 +27,7 @@ export class TycoonUI {
     return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.items.length, b && b.id, g.franchise.branches.filter(x => x.open).length, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), g.franchise.branches.map(b => b.clientsToday).join(),
       g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit].join('|');
   }
-  render(page) { return { staff: () => this.#staff(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#reviews(), prog: () => this.#growth() }[page](); }
+  render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#reviews(), prog: () => this.#growth() }[page](); }
 
   #status(e) {
     const t = (k, ...a) => this.#t(k, ...a), day = this.game.clock.day, tags = [];
@@ -92,7 +92,6 @@ export class TycoonUI {
     return `<div class="bsec"><h4>${t('staff.policy')}</h4><div class="brow"><span>${t('staff.commission')}</span><span class="sp"></span><span class="seg">${commission}</span></div>
       <div class="brow"><span>${t('staff.shuffle')}</span><span class="sp"></span><span class="seg"><button data-do="shuffle:0" class="${st.seatShuffle ? '' : 'sel'}">${t('pol.off')}</button><button data-do="shuffle:1" class="${st.seatShuffle ? 'sel' : ''}">${t('pol.on')}</button></span></div><div class="dim">${t('staff.shuffleD')}</div>
       <div class="brow"><span>${t('staff.dinner')}</span><span class="dim">${t('staff.perHead', DINNER_PER_HEAD)}</span><span class="sp"></span><button data-do="dinner" ${!st.hired.length || st.dinnerDay === g.clock.day || !g.economy.canAfford(st.dinnerCost()) ? 'disabled' : ''}>${st.dinnerDay === g.clock.day ? t('staff.dinnerDone') : '$' + st.dinnerCost()}</button></div></div>
-      ${this.#synergies()}
       <div class="bsec"><h4>${t('staff.designers')}</h4>${g.isUnlocked('staff') ? '' : `<div class="dim">${t('staff.lock')}</div>`}${[st.owner, ...team].map(e => this.#staffRow(e)).join('')}</div><div class="bsec"><h4>${t('staff.support')}</h4>${st.support.map(e => this.#supportRow(e)).join('')}</div>`;
   }
   #build() {

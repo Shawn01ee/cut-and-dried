@@ -681,7 +681,7 @@ let sel=0;const tabs=$('#tabs'),pbody=$('#pbody');let panelKey='';
 function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span>`;if(st.state==='await')return tx(st.cust.inWash?'st.shampoo':'st.walk');
   if(st.state==='consult')return canAuto(st)?tx('st.auto',Math.max(0,st.timer).toFixed(0)):`<span class="gold">${tx('st.wait')}</span>`;
   if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}% · ${tx('st.left',Math.max(0,Math.ceil(o.minutes*(1-clamp(o.t/o.dur)))))}`;}return tx('st.reveal');}
-function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']],unread=game.reviews.unread;
+function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['syn','tab.syn'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']],unread=game.reviews.unread;
   tabs.innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${(k==='salon'?typeof sel==='number':sel===k)?'sel':''}">${tx(l)}${k==='rev'&&unread&&sel!=='rev'?`<span class="badge">${unread}</span>`:''}${k==='prog'&&game.missions.claimable?`<span class="badge">${game.missions.claimable}</span>`:''}</button>`).join('')+`<button class="tog" id="bMin">${$('#panel').classList.contains('min')?'▴':'▾'}</button>`;
   tabs.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{sel=b.dataset.t==='salon'?lastChair:b.dataset.t;$('#panel').classList.remove('min');renderPanel(true);const pb=$('#pbody');pb.classList.remove('fade');void pb.offsetWidth;pb.classList.add('fade');});
   $('#bMin').onclick=()=>{$('#panel').classList.toggle('min');renderTabs();};}
