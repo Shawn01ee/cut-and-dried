@@ -70,7 +70,7 @@ export class TycoonUI {
     const t = (k, ...a) => this.#t(k, ...a), role = RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`;
     const chips = [e.specialty ? `<span class="chip spec">${t('style.' + SPEC_STYLE[e.specialty])}</span>` : e.style === 'AllRounder' ? `<span class="chip">${t('style.AllRounder')}</span>` : '', e.perk ? `<span class="chip perk">${t('perk.' + e.perk).split(' · ')[0]}</span>` : ''].join('');
     const kind = this.#kind(e), crown = kind === 'owner' ? `<img class="crown" src="${crownURL()}" alt="">` : '';
-    return `<div class="shead"><img class="face r-${kind}" src="${portraitURL(e, kind)}" alt=""><div class="who"><div class="brow"><b style="color:${nameColour(e)}">${crown}${rankMark(e)}${this.i18n.name(e.name)}</b>${kind === 'owner' ? `<span class="chip own">${t('st.ownerTag')}</span>` : role}${e.gender ? `<span class="dim">${t('gender.' + e.gender)}</span>` : ''}</div>${chips ? `<div class="chips">${chips}</div>` : ''}</div><div class="act">${actions}</div></div>`;
+    return `<div class="shead"><img class="face r-${kind}" src="${portraitURL(e, kind)}" alt=""><div class="who"><div class="brow"><b style="color:${nameColour(e)}">${crown}${rankMark(e)}${this.i18n.name(e.name)}</b>${kind === 'owner' ? `<span class="chip boss">${t('st.ownerTag')}</span>` : role}${e.gender ? `<span class="dim">${t('gender.' + e.gender)}</span>` : ''}</div>${chips ? `<div class="chips">${chips}</div>` : ''}</div><div class="act">${actions}</div></div>`;
   }
   /** Skills as short bars in one line; `hi` marks a specialty. */
   #statBars(list) {
