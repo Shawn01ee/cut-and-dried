@@ -499,6 +499,21 @@ function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='fr
 /** A stylist leaves their chair: Lia takes it if she has none, otherwise it stands empty. */
 function vacate(st){const e=st.sty;if(e===OWNER||st.vacant)return;e.fig.root.visible=false;
   if(OWNER.floating){OWNER.floating=false;st.sty=OWNER;st.state='free';OWNER.fig.walkTo(route(OWNER.fig.pos,st.stand),()=>OWNER.fig.yaw=st.face);}else{st.sty=VAC;st.vacant=true;st.state='vacant';}}
+/** A chair nobody is being served at, so its stylist can change places. */
+const seatFree=st=>!st.cust&&!st.washing&&!st.sweep&&!st.filming&&(st.state==='free'||st.state==='vacant')&&!(styling&&styling.station===st);
+/** Two chairs trade stylists. */
+function swapSeats(a,b){if(a===b||!seatFree(a)||!seatFree(b))return false;const ea=a.sty,va=a.vacant;
+  Object.assign(a,{sty:b.sty,vacant:b.vacant,state:b.vacant?'vacant':'free'});Object.assign(b,{sty:ea,vacant:va,state:va?'vacant':'free'});
+  for(const st of [a,b])if(!st.vacant){const f=st.sty.fig;f.walkTo(route(f.pos,st.stand),()=>f.yaw=st.face);}return true;}
+/** The player moves a stylist to chair `i`, trading places with whoever sits there. */
+function moveToSeat(e,i){const to=stations[i],from=stations.find(s=>s.sty===e);if(!to||!from||from===to)return false;
+  if(!swapSeats(from,to)){popup(tx('seat.busy'),recep.head,'');audio.play('deny');return false;}return true;}
+/** Each morning: shuffle the chairs if that is the policy, then a VIP specialist on duty takes the VIP room. */
+function morningSeats(){if(game.staff.seatShuffle){const sts=stations.filter(s=>!s.vacant&&seatFree(s)),people=sts.map(s=>s.sty);
+    for(let i=people.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[people[i],people[j]]=[people[j],people[i]];}
+    sts.forEach((s,k)=>{s.sty=people[k];const f=s.sty.fig;f.walkTo(route(f.pos,s.stand),()=>f.yaw=s.face);});}
+  const room=stations.find(s=>s.item.id==='vipRoom');if(!room||room.sty.perk==='vip')return;
+  const vip=stations.find(s=>s!==room&&!s.vacant&&s.sty.perk==='vip');if(vip)swapSeats(room,vip);}
 /** Each morning: stylists on leave give up their chair and stylists who are in take any free one. */
 function syncRoster(){const day=game.clock.day;
   stations.forEach(st=>{if(!st.vacant&&st.sty!==OWNER&&!st.cust&&(!st.sty.hired||st.sty.onLeave(day)))vacate(st);});
@@ -617,7 +632,9 @@ function simStep(dt){simT+=dt;
     else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
     if(st.state==='free'){if(st.sty.restUntil>simT||st.sweep||st.filming||pendingMoves.has(st.item)||queuedMoves.has(st.item))return;
       const done=custs.filter(q=>q.state==='ready'),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>simT-q.readyAt>game.clock.hourLength/4);if(back){resumeAt(st,back);return;}
-      if(!game.clock.isOpen||(booths.length&&!freeBooth()))return;const waiting=queue.filter(q=>q.state==='wait').slice(0,3),vipRoom=st.item.id==='vipRoom',c=(vipRoom&&queue.find(q=>q.state==='wait'&&q.vip))||waiting.find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
+      if(!game.clock.isOpen||(booths.length&&!freeBooth()))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.perk==='vip',vipOnDuty=stations.some(s=>!s.vacant&&(s.item.id==='vipRoom'||s.sty.perk==='vip'));
+      // VIP clients wait for a VIP chair (the VIP room or a VIP specialist) while one is on duty, unless half their patience is gone.
+      const waiting=queue.filter(q=>q.state==='wait'&&(!q.vip||vipChair||!vipOnDuty||q.pat<q.maxPat*.5)),c=(vipChair&&waiting.find(q=>q.vip))||waiting.slice(0,3).find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep&&!st.filming){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
@@ -792,7 +809,7 @@ function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>pop
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
 const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,syncBranches,viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
-  post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e)});
+  post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e),seats:()=>stations.map(s=>({vip:s.item.id==='vipRoom'})),seatOf:e=>stations.findIndex(s=>s.sty===e),moveSeat:(e,i)=>moveToSeat(e,i)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});
@@ -853,11 +870,11 @@ function renderMenu(){const top=mbox.scrollTop;let h;
   mbox.innerHTML=h;mbox.scrollTop=top;}
 function openMenu(s,from){menuScreen=s;menuFrom=from;mbox.scrollTop=0;$('#menu').classList.remove('hide');renderMenu();mbox.scrollTop=0;}
 /** Opens the next day; a Sunday opens on the weekly settlement instead of the salon floor. */
-function beginDay(){game.nextDay();spawnTimer=1.5;paused=false;closeMenu();alignToWalls();syncRoster();morningNews();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
+function beginDay(){game.nextDay();spawnTimer=1.5;paused=false;closeMenu();alignToWalls();syncRoster();morningSeats();morningNews();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
 function offdayText(){const o=$('#offday');o.querySelector('.offt').textContent=tx('off.banner');o.querySelector('[data-off="week"]').textContent=tx('off.week');o.querySelector('[data-off="monday"]').textContent=tx('week.monday');}
 function closeMenu(){offdayText();$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
-function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();syncBranches();openDay();alignToWalls();syncRoster();morningNews();game.updateProgress();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
+function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();syncBranches();openDay();alignToWalls();syncRoster();morningSeats();morningNews();game.updateProgress();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
