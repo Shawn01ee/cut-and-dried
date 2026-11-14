@@ -9,7 +9,15 @@ function shade(n, k) {
   const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => Math.max(0, Math.min(255, Math.round(v * k))));
   return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
 }
-const INK = '#1d1a26', BLUSH = '#e88a8a', GLINT = '#8a8494';
+const INK = '#1d1a26', BLUSH = '#e88a8a', GLINT = '#8a8494', GOLD = '#ffd98a', GOLD_DK = '#c8964a';
+/** Backdrops by standing: Lia's pink with stripes, the master's gold with sparkles, seniors' navy with dots. */
+const BACKDROPS = {
+  owner: { base: '#5a2a48', mark: '#73365c', at: (x, y) => (x + y) % 4 === 0 },
+  master: { base: '#4a3a1a', mark: GOLD, at: (x, y) => [[1, 2], [14, 4], [2, 11], [13, 12], [1, 6]].some(([a, b]) => a === x && b === y) },
+  senior: { base: '#1e3550', mark: '#2c4a6c', at: (x, y) => x % 3 === 1 && y % 3 === 1 },
+};
+/** A small gold crown, drawn over Lia's portrait and beside her name. */
+const CROWN = ['#.#.#', '#####', '#####'];
 
 /** Hair pixels for each hairdo, as [y, x0, x1] runs drawn in the hair colour. */
 const HAIR = {
@@ -21,9 +29,11 @@ const HAIR = {
   curly: [[1, 5, 10], [2, 3, 12], [3, 2, 13], [4, 2, 13], [5, 2, 4], [5, 11, 13], [6, 2, 3], [6, 12, 13], [7, 2, 3], [7, 12, 13], [8, 2, 2], [8, 13, 13]],
 };
 
-function draw(e) {
+function draw(e, kind) {
   const cv = document.createElement('canvas'); cv.width = cv.height = SIZE;
   const g = cv.getContext('2d'), px = (x, y, c) => { g.fillStyle = c; g.fillRect(x, y, 1, 1); }, run = (y, a, b, c) => { g.fillStyle = c; g.fillRect(a, y, b - a + 1, 1); };
+  const back = BACKDROPS[kind];
+  if (back) { g.fillStyle = back.base; g.fillRect(0, 0, SIZE, SIZE); for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) if (back.at(x, y)) px(x, y, back.mark); }
   const skinN = e.skin ?? 0xf6d6bd, skin = hex(skinN), skinDk = shade(skinN, .8), hairN = e.hair ?? 0x2e1d14, hair = hex(hairN), hairDk = shade(hairN, .7), hairLt = shade(hairN, 1.35);
   const apronN = e.apron ?? 0x45404f, apron = hex(apronN), apronDk = shade(apronN, .72), hairdo = HAIR[e.hairdo] ? e.hairdo : 'short';
   // shoulders and apron, neck, ears, face
@@ -44,12 +54,23 @@ function draw(e) {
   if (hairdo !== 'buzz') { px(6, hairdo === 'bun' ? 0 : hairdo === 'curly' ? 1 : 2, hairLt); px(7, hairdo === 'curly' ? 2 : 3, hairLt); }
   else run(3, 6, 8, hairLt);
   if (hairdo === 'bob' || hairdo === 'long') run(5, 5, 10, hair);
+  if (kind === 'owner') CROWN.forEach((row, y) => [...row].forEach((c, x) => { if (c === '#') px(10 + x, y, y === 2 ? GOLD_DK : GOLD); }));
   return cv.toDataURL();
 }
 
-/** The portrait's image URL for anyone with a look; redrawn only when that look changes. */
-export function portraitURL(e) {
-  const key = [e.id, e.hairdo, e.hair, e.skin, e.apron, e.beard, e.shades, e.gender].join('|');
-  if (!cache.has(key)) cache.set(key, draw(e));
+/** The portrait's image URL for anyone with a look; `kind` (owner, master, senior…) picks the backdrop. Redrawn only when the look changes. */
+export function portraitURL(e, kind = e.rank) {
+  const key = [e.id, kind, e.hairdo, e.hair, e.skin, e.apron, e.beard, e.shades, e.gender].join('|');
+  if (!cache.has(key)) cache.set(key, draw(e, kind));
   return cache.get(key);
+}
+
+/** The gold crown on its own, for marking Lia as the owner beside her name. */
+export function crownURL() {
+  if (!cache.has('crown')) {
+    const cv = document.createElement('canvas'); cv.width = 5; cv.height = 3; const g = cv.getContext('2d');
+    CROWN.forEach((row, y) => [...row].forEach((c, x) => { if (c === '#') { g.fillStyle = y === 2 ? GOLD_DK : GOLD; g.fillRect(x, y, 1, 1); } }));
+    cache.set('crown', cv.toDataURL());
+  }
+  return cache.get('crown');
 }
