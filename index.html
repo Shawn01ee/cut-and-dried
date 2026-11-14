@@ -199,7 +199,30 @@ button.on:hover:not(:disabled){background:#a3384a}
 #offday.show{display:flex}#offday .offt{color:#ffd98a}
 .wbars{display:flex;align-items:flex-end;gap:6px;height:84px;margin:8px 0 10px;padding:0 2px;border-bottom:1px solid #45404f}
 .wbars div{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px}
-.mbars{gap:1px}.mbars span{font-size:10px;height:12px}
+/* profit chart for the weekly and monthly settlements */
+.mchart{display:grid;grid-template-columns:54px 1fr;grid-template-rows:132px auto;column-gap:6px;margin:10px 0 2px}
+.mc-y{position:relative;margin:16px 0}
+.mc-y span{position:absolute;right:0;transform:translateY(-50%);font-size:11px;line-height:1;color:#9c98a2;white-space:nowrap}
+.mc-plot{position:relative;display:flex;gap:2px;margin:16px 0;border-top:1px dashed #2f2a3a;border-bottom:1px dashed #2f2a3a}
+.mc-zero{position:absolute;left:0;right:0;height:1px;background:#9c98a2;z-index:1;pointer-events:none}
+.mc-col{flex:1;position:relative;height:100%;min-width:0}
+.mc-col:hover{background:rgba(246,243,238,.07)}
+.mc-col i{position:absolute;left:0;right:0;display:block;background:#4a93d8}
+.mc-col i.neg{background:#d9692e}
+.mc-col i.off{background:repeating-linear-gradient(135deg,#6f6a7a 0 2px,#2a2633 2px 4px)}
+.mc-v{position:absolute;left:50%;transform:translateX(-50%);font-size:11px;font-weight:400;line-height:14px;color:#f6f3ee;white-space:nowrap;pointer-events:none;z-index:2}
+.mc-col.l .mc-v{left:0;transform:none}.mc-col.r .mc-v{left:auto;right:0;transform:none}
+.mc-col:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 18px);left:50%;transform:translateX(-50%);background:#0d0b14;border:1px solid #5f5a68;padding:2px 6px;font-size:11px;line-height:1.4;white-space:nowrap;color:#f6f3ee;z-index:4;pointer-events:none}
+.mc-col.l:hover::after{left:0;transform:none}.mc-col.r:hover::after{left:auto;right:0;transform:none}
+.mc-x{display:flex;gap:2px}.mc-x span{flex:1;min-width:0;text-align:center;font-size:11px;color:#9c98a2;overflow:visible;white-space:nowrap}
+.mc-key{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:#9c98a2;margin:4px 0 10px 60px}
+.mc-key i{display:inline-block;width:9px;height:9px;margin-right:5px;vertical-align:-1px;background:#4a93d8}
+.mc-key i.neg{background:#d9692e}.mc-key i.off{background:repeating-linear-gradient(135deg,#6f6a7a 0 2px,#2a2633 2px 4px)}
+.mweeks{width:100%;border-collapse:collapse;margin:0 0 10px;font-size:12px}
+.mweeks th{color:#9c98a2;font-weight:400;text-align:right;padding:2px 4px;border-bottom:1px solid #45404f}
+.mweeks td{text-align:right;padding:2px 4px;border-bottom:1px solid #241e2f}
+.mweeks th:first-child,.mweeks td:first-child,.mweeks th:nth-child(2),.mweeks td:nth-child(2){text-align:left}
+@media (max-width:480px){.mchart{grid-template-columns:46px 1fr}.mc-plot,.mc-x{gap:1px}.mc-key{margin-left:52px}}
 .wbars i{display:block;width:100%;background:#8fc25a}.wbars i.neg{background:#ff7a3d}.wbars span{font-size:12px;color:#9c98a2}
 .mcard{border:1px solid #2e2a38;background:#15121d;padding:5px 7px;margin:5px 0}
 .mcard .mt{color:#ffd98a}

@@ -14,7 +14,7 @@ export function summariseDays(days) {
     revenue: add('revenue'), operating: add('operating'), investment: add('investment'), funding: add('funding'),
     totalRevenue: sum(d => d.totalRevenue), totalOperating: sum(d => d.totalOperating), totalInvestment: sum(d => d.totalInvestment), profit: sum(d => d.profit),
     served: sum(d => d.served), reviews: { count, average: count ? sum(d => d.reviews.count * d.reviews.average) / count : 0 },
-    reputation: sum(d => d.reputation), followers: sum(d => d.followers.change), days: days.map(d => ({ day: d.day, profit: d.profit })),
+    reputation: sum(d => d.reputation), followers: sum(d => d.followers.change), days: days.map(d => ({ day: d.day, profit: d.profit, revenue: d.totalRevenue })),
   };
 }
 
