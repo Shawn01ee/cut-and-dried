@@ -23,6 +23,7 @@ import { CHANNELS } from './tycoon/Marketing.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { IncidentCard } from './ui/IncidentCard.js';
 import { checkForUpdate, refreshToLatest } from './core/Updater.js';
+import { dateOf, seasonOf, eventsOn, HAPPENINGS } from './tycoon/Calendar.js';
 
 const game = new TycoonGame(), i18n = new I18n(window.__lang), audio = new AudioManager(game.bus);
 const tx = (k, ...a) => i18n.t(k, ...a), nm = n => i18n.name(n);
@@ -805,7 +806,7 @@ $('#hud').addEventListener('pointerdown',e=>{if(!e.target.closest('[data-hud]'))
 function updateHud(){game.syncMissions();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
-  $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)}(${tx('wd.'+g.weekday)}) ${g.dayOff?tx('hud.off'):g.clock.timeText}</span></h1>
+  $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)}(${tx('wd.'+g.weekday)}) ${(d=>d.month+'/'+d.date)(dateOf(g.clock.day))} ${tx('season.'+seasonOf(g.clock.day))} ${g.dayOff?tx('hud.off'):g.clock.timeText}</span></h1>
   <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.rating',g.reviews.count?`★${g.reviews.rating.toFixed(1)} (${g.reviews.count})`:'–')}${row('hud.followers',g.marketing.followers.toLocaleString())}${row('hud.hours',`${g.clock.openHour}:00–${g.clock.closeHour}:00`)}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length+custs.filter(q=>q.state==='process'||q.state==='ready').length} / ${stations.length+terr.length+procSeats.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
   ${hudChairs(stations.filter(st=>siteOf(st.item.x)===site),st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</td><td class="${st.cust&&st.cust.villain?'bad':''}">${st.cust?(st.cust.vip?'★':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`)}
   ${last?`<div class="dim">${tx('hud.last',nm(last.name),Math.round(last.all*100),nm(last.sty),last.mins.toFixed(1))}</div>`:''}`;}
@@ -902,12 +903,27 @@ function postOn(channel){const who=filmer();if(!who){popup(tx('mk.busy'),OWNER.f
     popup(r.viral?tx('mk.viralPop',name,r.views.toLocaleString()):tx('mk.postPop',name,r.views.toLocaleString(),r.gained.toLocaleString()),f.head,'big');audio.play(r.viral?'levelUp':'happy');renderPanel(true);});
   renderPanel(true);}
 /** Morning news: what the rival did overnight, and stylists who have had enough. */
-function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>popup(k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):tx('rival.news.'+k),recep.head,'big')));
+function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):tx('rival.news.'+k));
+  // a new season, and calendar events on their first day
+  if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
+  eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));
+  news.forEach((n,i)=>later(.6+i*1.4,()=>popup(n,recep.head,'big')));
+  happeningCard();
   game.resignations.splice(0).forEach(e=>{if(!e.hired)return;audio.play('bad');const day=game.clock.day,answer=how=>()=>{const stays=game.staff.answerResignation(e,how,day);
       if(how==='talk'){audio.play(stays?'cash':'bad');incidents.show({title:tx(stays?'inc.talkOkT':'inc.talkNoT',nm(e.name)),text:tx(stays?'inc.talkOk':'inc.talkNo',nm(e.name),GRUDGE_DAYS,GRUDGE_PENALTY),options:[{label:tx('inc.ok'),run:()=>{}}]});}renderPanel(true);};
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:4,options:[
       {label:tx('inc.keep',e.salary*2),note:tx('inc.keepN'),run:answer('bonus')},{label:tx('inc.talk'),note:tx('inc.talkN',GRUDGE_DAYS,GRUDGE_PENALTY),run:answer('talk')},
       {label:tx('inc.raise'),note:tx('inc.raiseN',Math.round(e.salary*(RAISE-1))),run:answer('raise')},{label:tx('inc.leave'),note:tx('inc.leaveN',RESIGN_LEAVE),run:answer('leave')},{label:tx('inc.letGo'),note:tx('inc.letGoN'),run:answer('go')}]});});}
+/** A set of calendar effects in words: "clients ×1.25 · payments ×1.15". */
+function fxText(fx){return Object.entries(fx).filter(([k,v])=>typeof v==='number'&&tx('fx.'+k)!=='fx.'+k&&!['month','from','to'].includes(k)).map(([k,v])=>tx('fx.'+k)+' ×'+(Math.round(v*100)/100)).join(' · ');}
+/** Today's happening: news, the inspection's verdict, or a choice to pay for a fix or take up an offer. */
+function happeningCard(){const h=game.happening;if(!h)return;const t=tx('hap.'+h.id+'.t'),text=tx('hap.'+h.id);
+  if(h.kind==='news'){later(1.2,()=>popup(t+' · '+text,recep.head,'big'));return;}
+  if(h.kind==='inspection'){audio.play(h.pass?'cash':'bad');incidents.show({title:t,text:tx(h.pass?'hap.inspection.pass':'hap.inspection.fail'),options:[{label:tx('inc.ok'),run:()=>{}}]});renderPanel(true);return;}
+  const fxOf=HAPPENINGS.find(x=>x.id===h.id).effect;
+  incidents.show({title:t,text,fallback:1,options:h.kind==='fix'
+    ?[{label:tx('hap.fix',h.cost),note:tx('hap.fixN'),run:()=>{if(game.resolveHappening(true))audio.play('cash');renderPanel(true);}},{label:tx('hap.ride'),note:fxText(fxOf),run:()=>{}}]
+    :[{label:tx('hap.join',h.cost),note:tx('hap.joinN',h.followers),run:()=>{if(game.resolveHappening(true))audio.play('cash');renderPanel(true);}},{label:tx('hap.skip'),run:()=>{}}]});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
 const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},branchExpanded:()=>{syncFurniture();syncChairs();focusSite(1);},syncSupport,openBranch,hairShow:n=>{audio.play('levelUp');popup(tx('show.done',n.toLocaleString()),recep.head,'big');},openMonth:()=>{monthFrom='panel';openMenu('month','game');paused=true;},viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
@@ -1036,4 +1052,4 @@ checkForUpdate({atStart:true});
 setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update');el.querySelector('span').textContent=tx('upd.ready');el.querySelector('button').textContent=tx('upd.reload');el.classList.add('show');el.querySelector('button').onclick=()=>refreshToLatest(b);}},10*60*1000);
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};

@@ -61,6 +61,8 @@ export class Marketing {
     this.#gain('instagram', gained); this.#boost('hairShow', HAIR_SHOW.days, HAIR_SHOW.demand); this.showReady = day + HAIR_SHOW.every; this.version++;
     return gained;
   }
+  /** Followers from outside the usual channels, such as a festival stall. */
+  addFollowers(n, channel = 'instagram') { this.#gain(channel, n); }
   #gain(channel, n) { const c = this.channels[channel]; c.followers = Math.max(0, Math.round(c.followers + n)); this.version++; }
 
   run(id, power = 1) {
