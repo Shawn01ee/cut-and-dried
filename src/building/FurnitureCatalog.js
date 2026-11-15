@@ -10,7 +10,7 @@ export const FURNITURE = {
   processIsland: { price: 1200, comfort: 2, w: 6, d: 4, processing: true, seatH: .5, max: [1, 1, 2, 2, 3, 3], seats: [[-.75, .55, 0], [.75, .55, 0], [-.75, -.55, 2], [.75, -.55, 2]] },
   // A ready-made three-seat chair set, from saves made before chairs could be lined up into one. No longer sold.
   island: { price: 1500, comfort: 2, w: 9, d: 3, legacy: true, needs: [[-1.5, 1], [0, 1], [1.5, 1]], chairs: [[-1.5, 0, 0], [0, 0, 0], [1.5, 0, 0]] },
-  wardrobe: { price: 350, comfort: 1, w: 2, d: 1, needs: [[0, .6]] },
+  wardrobe: { price: 350, comfort: 1, w: 2, d: 1, needs: [[0, .6]], legacy: true },
   // A waist-high oak planter that divides the floor into areas without blocking the view.
   partition: { price: 250, comfort: 1, w: 3, d: 1 },
   // A free-standing table of hair products in the middle of the floor.
@@ -20,16 +20,23 @@ export const FURNITURE = {
   bench2: { price: 250, comfort: 1, w: 3, d: 1, seatH: .44, seats: [[-.3, .1], [.3, .1]] },
   sofa: { price: 400, comfort: 1, w: 2, d: 1, seats: [[-.24, 0], [.24, 0]] },
   loungeRug: { price: 150, comfort: 1, w: 4, d: 2, walkable: true },
-  rug: { price: 120, comfort: 1, walkable: true },
-  mat: { price: 40, comfort: 0, w: 2, d: 1, walkable: true },
+  rug: { price: 120, comfort: 1, walkable: true, legacy: true },
+  mat: { price: 40, comfort: 0, w: 2, d: 1, walkable: true, legacy: true },
   plant: { price: 80, comfort: 1 },
   // A small table between the waiting benches, with magazines and flowers.
-  sideTable: { price: 120, comfort: 1 },
-  mirror: { price: 150, comfort: 2 },
+  sideTable: { price: 120, comfort: 1, legacy: true },
+  mirror: { price: 150, comfort: 2, legacy: true },
   lamp: { price: 200, comfort: 2 },
-  bookcase: { price: 180, comfort: 1, w: 2, d: 1 },
+  bookcase: { price: 180, comfort: 1, w: 2, d: 1, legacy: true },
   shelf: { price: 250, comfort: 1, dailySales: 30 },
-  dryer: { price: 300, comfort: 1, w: 2, d: 2 },
+  dryer: { price: 300, comfort: 1, w: 2, d: 2, legacy: true },
+  // Practical pieces, one per salon, each doing one job there.
+  kiosk: { price: 600, comfort: 0, max: 1, needs: [[0, .6]], patience: 1.1 },
+  towelStation: { price: 700, comfort: 0, w: 2, d: 1, max: 1, speedBonus: .15, speedFor: 'shampoo' },
+  sterilizer: { price: 450, comfort: 0, max: 1, satisfaction: .02 },
+  stockroom: { price: 1200, comfort: 0, w: 2, d: 2, minTier: 1, max: 1, materials: .8 },
+  cctv: { price: 400, comfort: 0, max: 1, catchDasher: .8 },
+  airPurifier: { price: 650, comfort: 1, max: 1, cleanAir: .5 },
   // A shampoo booth: basin, reclining chair and oak screens. Clients are washed here before their chair.
   shampooBooth: { price: 900, comfort: 2, w: 3, d: 3, max: [3, 3, 3, 4, 5, 6], needs: [[0, 1]] },
   // Pieces that open as the salon grows (`minTier` is the salon size).

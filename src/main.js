@@ -413,7 +413,7 @@ function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OW
   if(p.doWave&&Math.abs(p.wave-st.cust.hair.wave)>.05)ops.push({type:'wave'},{type:'process',of:'wave'});
   if(p.doCut)ops.push({type:'cut'});
   // Each step takes the stylist's own time for it, from the standard service times.
-  ops.push({type:'dry'});timeOps(ops,worker,siteOf(st.item.x));game.chargeMaterials(ops);if(worker!==st.sty)st.sty.fig.walkTo(route(st.sty.fig.pos,st.at(-.8,1.55)));
+  ops.push({type:'dry'});timeOps(ops,worker,siteOf(st.item.x));game.chargeMaterials(ops,siteOf(st.item.x));if(worker!==st.sty)st.sty.fig.walkTo(route(st.sty.fig.pos,st.at(-.8,1.55)));
   st.ops=ops;st.opi=0;st.state='work';beginOp(st);renderPanel(true);}
 const TOOLS={colour:'brush',wave:'comb',cut:'scissors',dry:'dryer'};
 /** Minutes and simulated time for each step: the stylist's own times, and the fixed processing times. */
@@ -481,6 +481,7 @@ function checkout(c,sc){const pay=sc.payment,head=c.fig.head;
   if(c.influencer){popup(tx('inf.sponsored'),recep.head,'');settle(0);return;}
   if(c.villain==='dasher'){
     if(game.staff.hasSupport('reception',c.site||0)&&Math.random()<.85){popup(tx('vil.caught',nm(recepName(c.site||0))),deskFig(c.site||0).head,'big');settle(pay);return;}
+    if(game.layout.countAt('cctv',c.site||0)&&Math.random()<FURNITURE.cctv.catchDasher){popup(tx('vil.cctv'),head,'big');settle(pay);return;}
     audio.play('bad');popup(tx('vil.dashed',pay),head,'big');game.finishVisit(c,sc,{dashed:true});c.state='paid';c.fig.spd=3.4;leave(c);return;}
   if(c.villain==='complainer'&&sc.satisfaction<.72){audio.play('bad');
     incidents.show({title:tx('inc.complain.t',nm(c.name)),text:tx('inc.complain'),options:[{label:tx('inc.refund',pay),run:()=>settle(0,{refunded:true})},{label:tx('inc.refuse'),run:()=>settle(pay,{refusedRefund:true})}]});return;}

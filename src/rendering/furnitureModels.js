@@ -106,6 +106,24 @@ export const FURNITURE_MODELS = {
     [[-.25, -.2, 0x2f6fd6], [-.1, -.22, 0xe25c8f], [.08, -.2, 0x1fa39a], [.24, -.22, 0xffd98a], [-.2, .15, 0xf6f3ee], [-.05, .17, 0xd8314a]].forEach(([x, z, c]) => g.box(.09, .18, .09, c, x, .83, z));
     g.box(.16, .2, .16, 0xb88a5a, .22, .84, .18).box(.22, .26, .22, 0x3a7a3a, .22, 1.05, .18);
   },
+  // a self check-in kiosk: a slim stand with a glowing touch screen
+  kiosk: (g, fx) => { g.box(.32, .04, .26, 0x1d1a26, 0, .02, 0).box(.1, 1.0, .1, 0xbdb9c0, 0, .52, 0).box(.44, .58, .1, 0x1d1a26, 0, 1.22, 0).box(.38, .5, .02, 0x7fb6f0, 0, 1.22, .06); fx.glow(.36, .46, .02, 0, 1.22, .07); },
+  // the towel laundry: a washer under the counter and stacks of fresh towels
+  towelStation: g => {
+    g.box(.94, .9, .44, 0xf6f3ee, 0, .45, 0).box(.98, .04, .46, 0xbdb9c0, 0, .92, 0).box(.32, .32, .02, 0x9c98a2, -.22, .5, .23).box(.24, .24, .02, 0x7fb6f0, -.22, .5, .24);
+    [[0xf6f3ee, .98], [0x1fa39a, 1.06], [0xf6f3ee, 1.14], [0xe25c8f, 1.22]].forEach(([c, y]) => g.box(.32, .08, .3, c, .24, y, 0));
+  },
+  // a tool sterilizer: a small cabinet with a violet UV window
+  sterilizer: (g, fx) => { g.box(.42, .72, .34, 0xdcd9dc, 0, .36, 0).box(.36, .34, .02, 0x8a4fc2, 0, .5, .18).box(.1, .04, .04, 0xbdb9c0, 0, .28, .18); fx.glow(.32, .3, .02, 0, .5, .19); },
+  // the stockroom: steel shelving full of product boxes
+  stockroom: g => {
+    for (const x of [-.44, .44]) for (const z of [-.36, .36]) g.box(.05, 1.6, .05, 0x7d7884, x, .8, z);
+    [.3, .8, 1.3].forEach((y, k) => { g.box(.94, .04, .78, 0x9c98a2, 0, y, 0); [[-.25, 0xb88a5a], [.05, 0xd9b98f], [.3, 0xb88a5a]].forEach(([x, c], j) => g.box(.24, .22, .3, (k + j) % 2 ? c : 0xe25c8f, x, y + .13, -.12 + (j % 2) * .24)); });
+  },
+  // a security camera on a slim pole, with its red light
+  cctv: g => g.box(.24, .04, .24, 0x1d1a26, 0, .02, 0).box(.05, 1.9, .05, 0x45404f, 0, .97, 0).box(.16, .12, .28, 0xdcd9dc, 0, 1.94, .08).box(.08, .08, .02, 0x1d1a26, 0, 1.94, .23).box(.03, .03, .02, 0xd8314a, .05, 1.98, .23),
+  // an air purifier: a white column with a grille and a blue light
+  airPurifier: (g, fx) => { g.box(.34, .9, .34, 0xf6f3ee, 0, .45, 0).box(.26, .04, .26, 0xbdb9c0, 0, .92, 0); [.25, .4, .55, .7].forEach(y => g.box(.28, .02, .02, 0x9c98a2, 0, y, .18)); g.box(.06, .03, .02, 0x7fb6f0, 0, .82, .18); fx.glow(.06, .03, .02, 0, .82, .19); },
   // coat storage beside the front desk
   // an open coat rack: coats on hangers over a shoe shelf, with a hat on top
   wardrobe: g => {
