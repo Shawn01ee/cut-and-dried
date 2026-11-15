@@ -7,7 +7,7 @@ import { clamp } from '../core/math.js';
 // Which skill each specialty raises, to highlight it on the card.
 const SPECIAL_SKILL = { cut: 'cutting', colour: 'colouring', perm: 'perming' };
 import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/StaffManager.js';
-import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS } from '../tycoon/Marketing.js';
+import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS, HAIR_SHOW } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
 import { ReviewRewards, milestoneBase, ratingMultiplier, streakPay } from '../tycoon/ReviewRewards.js';
@@ -178,7 +178,7 @@ export class TycoonUI {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, { add, mult } = g.demandParts, f1 = v => (Math.round(v * 10) / 10).toString(), x = v => '×' + (Math.round(v * 100) / 100);
     const rows = Object.entries(add).filter(([k]) => k !== 'branch' || g.layout.branchOpen).map(([k, v]) => `<div class="brow"><span>${t('demand.' + k)}</span><span class="sp"></span><span>${f1(v)}</span></div>`).join('');
     const today = Math.round(g.dailyDemand * g.clock.hours / 8);
-    return `<div class="bsec"><h4>${t('demand.title')}</h4>${rows}<div class="dim">${t('demand.mult', x(mult.price), x(mult.marketing), x(mult.reviews), x(mult.rival))}${mult.award > 1 ? ' · ' + t('demand.award', x(mult.award)) : ''}</div><div class="brow"><span>${t('demand.total', g.clock.hours)}</span><span class="sp"></span><b class="gold">${t('demand.people', today)}</b></div></div>`;
+    return `<div class="bsec"><h4>${t('demand.title')}</h4>${rows}<div class="dim">${t('demand.mult', x(mult.price), x(mult.marketing), x(mult.reviews), x(mult.rival))}${['award', 'booking', 'fame'].filter(k => mult[k] > 1).map(k => ' · ' + t('demand.' + k, x(mult[k]))).join('')}</div><div class="brow"><span>${t('demand.total', g.clock.hours)}</span><span class="sp"></span><b class="gold">${t('demand.people', today)}</b></div></div>`;
   }
   /** Steppers for tomorrow's opening and closing hours. */
   #hours() {
@@ -228,7 +228,15 @@ export class TycoonUI {
     const buzz = m.active.filter(a => !CAMPAIGNS[a.id]).map(a => `<div class="brow"><span class="gold">${t('mk.buzz.' + a.id)}</span><span class="sp"></span><span class="dim">${t('mk.running', a.daysLeft)}</span></div>`).join('');
     const manager = (desk.hired ? t('mk.manager', this.i18n.name(desk.name), desk.skills.marketing || 0) : t('mk.managerSelf', this.i18n.name(g.staff.owner.name))) + (this.hooks.filming() ? ' · ' + t('mk.filmingNow') : '');
     return `<div class="bsec"><h4>${t('mk.sns')}</h4><div class="brow"><span>${t('mk.followers')}</span><span class="sp"></span><b>${m.followers.toLocaleString()}</b></div><div class="dim">${manager}</div>${Object.keys(CHANNELS).map(channel).join('')}${buzz}</div>
-      <div class="bsec"><h4>${t('mk.ads')}</h4>${campaign('flyers')}${campaign('instaAd')}<div class="brow"><span>${t('mk.influencer')}</span><span class="dim">${t('mk.infNote', INFLUENCER_FEE)}</span><span class="sp"></span>${influencer}</div><div class="dim">${INFLUENCER_POSTS.map(p => t('mk.infTier.' + p.tier, p.min.toLocaleString(), Math.round(p.demand * 100), p.days, Math.abs(p.rep))).join('<br>')}</div></div>`;
+      <div class="bsec"><h4>${t('mk.ads')}</h4>${campaign('flyers')}${campaign('instaAd')}<div class="brow"><span>${t('mk.influencer')}</span><span class="dim">${t('mk.infNote', INFLUENCER_FEE)}</span><span class="sp"></span>${influencer}</div><div class="dim">${INFLUENCER_POSTS.map(p => t('mk.infTier.' + p.tier, p.min.toLocaleString(), Math.round(p.demand * 100), p.days, Math.abs(p.rep))).join('<br>')}</div></div>${this.#hairShow()}`;
+  }
+  /** The hair show, once it is unlocked: what it costs and brings, and when it can be held again. */
+  #hairShow() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, m = g.marketing, day = g.clock.day;
+    if (!g.isUnlocked('hairShow')) return '';
+    const wait = m.showReady - day, gain = Math.max(HAIR_SHOW.minFollowers, Math.round(m.followers * HAIR_SHOW.share)), running = m.active.find(a => a.id === 'hairShow');
+    const btn = wait > 0 ? `<span class="dim">${t('show.wait', wait)}</span>` : `<button class="go" data-do="hairShow" ${g.economy.canAfford(HAIR_SHOW.cost) ? '' : 'disabled'}>${t('show.btn', HAIR_SHOW.cost.toLocaleString())}</button>`;
+    return `<div class="bsec"><h4>${t('show.title')}</h4><div class="dim">${t('show.desc', gain.toLocaleString(), HAIR_SHOW.rep, Math.round(HAIR_SHOW.demand * 100), HAIR_SHOW.days)}</div>${running ? `<div class="good">${t('show.on', running.daysLeft)}</div>` : ''}<div class="brow"><span class="sp"></span>${btn}</div></div>`;
   }
   /** Review milestones and the 5-star streak: where they stand and exactly what the next one pays. */
   #reviewRewards() {
@@ -282,7 +290,7 @@ export class TycoonUI {
       hire: () => this.hooks.hire(e), fire: () => this.hooks.fire(e),
       shire: () => { if (g.staff.hire(e)) this.hooks.syncSupport(); }, sfire: () => { if (g.staff.fire(e)) this.hooks.syncSupport(); }, train: () => { if (g.trainStaff(e)) g.bus.emit('staff:levelup', e); }, claim: () => { if (g.claimMission(+value)) this.hooks.spent(); },
       rest: () => { e.restUntil = this.hooks.now() + 20; e.rest(50); },
-      price: () => { g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), bexpand: () => { if (g.expandBranch()) this.hooks.branchExpanded(); }, monthView: () => this.hooks.openMonth(), view: () => this.hooks.viewSite(+value),
+      price: () => { g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), hairShow: () => { const n = g.hostHairShow(); if (n != null) this.hooks.hairShow(n); }, bexpand: () => { if (g.expandBranch()) this.hooks.branchExpanded(); }, monthView: () => this.hooks.openMonth(), view: () => this.hooks.viewSite(+value),
       expand: () => { if (g.expand()) this.hooks.expanded(); },
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
