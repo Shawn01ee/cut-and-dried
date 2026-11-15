@@ -19,6 +19,7 @@ import { CustomerFactory } from '../customers/CustomerFactory.js';
 import { ServiceEvaluator } from '../customers/ServiceEvaluator.js';
 import { rollVillain } from '../customers/Villains.js';
 import { SalonLayout } from '../building/SalonLayout.js';
+import { FURNITURE } from '../building/FurnitureCatalog.js';
 import { rand, clamp } from '../core/math.js';
 
 const PRICE_MULTIPLIER = [.8, 1, 1.5, 2.2], PRICE_DEMAND = [1.3, 1, .7, .45];
@@ -135,7 +136,7 @@ export class TycoonGame {
   /** Furniture comfort, plus a tidy floor while an assistant is employed, minus hair left lying on the floor. */
   get comfort() { return this.comfortAt(0); }
   /** Comfort at one salon: its furniture, a tidy floor while an assistant is employed, minus hair left lying around. */
-  comfortAt(site) { return this.layout.comfortAt(site) + (this.staff.hasSupport('tidy') ? 2 : 0) - Math.min(4, Math.floor(this.dirt / 150)); }
+  comfortAt(site) { const dirt = Math.min(4, Math.floor(this.dirt / 150)) * (this.layout.countAt('airPurifier', site) ? FURNITURE.airPurifier.cleanAir : 1); return this.layout.comfortAt(site) + (this.staff.hasSupport('tidy') ? 2 : 0) - Math.floor(dirt); }
   get averageSatisfaction() { return this.served ? this.satisfactionSum / this.served : 0; }
   /** How good a reel filmed right now looks: the latest finished style, the salon and its rating. */
   has(id) { return this.layout.items.some(it => it.id === id); }
@@ -163,7 +164,7 @@ export class TycoonGame {
     const influencer = walkIn ? this.marketing.takeInfluencer() : null;
     const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
-      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1),
+      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1) * (this.layout.countAt('kiosk', site) ? FURNITURE.kiosk.patience : 1),
       villain: walkIn && !influencer ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor,
     });
     c.site = site; c.booked = booked;
@@ -171,10 +172,11 @@ export class TycoonGame {
     return c;
   }
   serviceProfileOf(worker, site = 0) { return worker.serviceProfile(this.layout.speedBonusAt(site, 'cut')); }
-  chargeMaterials(ops) { ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', MATERIALS[op.type]); }); }
+  /** Colour and perm products for a service; a stockroom at that salon buys them for less. */
+  chargeMaterials(ops, site = 0) { const k = this.layout.countAt('stockroom', site) ? FURNITURE.stockroom.materials : 1; ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', Math.round(MATERIALS[op.type] * k)); }); }
   completeService(customer, worker, byOwner) {
     const comfort = this.comfortAt(customer.site || 0), syn = this.synergies, result = this.evaluator.evaluate(customer, worker, comfort, {
-      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0), calm: syn.some(s => s.calm),
+      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0) + (this.layout.countAt('sterilizer', customer.site || 0) ? FURNITURE.sterilizer.satisfaction : 0), calm: syn.some(s => s.calm),
     });
     if (customer.vip) result.payment = Math.round(result.payment * syn.reduce((k, s) => k * (s.vipPay || 1), 1));
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);
