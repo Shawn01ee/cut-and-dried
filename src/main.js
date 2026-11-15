@@ -831,8 +831,20 @@ $('#bZo').onclick=()=>zoomGoal=clamp(zoomGoal/1.2,ZOOM_MIN,ZOOM_MAX);$('#bZi').o
 // the music: ♪ skips to the next track; each new track shows its name for a moment
 let npTimer=0;
 function showNow(text){const el=$('#nowPlaying');el.textContent='♪ '+text;el.style.top=($('#ctrl').getBoundingClientRect().bottom+6)+'px';el.classList.add('show');const mine=++npTimer;setTimeout(()=>{if(npTimer===mine)el.classList.remove('show');},4000);}
-audio.onTrack=id=>showNow(tx('mu.'+id));
-$('#bTrack').onclick=()=>{audio.nextTrack();showNow(tx('mu.next'));};
+audio.onTrack=id=>{showNow(tx('mu.'+id));if($('#playlist').classList.contains('show'))renderPlaylist();};
+/** The playlist panel: play any track, choose which ones rotate, and how the next one is picked. */
+function renderPlaylist(){const el=$('#playlist'),cur=audio.trackId;el.style.top=($('#ctrl').getBoundingClientRect().bottom+6)+'px';
+  el.innerHTML=`<div class="brow"><b>${tx('pl.title')}</b><span class="sp"></span><button data-pl="close">×</button></div>
+  <div class="seg">${['auto','order','repeat'].map(k=>`<button data-pl="mode.${k}" class="${audio.mode===k?'sel':''}">${tx('pl.mode.'+k)}</button>`).join('')}</div><div class="dim">${tx('pl.modeD.'+audio.mode)}</div>
+  ${audio.tracks.map(t=>`<div class="plr ${t.id===cur?'on':''}"><button data-pl="play.${t.id}" title="${tx('pl.play')}">${t.id===cur?'♪':'▶'}</button><span>${tx('mu.'+t.id)}</span><span class="dim">${tx('pl.e.'+t.energy)} · ${t.tempo}</span><input type="checkbox" data-pl="use.${t.id}" ${t.enabled?'checked':''} title="${tx('pl.use')}"></div>`).join('')}
+  <div class="brow"><span class="dim">${tx('pl.note')}</span><span class="sp"></span><button data-pl="next">${tx('m.nextTrack')}</button></div>`;}
+$('#bTrack').onclick=()=>{const el=$('#playlist');el.classList.toggle('show');if(el.classList.contains('show'))renderPlaylist();};
+$('#playlist').addEventListener('click',e=>{const b=e.target.closest('[data-pl]');if(!b)return;const [a,v]=b.dataset.pl.split('.');
+  if(a==='close')$('#playlist').classList.remove('show');
+  else if(a==='mode'){audio.setMode(v);renderPlaylist();}
+  else if(a==='play'){audio.playTrack(v);showNow(tx('mu.next'));}
+  else if(a==='use'){audio.toggleTrack(v);renderPlaylist();}
+  else if(a==='next'){audio.nextTrack();showNow(tx('mu.next'));}});
 /** Zooms to `z`, keeping the ground under the screen point (x, y) where it is. */
 function zoomAt(z,x,y){z=clamp(z,ZOOM_MIN,ZOOM_MAX);if(z===zoomGoal)return;const p=groundAt(x,y);
   // measured against where the view is heading, not where it is mid-animation, so quick scrolling cannot overshoot
@@ -1008,12 +1020,13 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   stylingTick(dt);if(started&&!paused)incidents.update(dt);
   updateLights(dt);updateCam(dt);envStep(dt,realT);updatePops(dt);
   if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
-    // The music turns tense while a difficult client is in or around the salon.
-    audio.setMood(started&&custs.some(c=>c.villain&&c.state!=='gone')?'tense':'calm');}
+    // Difficult clients darken the music, more with each one; a busy salon livens it up, evenings calm it down.
+    audio.setTension(started?custs.filter(c=>c.villain&&c.state!=='gone').length:0);
+    {const waiting=queue.filter(q=>q.state==='wait').length,busyChairs=stations.filter(s=>s.cust).length;audio.setScene({busy:started&&game.clock.isOpen&&(waiting>=4||(stations.length>2&&busyChairs/stations.length>.8)),evening:started&&game.clock.hour>=18});}}
   if((clockT+=dt)>1){clockT=0;drawClock();if(started){alignToWalls();applyQueuedMoves();}}
   renderer.setRenderTarget(rt);renderer.render(scene,cam);
   renderer.setRenderTarget(null);renderer.render(post,postCam);
   if(!booted){booted=true;boot();}}
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
