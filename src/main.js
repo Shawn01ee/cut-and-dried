@@ -828,6 +828,11 @@ $('#bLang').onclick=()=>setLang(i18n.lang==='ko'?'en':'ko');
 $('#bSound').onclick=()=>{audio.toggleMute();syncCtrl();};
 $('#bHelp').onclick=()=>{build.cancel();paused=true;openMenu('how','game');};
 $('#bZo').onclick=()=>zoomGoal=clamp(zoomGoal/1.2,ZOOM_MIN,ZOOM_MAX);$('#bZi').onclick=()=>zoomGoal=clamp(zoomGoal*1.2,ZOOM_MIN,ZOOM_MAX);$('#bCenter').onclick=recenter;
+// the music: ♪ skips to the next track; each new track shows its name for a moment
+let npTimer=0;
+function showNow(text){const el=$('#nowPlaying');el.textContent='♪ '+text;el.style.top=($('#ctrl').getBoundingClientRect().bottom+6)+'px';el.classList.add('show');const mine=++npTimer;setTimeout(()=>{if(npTimer===mine)el.classList.remove('show');},4000);}
+audio.onTrack=id=>showNow(tx('mu.'+id));
+$('#bTrack').onclick=()=>{audio.nextTrack();showNow(tx('mu.next'));};
 /** Zooms to `z`, keeping the ground under the screen point (x, y) where it is. */
 function zoomAt(z,x,y){z=clamp(z,ZOOM_MIN,ZOOM_MAX);if(z===zoomGoal)return;const p=groundAt(x,y);
   // measured against where the view is heading, not where it is mid-animation, so quick scrolling cannot overshoot
@@ -883,9 +888,9 @@ function postOn(channel){const who=filmer();if(!who){popup(tx('mk.busy'),OWNER.f
 /** Morning news: what the rival did overnight, and stylists who have had enough. */
 function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>popup(k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):tx('rival.news.'+k),recep.head,'big')));
   game.resignations.splice(0).forEach(e=>{if(!e.hired)return;audio.play('bad');const day=game.clock.day,answer=how=>()=>{const stays=game.staff.answerResignation(e,how,day);
-      if(how==='talk')popup(tx(stays?'inc.talkOk':'inc.talkNo',nm(e.name),GRUDGE_DAYS),recep.head,'big');renderPanel(true);};
+      if(how==='talk'){audio.play(stays?'cash':'bad');incidents.show({title:tx(stays?'inc.talkOkT':'inc.talkNoT',nm(e.name)),text:tx(stays?'inc.talkOk':'inc.talkNo',nm(e.name),GRUDGE_DAYS,GRUDGE_PENALTY),options:[{label:tx('inc.ok'),run:()=>{}}]});}renderPanel(true);};
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:4,options:[
-      {label:tx('inc.keep',e.salary*2),note:tx('inc.keepN'),run:answer('bonus')},{label:tx('inc.talk'),note:tx('inc.talkN',Math.round(game.staff.persuadeChance(e)*100),GRUDGE_DAYS,GRUDGE_PENALTY),run:answer('talk')},
+      {label:tx('inc.keep',e.salary*2),note:tx('inc.keepN'),run:answer('bonus')},{label:tx('inc.talk'),note:tx('inc.talkN',GRUDGE_DAYS,GRUDGE_PENALTY),run:answer('talk')},
       {label:tx('inc.raise'),note:tx('inc.raiseN',Math.round(e.salary*(RAISE-1))),run:answer('raise')},{label:tx('inc.leave'),note:tx('inc.leaveN',RESIGN_LEAVE),run:answer('leave')},{label:tx('inc.letGo'),note:tx('inc.letGoN'),run:answer('go')}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
@@ -964,6 +969,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mrow"><label>${tx('m.time')}</label>${mSeg('time',TM.map(v=>[v,tx('m.t.'+v)]),timeMode)}</div>
     <div class="mrow"><label>${tx('m.speed')}</label>${mSeg('spd',[[1,'×1'],[3,'×3'],[5,'×5']],speed)}</div>
     <div class="mrow"><label>${tx('m.music')}</label><input type="range" min="0" max="100" value="${Math.round(audio.musicVolume*100)}" data-vol="music"></div>
+    <div class="mrow"><label>${tx('m.track')}</label><span>♪ ${tx('mu.'+audio.trackId)}</span><button data-act="track">${tx('m.nextTrack')}</button></div>
     <div class="mrow"><label>${tx('m.sfx')}</label><input type="range" min="0" max="100" value="${Math.round(audio.sfxVolume*100)}" data-vol="sfx"></div>
     <div class="mbtns side">${backBtn}</div>`;
   mbox.innerHTML=h;mbox.scrollTop=top;}
@@ -980,6 +986,7 @@ mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)r
   else if(a==='nextday'||a==='monday'){if(a==='monday')game.save();beginDay();}
   else if(a==='weekfix'){closeMenu();paused=false;updateHud();renderPanel(true);}
   else if(a==='month'){monthFrom=menuScreen;openMenu('month',menuFrom);}
+  else if(a==='track'){audio.nextTrack();setTimeout(renderMenu,2500);}
   else if(a==='how'||a==='opts')openMenu(a,'main');
   else if(a==='back'){if(menuFrom==='game'){paused=false;closeMenu();}else openMenu('main','main');}
   else if(a==='lang')setLang(v);
