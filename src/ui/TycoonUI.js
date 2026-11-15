@@ -15,6 +15,8 @@ import { ReviewRewards, milestoneBase, ratingMultiplier, streakPay } from '../ty
 import { INVESTMENTS, LOANS, MISSION, MAX_SHARE } from '../tycoon/Finance.js';
 import { missionWho } from '../tycoon/Missions.js';
 import { SYNERGIES } from '../tycoon/Synergies.js';
+import { STORIES, MAX_HEARTS, BOOK_SIZE, HEART_UP, HEART_DOWN, HEART_FRIEND, FRIEND_CHANCE, HEART_LOYAL, LOYAL_PAY, FAVOURITE_SATISFACTION, OCCASION_PAY, OCCASION_NEED, OCCASION_HEARTS, CHAPTER_VISITS, STORY_GIFT } from '../tycoon/Regulars.js';
+import { SPECIALS, SPECIAL_CHANCE, SPECIAL_LEVEL, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from '../tycoon/SpecialClients.js';
 
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 const SPEC_STYLE = { cut: 'CutSpecialist', colour: 'ColourSpecialist', perm: 'PermSpecialist' };
@@ -22,15 +24,15 @@ const level = v => v >= 70 ? 'bad' : v >= 40 ? 'gold' : 'good';
 
 /** Renders the Staff, Build, Business, Promo, Reviews and Growth pages and routes their button presses. */
 export class TycoonUI {
-  constructor(game, build, i18n, hooks) { Object.assign(this, { game, build, i18n, hooks }); this.reviewFilter = 'all'; this.reviewLimit = 25; this.staffPage = 'team'; this.staffRole = 'all'; this.staffSpec = 'all'; this.staffPerk = 'all'; this.bizPage = 'money'; this.bizSub = { money: 'today', fund: 'value', ops: 'demand' }; this.ladderSort = 'earn'; }
+  constructor(game, build, i18n, hooks) { Object.assign(this, { game, build, i18n, hooks }); this.reviewFilter = 'all'; this.reviewLimit = 25; this.staffPage = 'team'; this.staffRole = 'all'; this.staffSpec = 'all'; this.staffPerk = 'all'; this.bizPage = 'money'; this.bizSub = { money: 'today', fund: 'value', ops: 'demand' }; this.ladderSort = 'earn'; this.clientPage = 'reviews'; }
   #t(k, ...a) { return this.i18n.t(k, ...a); }
 
   key(page) {
     const g = this.game, b = this.build.active;
     return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, g.layout.branchTier, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
-      g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage, Object.values(this.bizSub).join(), this.ladderSort].join('|');
+      g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage, Object.values(this.bizSub).join(), this.ladderSort, this.clientPage, g.regularBook.version, g.special && g.special.state, g.specialLog.length].join('|');
   }
-  render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#reviews(), prog: () => this.#growth() }[page](); }
+  render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#clients(), prog: () => this.#growth() }[page](); }
 
   #status(e) {
     const t = (k, ...a) => this.#t(k, ...a), day = this.game.clock.day, tags = [];
@@ -259,6 +261,40 @@ export class TycoonUI {
       <div class="brow"><span>${t('rv.streak', R.streak, R.best)}</span><span class="sp"></span><span class="gold">${t('rv.streakNext', nextStreak, streakPay(nextStreak).toLocaleString())}</span></div>
       <div class="dim">${t('rv.streakNote')}</div></div>`;
   }
+  /** The clients tab in three pages: the reviews, the regulars' book and the special bookings. */
+  #clients() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, page = this.clientPage;
+    const tabs = `<div class="seg stabs">${[['reviews', t('cl.reviews')], ['regulars', t('cl.regulars', g.regulars)], ['special', t('cl.special')]].map(([k, l]) => `<button data-do="clp:${k}" class="${page === k ? 'sel' : ''}">${l}${k === 'special' && g.special && (g.special.state === 'due' || g.special.state === 'arrived') ? ' ✦' : ''}</button>`).join('')}</div>`;
+    return tabs + (page === 'regulars' ? this.#regulars() : page === 'special' ? this.#specials() : this.#reviews());
+  }
+  /** The regulars' book: how hearts work, then each named regular with their stylist, visits and story so far. */
+  #regulars() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, B = g.regularBook, name = n => this.i18n.name(n), pct = v => Math.round(v * 100);
+    const hearts = n => `<span class="hearts">${'♥'.repeat(n)}<span class="dim">${'♡'.repeat(MAX_HEARTS - n)}</span></span>`;
+    const rules = [t('reg.r.heart', pct(HEART_UP), pct(HEART_DOWN)), t('reg.r.fav', pct(FAVOURITE_SATISFACTION)), t('reg.r.friend', HEART_FRIEND, pct(FRIEND_CHANCE)), t('reg.r.loyal', HEART_LOYAL, pct(LOYAL_PAY - 1)),
+      t('reg.r.story', CHAPTER_VISITS.join('·')), t('reg.r.occ', OCCASION_PAY, pct(OCCASION_NEED), OCCASION_HEARTS), t('reg.r.gift', STORY_GIFT)].map(r => `<div class="dim">· ${r}</div>`).join('');
+    const card = e => {
+      const story = STORIES[e.story], next = e.chapter + 1;
+      const lines = story.slice(0, next).map((ch, i) => `<div class="say"><b>${i + 1}</b>${t('story.' + e.story + '.' + i)}${ch.occasion ? ` <span class="gold">· ${t('occ.' + ch.occasion)}</span>` : ''}</div>`).join('');
+      const upcoming = next < story.length ? t('reg.next', CHAPTER_VISITS[next], next + 1) : t(e.lifelong ? 'reg.storyDone' : 'reg.storyLast');
+      return `<div class="rcard ${e.lifelong ? 'life' : ''}"><div class="brow"><b>${name(e.name)}</b>${e.lifelong ? `<span class="chip boss">${t('reg.lifelong')}</span>` : ''}<span class="sp"></span>${hearts(e.hearts)}</div>`
+        + `<div class="brow dim"><span>${t('reg.fav', e.stylist ? name(e.stylist) : t('reg.anyone'))}</span><span class="sp"></span><span>${t('reg.visits', e.visits, e.lastDay)}</span></div>`
+        + `${lines || `<div class="dim">${t('reg.noStory')}</div>`}<div class="dim">${t('reg.chapter', Math.max(0, next), story.length)} · ${upcoming}</div></div>`;
+    };
+    const list = B.entries.slice().sort((a, b) => b.lifelong - a.lifelong || b.hearts - a.hearts || b.visits - a.visits);
+    return `<div class="bsec"><h4>${t('reg.title')}</h4><div>${t('reg.count', g.regulars, B.size, BOOK_SIZE, B.lifelong)}</div><div class="dim">${t('reg.note')}</div>${rules}</div>`
+      + `<div class="bsec">${list.length ? list.map(card).join('') : `<div class="dim">${t('reg.empty')}</div>`}</div>`;
+  }
+  /** Special bookings: today's, what each kind asks and pays, and how past ones went. */
+  #specials() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, s = g.special, lvl = g.progression.level, pct = v => Math.round(v * 100);
+    const today = s ? `<div class="rcard sp"><div class="brow"><b class="gold">✦ ${t('sp.' + s.kind)}</b><span class="sp"></span><span>${s.hour}:00 · ${t('sp.state.' + s.state)}</span></div><div>${t('sp.terms', pct(s.need), s.reward.toLocaleString(), s.followers.toLocaleString(), s.rep)}</div>${s.name ? `<div class="dim">${t('sp.who', this.i18n.name(s.name))}</div>` : ''}</div>`
+      : `<div class="dim">${lvl < SPECIAL_LEVEL ? t('sp.locked', SPECIAL_LEVEL) : t('sp.none', pct(SPECIAL_CHANCE))}</div>`;
+    const kinds = Object.entries(SPECIALS).map(([k, v]) => `<div class="brow ${v.level <= lvl ? '' : 'dim'}"><b>${t('sp.' + k)}</b><span class="sp"></span><span>${v.level <= lvl ? t('sp.row', pct(v.need), v.reward.toLocaleString(), v.followers.toLocaleString(), v.rep) : t('sp.fromLv', v.level)}</span></div>`).join('');
+    const log = g.specialLog.map(x => `<div class="brow"><span>${t('rv.day', x.day)} · ${t('sp.' + x.kind)}</span><span class="sp"></span><span class="${x.ok ? 'good' : 'bad'}">${x.sat}% ${x.ok ? '✓' : '✗'}</span></div>`).join('');
+    return `<div class="bsec"><h4>${t('sp.today')}</h4>${today}</div><div class="bsec"><h4>${t('sp.kinds')}</h4><div class="dim">${t('sp.note', SPECIAL_PRICE, SPECIAL_PATIENCE, -SPECIAL_FAIL_REP, pct(SPECIAL_CHANCE))}</div>${kinds}</div>`
+      + `<div class="bsec"><h4>${t('sp.log')}</h4>${log || `<div class="dim">${t('sp.logNone')}</div>`}</div>`;
+  }
   #reviews() {
     const t = (k, ...a) => this.#t(k, ...a), rv = this.game.reviews, f = this.reviewFilter, name = n => this.i18n.name(n);
     rv.markRead();
@@ -303,7 +339,7 @@ export class TycoonUI {
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
       post: () => this.hooks.post(value), campaign: () => { if (g.runCampaign(value)) this.hooks.spent(); }, influencer: () => { if (g.staff.receptionist.hired) g.marketing.bookInfluencer(g.clock.day); },
-      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, stp: () => { this.staffPage = value; }, sfr: () => { this.staffRole = value; if (value !== 'all' && value !== 'designer') { this.staffSpec = 'all'; this.staffPerk = 'all'; } }, rhire: () => { const [id, site] = value.split('.'), who = g.staff.find(id); if (who && g.staff.hireAt(who, +site)) this.hooks.syncSupport(); }, bzp: () => { this.bizPage = value; }, bzs: () => { const [p, k] = value.split('.'); this.bizSub[p] = k; }, lsort: () => { this.ladderSort = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
+      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, clp: () => { this.clientPage = value; }, stp: () => { this.staffPage = value; }, sfr: () => { this.staffRole = value; if (value !== 'all' && value !== 'designer') { this.staffSpec = 'all'; this.staffPerk = 'all'; } }, rhire: () => { const [id, site] = value.split('.'), who = g.staff.find(id); if (who && g.staff.hireAt(who, +site)) this.hooks.syncSupport(); }, bzp: () => { this.bizPage = value; }, bzs: () => { const [p, k] = value.split('.'); this.bizSub[p] = k; }, lsort: () => { this.ladderSort = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
       amen: () => g.hospitality.toggle(value), autoreply: () => { g.reviews.autoReply = !g.reviews.autoReply; g.reviews.version++; }, hrs: () => g.shiftHours(value[0] === 'o' ? 0 : 1, value[1] === '+' ? 1 : -1),
       commission: () => g.staff.setCommission(+value), shuffle: () => g.staff.setSeatShuffle(value === '1'),
       seat: () => { const [id, i] = value.split('.'), who = id === 'owner' ? g.staff.owner : g.staff.find(id); if (who) this.hooks.moveSeat(who, +i); }, dinner: () => { if (g.staff.teamDinner(g.clock.day)) this.hooks.spent(); },

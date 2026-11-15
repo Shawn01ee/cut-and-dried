@@ -15,6 +15,8 @@ import { Missions } from './Missions.js';
 import { MonthlyLedger, MONTH_DAYS, summariseDays } from './MonthlyLedger.js';
 import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS } from './Calendar.js';
 import { SYNERGIES, teamOf } from './Synergies.js';
+import { RegularBook, FAVOURITE_SATISFACTION, HEART_LOYAL, LOYAL_PAY, OCCASION_PAY } from './Regulars.js';
+import { rollSpecial, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from './SpecialClients.js';
 import { StaffManager } from '../employees/StaffManager.js';
 import { CustomerFactory } from '../customers/CustomerFactory.js';
 import { ServiceEvaluator } from '../customers/ServiceEvaluator.js';
@@ -75,6 +77,8 @@ export class TycoonGame {
     this.repAtDayStart = 0; this.followersAtDayStart = 0; this.incidents = blankIncidents(); this.trollAt = null; this.report = null;
     // Regular clients come back on their own; stylists who want to quit and rival news wait for the morning.
     this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null;
+    // The regulars with names and stories, and today's special booking with a log of past ones.
+    this.regularBook = new RegularBook(); this.special = null; this.specialLog = [];
   }
   /** 0 for Monday up to 6 for Sunday; day 1 is a Monday. */
   get weekday() { return (this.clock.day - 1) % 7; }
@@ -190,15 +194,32 @@ export class TycoonGame {
   /** A client for salon `site`. Branch clients (`walkIn` false) are never influencers or difficult clients. */
   newCustomer(usedNames, walkIn = true, site = 0) {
     const booked = walkIn && this.isUnlocked('booking') && Math.random() < BOOKED_SHARE, fx = this.dayFx;
-    const influencer = walkIn ? this.marketing.takeInfluencer() : null;
+    // Sometimes the walk-in is a regular from the book, coming back.
+    const visit = walkIn ? this.regularBook.visitor(site, this.clock.day, usedNames) : null, reg = visit && visit.entry;
+    const influencer = walkIn && !reg ? this.marketing.takeInfluencer() : null;
     const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
       vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1) * (this.layout.countAt('kiosk', site) ? FURNITURE.kiosk.patience : 1) * (fx.patience ?? 1),
-      villain: walkIn && !influencer ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor * (fx.budget ?? 1),
-      colourBias: (fx.colour ?? 1) / (fx.cut ?? 1), permBias: (fx.perm ?? 1) / (fx.cut ?? 1),
+      villain: walkIn && !influencer && !reg ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor * (fx.budget ?? 1),
+      colourBias: (fx.colour ?? 1) / (fx.cut ?? 1), permBias: (fx.perm ?? 1) / (fx.cut ?? 1), as: reg,
     });
     c.site = site; c.booked = booked;
+    if (reg) {
+      Object.assign(c, { regular: reg, preferredStylist: reg.stylist, chapter: visit.chapter, occasion: visit.occasion, sendsFriend: visit.friend });
+      if (c.occasion) { c.price = Math.round(c.price * OCCASION_PAY); c.budget = Math.round(c.budget * OCCASION_PAY); }
+    }
     if (c.vip) { const k = this.synergies.reduce((m, x) => m * (x.vipPatience || 1), 1); c.pat *= k; c.maxPat *= k; }
+    return c;
+  }
+  /** Today's special client, at the main salon at the hour they booked. */
+  newSpecial(usedNames) {
+    const s = this.special; if (!s || s.state !== 'due') return null;
+    const c = this.customers.create(usedNames, {
+      colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'), vipChance: 0,
+      priceMultiplier: PRICE_MULTIPLIER[this.priceLevel] * SPECIAL_PRICE, patienceMultiplier: SPECIAL_PATIENCE * (1 + this.comfortAt(0) * .03), budgetFactor: SPECIAL_PRICE,
+      as: s.kind === 'bride' ? { gender: 'f' } : null,
+    });
+    Object.assign(c, { site: 0, booked: true, special: s.kind, specialNeed: s.need }); s.state = 'arrived'; s.name = c.name;
     return c;
   }
   serviceProfileOf(worker, site = 0) { return worker.serviceProfile(this.layout.speedBonusAt(site, 'cut')); }
@@ -206,8 +227,10 @@ export class TycoonGame {
   chargeMaterials(ops, site = 0) { const k = (this.layout.countAt('stockroom', site) ? FURNITURE.stockroom.materials : 1) * (this.dayFx.materials ?? 1); ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', Math.round(MATERIALS[op.type] * k)); }); }
   completeService(customer, worker, byOwner) {
     const comfort = this.comfortAt(customer.site || 0), syn = this.synergies, result = this.evaluator.evaluate(customer, worker, comfort, {
-      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0) + (this.layout.countAt('sterilizer', customer.site || 0) ? FURNITURE.sterilizer.satisfaction : 0), calm: syn.some(s => s.calm),
+      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0) + (this.layout.countAt('sterilizer', customer.site || 0) ? FURNITURE.sterilizer.satisfaction : 0)
+        + (customer.regular && customer.regular.stylist === worker.name ? FAVOURITE_SATISFACTION : 0), calm: syn.some(s => s.calm),
     });
+    if (customer.regular && customer.regular.hearts >= HEART_LOYAL) result.payment = Math.round(result.payment * LOYAL_PAY);
     if (customer.vip) result.payment = Math.round(result.payment * syn.reduce((k, s) => k * (s.vipPay || 1), 1));
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);
     if (customer.vip && worker.perk === 'vip') result.payment = Math.round(result.payment * 1.2);
@@ -245,19 +268,43 @@ export class TycoonGame {
     // A difficult visit wears on the stylist who did it.
     const worker = this.staff.all.find(e => e.name === result.stylist);
     if (customer.villain && worker && worker !== this.staff.owner) worker.addStress(outcome.refusedRefund || outcome.refunded || outcome.haggleRefused || outcome.discount ? 7 : 4);
-    // Happy clients may become regulars; a bad visit can lose one.
-    if (!customer.villain && !customer.influencer) {
-      if (result.satisfaction >= .8 && Math.random() < (this.isUnlocked('stamp') ? .5 : .35)) this.regulars++;
-      else if (result.satisfaction < .5 && this.regulars && Math.random() < .5) this.regulars--;
+    // A regular's hearts move with the visit; other happy clients may become regulars, and a bad visit can lose one.
+    let regular = null, newRegular = false;
+    if (customer.regular) regular = this.#regularVisited(customer, outcome.refunded ? 0 : result.satisfaction, result.stylist);
+    else if (!customer.villain && !customer.influencer && !customer.special) {
+      if (result.satisfaction >= .8 && Math.random() < (this.isUnlocked('stamp') ? .5 : .35)) { this.regulars++; newRegular = !!this.regularBook.add(customer, result.stylist, customer.site || 0, this.clock.day); }
+      else if (result.satisfaction < .5 && this.regulars && Math.random() < .5) { this.regulars--; this.regularBook.trim(this.regulars); }
     }
+    const special = customer.special ? this.#settleSpecial(outcome.refunded ? 0 : result.satisfaction) : null;
     let followers = 0, influencerPost = null;
     if (customer.influencer) {
       influencerPost = this.marketing.influencerPosted(customer.influencer, result.satisfaction);
       followers = influencerPost.followers; this.reputation.add(influencerPost.rep); this.missions.record('followers', followers);
     }
-    return { review: this.#post(this.reviews.fromService(customer, result, this.clock.day, outcome)), followers, influencerPost };
+    return { review: this.#post(this.reviews.fromService(customer, result, this.clock.day, outcome)), followers, influencerPost, regular, newRegular, special };
   }
-  customerGaveUp(customer) { this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day)); }
+  /** A client who gave up waiting: a regular loses heart, a special booking is missed. */
+  customerGaveUp(customer) {
+    this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day));
+    return { regular: customer.regular ? this.#regularVisited(customer, 0, null) : null, special: customer.special ? this.#settleSpecial(0) : null };
+  }
+  #regularVisited(customer, satisfaction, stylist) {
+    const r = this.regularBook.visited(customer.regular, { satisfaction, stylist, occasion: customer.occasion });
+    if (r.lost) this.regulars = Math.max(0, this.regulars - 1);
+    if (r.gift) this.economy.earn('regularGift', r.gift);
+    if (r.occasionMet) this.reputation.add(1);
+    if (customer.sendsFriend && satisfaction >= .6) r.friend = true;
+    return r;
+  }
+  /** The special client's verdict: the fee, followers and reputation if they were pleased enough, a dent in reputation if not. */
+  #settleSpecial(satisfaction) {
+    const s = this.special; if (!s || s.state !== 'arrived') return null;
+    const ok = satisfaction >= s.need; s.state = ok ? 'done' : 'failed'; s.satisfaction = satisfaction;
+    if (ok) { this.economy.earn('special', s.reward); this.marketing.addFollowers(s.followers); this.reputation.add(s.rep); }
+    else this.reputation.add(SPECIAL_FAIL_REP);
+    this.specialLog.unshift({ day: this.clock.day, kind: s.kind, ok, sat: Math.floor(satisfaction * 100) }); this.specialLog.length = Math.min(this.specialLog.length, 12);
+    return { ok, ...s };
+  }
   customerTurnedAway(customer) { this.#post(this.reviews.turnedAway(customer, this.clock.day)); }
   /** A new review: it moves the reputation by its stars and goes on the board. */
   #post(review) {
@@ -309,16 +356,17 @@ export class TycoonGame {
     if (this.nextHours) { this.clock.setHours(...this.nextHours); this.nextHours = null; }
     this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day);
     this.missions.fill(this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k));
-    this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null;
+    this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null; this.special = null;
     if (!this.month.start) this.month.begin(this.#monthSnapshot());
     if (this.isSunday) { this.#dayOff(); return; }
     this.dayOff = false; this.marketing.startDay();
     this.happening = null; this.happeningFx = {};
     if (this.progression.level >= 2) { const h = rollHappening(); if (h) this.#startHappening(h); }
+    this.special = rollSpecial(this.progression.level, this.clock.openHour, this.clock.closeHour);
     const move = this.rival.startDay(this.clock.day, this.standing);
     if (move) this.news.push(move);
     // A discounting rival tempts a few regulars away.
-    this.regulars = Math.max(0, this.regulars - Math.round(this.regulars * this.rival.discount * .2 * (this.isUnlocked('membership') ? .5 : 1)));
+    this.regulars = Math.max(this.regularBook.lifelong, this.regulars - Math.round(this.regulars * this.rival.discount * .2 * (this.isUnlocked('membership') ? .5 : 1))); this.regularBook.trim(this.regulars);
     this.trollAt = Math.random() < this.trollChance ? rand(.1, .9) * this.clock.dayLength : null;
     this.clock.startDay();
   }
@@ -379,7 +427,7 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
@@ -393,6 +441,7 @@ export class TycoonGame {
     (d.reviews?.list || []).forEach(r => { if (r.visit && RENAMED[r.visit.stylist]) r.visit.stylist = RENAMED[r.visit.stylist]; });
     this.marketing.restore(d.marketing); this.reviews.restore(d.reviews); this.reviewRewards.restore(d.reviewRewards, this.reviews); this.hospitality.restore(d.hospitality);
     this.finance.restore(d.finance); this.rival.restore(d.rival); this.regulars = d.regulars || 0; this.staff.restore(d.staffPolicy);
+    this.regularBook.restore(d.regularBook); this.regularBook.trim(this.regulars); this.specialLog = d.specialLog || [];
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
     this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0;
