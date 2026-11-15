@@ -22,6 +22,7 @@ import { FURNITURE } from './building/FurnitureCatalog.js';
 import { CHANNELS } from './tycoon/Marketing.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { IncidentCard } from './ui/IncidentCard.js';
+import { checkForUpdate, refreshToLatest } from './core/Updater.js';
 
 const game = new TycoonGame(), i18n = new I18n(window.__lang), audio = new AudioManager(game.bus);
 const tx = (k, ...a) => i18n.t(k, ...a), nm = n => i18n.name(n);
@@ -1029,6 +1030,9 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   renderer.setRenderTarget(rt);renderer.render(scene,cam);
   renderer.setRenderTarget(null);renderer.render(post,postCam);
   if(!booted){booted=true;boot();}}
+// A newer deploy: at start-up the game updates itself; while playing it offers a button, so the day is not cut short.
+checkForUpdate({atStart:true});
+setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update');el.querySelector('span').textContent=tx('upd.ready');el.querySelector('button').textContent=tx('upd.reload');el.classList.add('show');el.querySelector('button').onclick=()=>refreshToLatest(b);}},10*60*1000);
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
 if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
