@@ -3,6 +3,7 @@ import { $, V, UP, rand, pick, clamp, lerp, smooth, angLerp, fwd, rgt } from './
 import { MAX_HEARTS, OCCASION_PAY, OCCASION_NEED } from './tycoon/Regulars.js';
 import { SPECIAL_FAIL_REP } from './tycoon/SpecialClients.js';
 import { TALK_RELIEF } from './employees/Welfare.js';
+import { GRADE_PAY, TREND_PAY } from './hair/StyleMenu.js';
 import { lab2lin, labCss, labMix, hexCss, PAL_LAB, PAL_RGB } from './rendering/color.js';
 import { STR, NS, CAP } from './hair/strands.js';
 import { profile, SHAPES, WAVES, DYES, dyeLab, cloneHair, hasColour, opColour, opWave, opCut, applyPlan, score, aiPlan, blankPlan } from './hair/rules.js';
@@ -372,7 +373,7 @@ const custs=[],queue=[];
 function lenDesc(L){return tx('len.'+(L<8?'pixie':L<18?'chin':L<28?'shoulder':L<40?'midback':'long'));}
 const natName=i=>i18n.lang==='ko'?NAT_KO[i]:NATURAL[i][0], wantName=i=>i18n.lang==='ko'?WANT_KO[i]:WANT[i][0], dyeName=i=>i18n.lang==='ko'?DYE_KO[i]:DYES[i].n;
 const colName=o=>o.col.t==='nat'?tx('naturalOf',natName(o.col.i)):wantName(o.col.i);
-function orderText(o){return `${tx('shape.'+o.shape)} · ${o.L} cm (${lenDesc(o.L)}) · ${colName(o)} · ${tx('wave.'+WAVES[o.wave])}`;}
+function orderText(o){return `${o.cut?tx('cut.'+o.cut):tx('shape.'+o.shape)} · ${o.L} cm (${lenDesc(o.L)}) · ${colName(o)} · ${o.perm?tx('perm.'+o.perm):tx('wave.'+WAVES[o.wave])}`;}
 /** A new client at the door: a walk-in (maybe a regular coming back), a friend a regular brought, or today's special booking. */
 function spawnCustomer(o={}){
   if(custs.filter(c=>c.state!=='gone').length>=40)return;
@@ -779,7 +780,7 @@ function renderPanel(force){if(panelHeldAt&&performance.now()-panelHeldAt<2000){
   if(st.vacant){pbody.innerHTML=chairRow+`<div class="dim">${tx('vac.note')}</div>`;return;}
   let h=chairRow+`<div class="ph"><b>${tx('chair',st.i+1)}</b> · <span style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</span> <span class="dim">(${tx('style.'+st.sty.style)})</span> · <span id="stl">${stLabel(st)}</span></div>`;
   if(!c){pbody.innerHTML=h+`<div class="dim">${tx('free.next',queue.length?queue.map(q=>nm(q.name)).join(', '):tx('free.nobody'))}</div><div id="help">${tx('free.help')}</div>`;return;}
-  h+=`<div class="ord">${c.special?`<span class="gold">✦ ${tx('sp.'+c.special)} · ${tx('sp.need',Math.round(c.specialNeed*100))}</span> `:''}${c.regular?`<span class="gold">${tx('reg.tag')} ${hearts(c.regular.hearts)}</span> `:''}${c.occasion?`<span class="gold">${tx('occ.'+c.occasion)} · ${tx('sp.need',Math.round(OCCASION_NEED*100))}</span> `:''}${c.vip?`<span class="gold">${tx('vip')}</span> `:''}${c.influencer?`<span class="gold">${tx('inf.tag',c.influencer.handle)}</span> `:''}<b class="${c.villain?'bad':''}">${tx('order.wants',nm(c.name))}</b> <span class="otext">${orderText(c.order)}</span> <span class="dim">· ${c.influencer?tx('inf.free'):`$${c.price} · ${tx('p.budget',c.budget)}`}</span>${st.state==='consult'&&!styling?` <button class="go" data-do="style" ${ownerBusy()?'disabled':''}>${tx('p.direct')}</button>`:''}</div>`;
+  h+=`<div class="ord">${c.special?`<span class="gold">✦ ${tx('sp.'+c.special)} · ${tx('sp.need',Math.round(c.specialNeed*100))}</span> `:''}${c.regular?`<span class="gold">${tx('reg.tag')} ${hearts(c.regular.hearts)}</span> `:''}${c.occasion?`<span class="gold">${tx('occ.'+c.occasion)} · ${tx('sp.need',Math.round(OCCASION_NEED*100))}</span> `:''}${c.trending?`<span class="gold">${tx('tr.tag')}</span> `:''}${c.vip?`<span class="gold">${tx('vip')}</span> `:''}${c.influencer?`<span class="gold">${tx('inf.tag',c.influencer.handle)}</span> `:''}<b class="${c.villain?'bad':''}">${tx('order.wants',nm(c.name))}</b> <span class="otext">${orderText(c.order)}</span> <span class="dim">· ${c.influencer?tx('inf.free'):`$${c.price} · ${tx('p.budget',c.budget)} · ${tx('grade.pay',tx('grade.'+game.gradeOf(st.sty)),GRADE_PAY[game.gradeOf(st.sty)])}`}</span>${st.state==='consult'&&!styling?` <button class="go" data-do="style" ${ownerBusy()?'disabled':''}>${tx('p.direct')}</button>`:''}</div>`;
   h+=`<div class="pv"><figure><canvas id="pvO" width="48" height="56"></canvas><figcaption>${tx('fig.order')}</figcaption></figure><figure><canvas id="pvN" width="48" height="56"></canvas><figcaption>${tx('fig.now')}</figcaption></figure>${st.state==='consult'?`<figure><canvas id="pvP" width="48" height="56"></canvas><figcaption>${tx('fig.plan')}</figcaption></figure>`:''}<div class="bars" id="bars"></div></div>`;
   if(st.state==='consult'){const p=st.plan;
     h+=`${styling&&styling.station===st?`<div class="row"><button data-do="turn:-1">◀</button><button data-do="turn:1">▶</button><button data-do="compare">${tx('style.compare')}</button><button data-do="style-close">${tx('style.close')}</button></div>`:''}<div class="row"><label><input type="checkbox" data-k="doCut" ${p.doCut?'checked':''}> ${tx('p.cut')}</label>${seg('shape',SHAPES,p.shape,n=>tx('shape.'+n))}</div>
@@ -942,6 +943,8 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));
   game.staff.news.splice(0).forEach(n=>news.push(tx(n.key,nm(n.name),n.n)));
+  // a new month brings new trends
+  if((day-1)%30===0){const T=game.trends;news.push(tx('tr.news',tx('cut.'+T.cutF),tx('cut.'+T.cutM),tx('perm.'+T.permF),tx('perm.'+T.permM),wantName(T.colour),Math.round((TREND_PAY-1)*100)));}
   {const s=game.special;if(s)news.push(tx('sp.news',s.hour+':00',tx('sp.'+s.kind),Math.round(s.need*100),s.reward.toLocaleString(),s.followers.toLocaleString(),s.rep));}
   news.forEach((n,i)=>later(.6+i*1.4,()=>popup(n,recep.head,'big')));
   happeningCard();

@@ -2,7 +2,7 @@ import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS, CATEGORIES, category
 import { siteOf } from '../building/SalonLayout.js';
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
 import { portraitURL, crownURL } from './Portrait.js';
-import { REVIEW_REP } from '../tycoon/TycoonGame.js';
+import { REVIEW_REP, PRICE_MULTIPLIER } from '../tycoon/TycoonGame.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION, GRUDGE_PENALTY } from '../employees/Employee.js';
 import { clamp } from '../core/math.js';
 // Which skill each specialty raises, to highlight it on the card.
@@ -17,6 +17,9 @@ import { ReviewRewards, milestoneBase, ratingMultiplier, streakPay } from '../ty
 import { INVESTMENTS, LOANS, MISSION, MAX_SHARE } from '../tycoon/Finance.js';
 import { missionWho } from '../tycoon/Missions.js';
 import { SYNERGIES } from '../tycoon/Synergies.js';
+import { CUTS, PERMS, TREND_COLOURS, GRADE_PAY, TREND_PAY, TREND_PERK_SATISFACTION, COLOUR_PRICE, TREND_COLOUR_PRICE, BLEACH_PRICE, isHot } from '../hair/StyleMenu.js';
+import { WANT } from '../customers/catalog.js';
+import { WANT_KO } from '../i18n/strings.js';
 import { STORIES, MAX_HEARTS, BOOK_SIZE, HEART_UP, HEART_DOWN, HEART_FRIEND, FRIEND_CHANCE, HEART_LOYAL, LOYAL_PAY, FAVOURITE_SATISFACTION, OCCASION_PAY, OCCASION_NEED, OCCASION_HEARTS, CHAPTER_VISITS, STORY_GIFT } from '../tycoon/Regulars.js';
 import { SPECIALS, SPECIAL_CHANCE, SPECIAL_LEVEL, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from '../tycoon/SpecialClients.js';
 
@@ -57,7 +60,7 @@ export class TycoonUI {
     const info = owner ? t('staff.ownerLv', e.level, e.experience, e.experienceToNext) + ' · ' + t('staff.you')
       : e.hired ? `${t('staff.pay', e.level, e.salary, Math.round(e.fatigue), e.experience, e.experienceToNext)} · <span class="${level(e.stress)}">${t('staff.stress', Math.round(e.stress))}</span> ${this.#status(e)}` : t('staff.wage', e.salary);
     const seat = this.hooks.seatOf(e), at = seat >= 0 ? this.hooks.seats()[seat].site : 0, mins = k => e.totalMinutes(k, g.speedFor(k, at), g.processSpeedFor(k));
-    const times = `${t('staff.times', mins('cut'), mins('colour'), mins('wave'), mins('dry'))}`;
+    const grade = g.gradeOf(e), times = `${t('staff.times', mins('cut'), mins('colour'), mins('wave'), mins('dry'))} · <span class="gold">${t('grade.pay', t('grade.' + grade), GRADE_PAY[grade])}</span>`;
     const r = g.reviews.ratingFor(e.name), perf = e.hired ? `${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
     const special = SPECIAL_SKILL[e.specialty], stats = [['cut', s.cutting, 'cutting'], ['colour', s.colouring, 'colouring'], ['perm', s.perming, 'perming'], ['speed', s.speed, 'speed'], ['service', s.customerService, 'customerService']];
     const rows = [[e.specialty ? 'special' : null, `<span class="gold">${e.specialty ? t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100)) : ''}</span>`],
@@ -206,7 +209,7 @@ export class TycoonUI {
     const page = this.bizPage, tabs = `<div class="seg stabs">${[['money', t('bz.money')], ['fund', t('bz.fund')], ['ops', t('bz.ops')], ['rank', t('bz.rank')]].map(([k, l]) => `<button data-do="bzp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
     const sub = keys => `<div class="seg ssub">${keys.map(k => `<button data-do="bzs:${page}.${k}" class="${this.bizSub[page] === k ? 'sel' : ''}">${t('bzs.' + k)}</button>`).join('')}</div>`;
     if (page === 'fund') return tabs + sub(['value', 'invest', 'loan']) + this.#funding(this.bizSub.fund);
-    if (page === 'ops') return tabs + sub(['demand', 'hours', 'price', 'treats']) + { demand: () => this.#calendar() + this.#demand(), hours: () => `<div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>`, price: () => `<div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}`, treats: () => `<div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>` }[this.bizSub.ops]();
+    if (page === 'ops') return tabs + sub(['demand', 'menu', 'hours', 'price', 'treats']) + { demand: () => this.#calendar() + this.#demand(), menu: () => this.#menu(), hours: () => `<div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>`, price: () => `<div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}`, treats: () => `<div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>` }[this.bizSub.ops]();
     const by = this.ladderSort, th = (k, label) => `<th class="${by === k ? 'on' : ''}">${t(label)}</th>`;
     const sorts = `<div class="seg ssub">${['earn', 'today', 'sat', 'rating', 'served'].map(k => `<button data-do="lsort:${k}" class="${by === k ? 'sel' : ''}">${t('lsort.' + k)}</button>`).join('')}</div>`;
     if (page === 'rank') return `${tabs}${sorts}<div class="bsec"><h4>${t('biz.ladder')}</h4><table class="lad"><tr><th>#</th><th>${t('lad.stylist')}</th>${th('served', 'lad.done')}${th('sat', 'lad.avg')}${th('rating', 'lad.rating')}${th('today', 'lad.today')}${th('earn', 'lad.earn')}</tr>${rows.map((s, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}"><td>${i + 1}</td><td style="color:${nameColour(s)}">${rankMark(s)}${this.i18n.name(s.name)}</td><td>${s.stats.served}</td><td>${s.stats.served ? Math.round(s.stats.sum / s.stats.served * 100) + '%' : '–'}</td><td>${rated(s)}</td><td>$${s.today.earn.toLocaleString()}</td><td>$${s.stats.earn.toLocaleString()}</td></tr>`).join('')}</table></div>`;
@@ -225,6 +228,20 @@ export class TycoonUI {
     const rows = Object.entries(add).filter(([k]) => k !== 'branch' || g.layout.branchOpen).map(([k, v]) => `<div class="brow"><span>${t('demand.' + k)}</span><span class="sp"></span><span>${f1(v)}</span></div>`).join('');
     const today = Math.round(g.dailyDemand * g.clock.hours / 8);
     return `<div class="bsec"><h4>${t('demand.title')}</h4>${rows}<div class="dim">${t('demand.mult', x(mult.price), x(mult.marketing), x(mult.reviews), x(mult.rival))}${['calendar', 'award', 'booking', 'fame', 'signs'].filter(k => mult[k] !== 1).map(k => ' · ' + t('demand.' + k, x(mult[k]))).join('')}</div><div class="brow"><span>${t('demand.total', g.clock.hours)}</span><span class="sp"></span><b class="gold">${t('demand.people', today)}</b></div></div>`;
+  }
+  /** The menu board: every cut, perm and colour with its price, this month's trends, and pricing by grade. */
+  #menu() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, T = g.trends, k = PRICE_MULTIPLIER[g.priceLevel], usd = v => '$' + Math.round(v * k);
+    const want = i => this.i18n.lang === 'ko' ? WANT_KO[i] : WANT[i][0], who = x => x.g === 'any' ? t('menu.any') : t('gender.' + x.g);
+    const item = (name, x, hot, locked, extra = '') => `<div class="brow ${locked ? 'dim' : ''}"><span>${hot ? '<b class="gold">★ ' : ''}${name}${hot ? '</b>' : ''}${x.trend ? ` <span class="chip spec">2026</span>` : ''}</span><span class="dim">${extra}</span><span class="sp"></span><b>${locked ? t('build.lockedAt') : usd(x.price)}</b></div>`;
+    const cuts = Object.entries(CUTS).map(([id, c]) => item(t('cut.' + id), c, isHot(T, id), c.advanced && !g.isUnlocked('chairs'), `${who(c)} · ${c.L[0]}–${c.L[1]}cm`)).join('');
+    const perms = Object.entries(PERMS).map(([id, p]) => item(t('perm.' + id), p, isHot(T, id), !g.isUnlocked('perm'), `${who(p)} · ${t(p.straighten ? 'menu.straight' : 'wave.' + ['Straight', 'Wavy', 'Curly', 'Coily'][p.wave])}`)).join('');
+    const colours = TREND_COLOURS.map(i => `<span class="chip ${isHot(T, i) ? 'spec' : ''}"><i class="dot" style="background:#${WANT[i][1].toString(16).padStart(6, '0')}"></i>${isHot(T, i) ? '★ ' : ''}${want(i)}</span>`).join('');
+    const grades = Object.entries(GRADE_PAY).map(([r, v]) => `${t('grade.' + r)} ×${v}`).join(' · ');
+    return `<div class="bsec"><h4>${t('menu.trends')}</h4><div class="gold">★ ${[t('cut.' + T.cutF), t('cut.' + T.cutM), t('perm.' + T.permF), t('perm.' + T.permM), want(T.colour)].join(' · ')}</div><div class="dim">${t('menu.trendNote', Math.round((TREND_PAY - 1) * 100), Math.round(TREND_PERK_SATISFACTION * 100))}</div></div>`
+      + `<div class="bsec"><h4>${t('menu.grades')}</h4><div>${grades}</div><div class="dim">${t('menu.gradeNote', k)}</div></div>`
+      + `<div class="bsec"><h4>${t('menu.cuts')}</h4>${cuts}</div><div class="bsec"><h4>${t('menu.perms')}</h4>${perms}</div>`
+      + `<div class="bsec"><h4>${t('menu.colours')}</h4><div class="brow"><span>${t('menu.colourFull')}</span><span class="sp"></span><b>${usd(COLOUR_PRICE)}</b></div><div class="brow"><span>${t('menu.colourTrend')}</span><span class="sp"></span><b>${usd(TREND_COLOUR_PRICE)}</b></div><div class="brow"><span>${t('menu.bleach')}</span><span class="sp"></span><b>+${usd(BLEACH_PRICE)}</b></div><div class="chips">${colours}</div></div>`;
   }
   /** Steppers for tomorrow's opening and closing hours. */
   #hours() {
