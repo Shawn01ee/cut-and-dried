@@ -15,6 +15,7 @@ import { Missions } from './Missions.js';
 import { MonthlyLedger, MONTH_DAYS, summariseDays } from './MonthlyLedger.js';
 import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS, dateOf } from './Calendar.js';
 import { SYNERGIES, teamOf } from './Synergies.js';
+import { trendsFor, GRADE_PAY, TREND_PAY, TREND_PERK_SATISFACTION } from '../hair/StyleMenu.js';
 import { RegularBook, FAVOURITE_SATISFACTION, HEART_LOYAL, LOYAL_PAY, OCCASION_PAY } from './Regulars.js';
 import { rollSpecial, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from './SpecialClients.js';
 import { StaffManager } from '../employees/StaffManager.js';
@@ -25,7 +26,7 @@ import { SalonLayout } from '../building/SalonLayout.js';
 import { FURNITURE } from '../building/FurnitureCatalog.js';
 import { rand, clamp } from '../core/math.js';
 
-const PRICE_MULTIPLIER = [.8, 1, 1.5, 2.2], PRICE_DEMAND = [1.3, 1, .7, .45];
+export const PRICE_MULTIPLIER = [.8, 1, 1.5, 2.2], PRICE_DEMAND = [1.3, 1, .7, .45];
 /** Opening the second salon: needs level 5, the first salon two expansions big and a good week's takings, then the money. */
 export const BRANCH = { cost: 30000, weekRevenue: 9000, tier: 2 };
 // What the old franchise branches cost, to pay them back to saves from before the second salon.
@@ -201,7 +202,7 @@ export class TycoonGame {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
       vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1) * (this.layout.countAt('kiosk', site) ? FURNITURE.kiosk.patience : 1) * (this.layout.countAt('chargingStation', site) ? FURNITURE.chargingStation.patience : 1) * (fx.patience ?? 1),
       villain: walkIn && !influencer && !reg ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor * (fx.budget ?? 1),
-      colourBias: (fx.colour ?? 1) / (fx.cut ?? 1), permBias: (fx.perm ?? 1) / (fx.cut ?? 1), as: reg,
+      colourBias: (fx.colour ?? 1) / (fx.cut ?? 1), permBias: (fx.perm ?? 1) / (fx.cut ?? 1), as: reg, trends: this.trends,
     });
     c.site = site; c.booked = booked;
     if (reg) {
@@ -217,19 +218,25 @@ export class TycoonGame {
     const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'), vipChance: 0,
       priceMultiplier: PRICE_MULTIPLIER[this.priceLevel] * SPECIAL_PRICE, patienceMultiplier: SPECIAL_PATIENCE * (1 + this.comfortAt(0) * .03), budgetFactor: SPECIAL_PRICE,
-      as: s.kind === 'bride' ? { gender: 'f' } : null,
+      as: s.kind === 'bride' ? { gender: 'f' } : null, trends: this.trends,
     });
     Object.assign(c, { site: 0, booked: true, special: s.kind, specialNeed: s.need }); s.state = 'arrived'; s.name = c.name;
     return c;
   }
+  /** The grade a stylist's services are priced at. */
+  gradeOf(worker) { return worker === this.staff.owner ? 'owner' : GRADE_PAY[worker.rank] ? worker.rank : 'designer'; }
+  /** This month's trending styles. */
+  get trends() { return trendsFor(Math.floor((this.clock.day - 1) / MONTH_DAYS)); }
   serviceProfileOf(worker, site = 0) { return worker.serviceProfile(this.layout.speedBonusAt(site, 'cut')); }
   /** Colour and perm products for a service; a stockroom at that salon buys them for less. */
   chargeMaterials(ops, site = 0) { const k = (this.layout.countAt('stockroom', site) ? FURNITURE.stockroom.materials : 1) * (this.dayFx.materials ?? 1); ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', Math.round(MATERIALS[op.type] * k)); }); }
   completeService(customer, worker, byOwner) {
     const comfort = this.comfortAt(customer.site || 0), syn = this.synergies, result = this.evaluator.evaluate(customer, worker, comfort, {
       satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0) + (this.layout.countAt('sterilizer', customer.site || 0) ? FURNITURE.sterilizer.satisfaction : 0)
-        + (customer.regular && customer.regular.stylist === worker.name ? FAVOURITE_SATISFACTION : 0), calm: syn.some(s => s.calm),
+        + (customer.regular && customer.regular.stylist === worker.name ? FAVOURITE_SATISFACTION : 0) + (customer.trending && worker.perk === 'trend' ? TREND_PERK_SATISFACTION : 0), calm: syn.some(s => s.calm),
     });
+    // Priced by the grade of whoever did it, and a month's trend pays more.
+    result.payment = Math.round(result.payment * GRADE_PAY[this.gradeOf(worker)] * (customer.trending ? TREND_PAY : 1));
     if (customer.regular && customer.regular.hearts >= HEART_LOYAL) result.payment = Math.round(result.payment * LOYAL_PAY);
     if (customer.vip) result.payment = Math.round(result.payment * syn.reduce((k, s) => k * (s.vipPay || 1), 1));
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);

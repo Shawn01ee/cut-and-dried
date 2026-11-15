@@ -3,10 +3,12 @@ import { hexLab, labMix, labDist } from '../rendering/color.js';
 import { gauss, clamp, lerp } from '../core/math.js';
 
 /* ================= salon rules: cut, colour, wave ================= */
-export const SHAPES=['Blunt','Layered','A-line','Undercut'];
+export const SHAPES=['Blunt','Layered','A-line','Undercut','Hush','Hime','Wolf','Dandy','Crop','Ivy'];
 export const WAVES=['Straight','Wavy','Curly','Coily'];
-export function profile(shape,L){return STR.map(s=>{const z=s.z;switch(shape){case'Layered':return L*[1,.86,.72,.58][z];case'A-line':return L*[.72,.84,1,1][z];case'Undercut':return(z===1||z===2)?1.5:L*(z===3?.9:1);default:return L;}});}
-export const DYES=[['Jet Black',0x1a1410],['Dark Brown',0x3b2618],['Chestnut',0x6a3f25],['Caramel',0x9a6436],['Copper',0xc25a26],['Auburn',0x8e2f1c],['Golden',0xd9ad62],['Ash',0xc9bfa4],['Platinum',0xece6dc],['Silver',0xb9b9c2],['Rose',0xe07aa0],['Violet',0x6f3fa8],['Ocean',0x2c6fb8],['Teal',0x1e9c94],['Cherry',0xb8203a],['Lilac',0xc4a8e6]].map(([n,h])=>({n,h,lab:hexLab(h)}));
+export function profile(shape,L){return STR.map(s=>{const z=s.z;switch(shape){case'Layered':return L*[1,.86,.72,.58][z];case'A-line':return L*[.72,.84,1,1][z];case'Undercut':return(z===1||z===2)?1.5:L*(z===3?.9:1);
+  // soft layers that frame the face; sidelocks at the cheek; a shaggy top over a long back; a fringe-led men's cut; a short textured crop; short sides with a side part
+  case'Hush':return L*[1,.84,.66,.5][z];case'Hime':return L*[1,1,.5,.5][z];case'Wolf':return L*[1,.7,.5,.42][z];case'Dandy':return L*[.85,.85,.85,1][z];case'Crop':return L*[.7,.55,.55,.8][z];case'Ivy':return(z===1||z===2)?3:L*(z===3?1:.7);default:return L;}});}
+export const DYES=[['Jet Black',0x1a1410],['Dark Brown',0x3b2618],['Chestnut',0x6a3f25],['Caramel',0x9a6436],['Copper',0xc25a26],['Auburn',0x8e2f1c],['Golden',0xd9ad62],['Ash',0xc9bfa4],['Platinum',0xece6dc],['Silver',0xb9b9c2],['Rose',0xe07aa0],['Violet',0x6f3fa8],['Ocean',0x2c6fb8],['Teal',0x1e9c94],['Cherry',0xb8203a],['Lilac',0xc4a8e6],['Beige',0xc9ab8a],['Mocha',0x5c3d2c],['Khaki',0x6b6a52]].map(([n,h])=>({n,h,lab:hexLab(h)}));
 export function dyeLab(a,b,mix){if(a<0&&b<0)return null;if(a<0)return DYES[b].lab;if(b<0)return DYES[a].lab;return labMix(DYES[a].lab,DYES[b].lab,mix);}
 export function colourResult(base,dye,bleach){
   const b={L:Math.min(.94,base.L+bleach*.2),a:base.a*(bleach?.8:1)+.008*bleach,b:base.b*(bleach?.85:1)+.03*bleach}; // bleach lifts and turns brassy
@@ -28,7 +30,7 @@ export function aiPlan(c,st){const h=c.hair,o=c.order;
   const L=Math.round(o.L/(1-.12*o.wave)*2)/2,pr=profile(o.shape,L);
   const p={doCut:h.len.some((x,j)=>x>pr[j]+.8),shape:o.shape,L,doWave:Math.abs(h.wave-o.wave)>.3,wave:o.wave,doColour:false,dyeA:-1,dyeB:-1,mix:.5,bleach:0,zones:{front:0,side:0,back:0}};
   if(labDist(h.lab,o.lab)>.035){let best=1e9;const step=st.fine?.05:.1;
-    for(let bl=0;bl<=3;bl++)for(let a=-1;a<16;a++)for(let b=-1;b<16;b++){if(b>=0&&(a<0||b<=a||st.single))continue;
+    for(let bl=0;bl<=3;bl++)for(let a=-1;a<DYES.length;a++)for(let b=-1;b<DYES.length;b++){if(b>=0&&(a<0||b<=a||st.single))continue;
       const mixes=(a>=0&&b>=0)?Array.from({length:Math.round(1/step)-1},(_,i)=>(i+1)*step):[.5];
       for(const m of mixes){const r=colourResult(h.lab,dyeLab(a,b,m),bl),e=labDist(r,o.lab)+bl*.012+(a>=0&&b>=0?.002:0);if(e<best){best=e;Object.assign(p,{dyeA:a,dyeB:b,mix:m,bleach:bl});}}}
     p.doColour=best<labDist(h.lab,o.lab)-.01;}
