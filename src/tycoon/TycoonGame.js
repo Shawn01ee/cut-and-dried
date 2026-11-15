@@ -16,6 +16,7 @@ import { MonthlyLedger, MONTH_DAYS, summariseDays } from './MonthlyLedger.js';
 import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS, dateOf } from './Calendar.js';
 import { SYNERGIES, teamOf } from './Synergies.js';
 import { trendsFor, GRADE_PAY, TREND_PAY, TREND_PERK_SATISFACTION } from '../hair/StyleMenu.js';
+import { WEATHER, SURPRISES, rollWeather, rollSurprise } from './Weather.js';
 import { RegularBook, FAVOURITE_SATISFACTION, HEART_LOYAL, LOYAL_PAY, OCCASION_PAY } from './Regulars.js';
 import { rollSpecial, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from './SpecialClients.js';
 import { StaffManager } from '../employees/StaffManager.js';
@@ -70,6 +71,8 @@ export class TycoonGame {
     this.weekLog = []; this.weekReport = null; this.dayOff = false; this.month = new MonthlyLedger();
     // Today's happening (an outage, a festival, an inspection...), what it does today, and a cut trend that lasts a few days.
     this.happening = null; this.happeningFx = {}; this.trendUntil = 0;
+    // Today's weather and tomorrow's forecast; a surprise in the middle of the day, and what it does until closing.
+    this.weather = 'sunny'; this.forecast = null; this.surprise = null; this.surpriseFx = {};
     this.rival = new Rival();
     this.customers = new CustomerFactory();
     this.evaluator = new ServiceEvaluator();
@@ -109,7 +112,7 @@ export class TycoonGame {
   /** Today's season, calendar events, happening and trend, as one set of multipliers (see Calendar.js). */
   get dayFx() {
     const day = this.clock.day, trend = day <= this.trendUntil ? HAPPENINGS.find(h => h.id === 'trend').effect : null;
-    return combine(SEASONS[seasonOf(day)], ...eventsOn(day), this.happeningFx, trend);
+    return combine(SEASONS[seasonOf(day)], ...eventsOn(day), this.happeningFx, trend, WEATHER[this.weather], this.surpriseFx);
   }
   /** Starts the day's happening: judged on the spot (inspection), news (a trend, rain), or a choice for the player. */
   #startHappening(h) {
@@ -123,6 +126,18 @@ export class TycoonGame {
     this.happeningFx = { ...h.effect };
     this.happening = h.fix ? { id: h.id, kind: 'fix', cost: h.fix } : h.offer ? { id: h.id, kind: 'offer', ...h.offer } : { id: h.id, kind: 'news' };
   }
+  /** The surprise arrives: its effect starts now. Returns what the scene shows. */
+  triggerSurprise() {
+    const s = this.surprise; if (!s || s.state !== 'due') return null;
+    const def = SURPRISES.find(x => x.id === s.id); s.state = 'on';
+    if (def.effect) this.surpriseFx = { ...def.effect };
+    if (def.followers) this.marketing.addFollowers(def.followers);
+    return { ...def, ...s };
+  }
+  /** Pays for the quick repair: the surprise's effect ends. */
+  fixSurprise() { const s = this.surprise, def = s && SURPRISES.find(x => x.id === s.id); if (!def || !def.fix || s.state !== 'on' || !this.economy.spend('repairs', def.fix)) return false; this.surpriseFx = {}; s.state = 'fixed'; return true; }
+  /** Starts a given surprise now (for tests). */
+  beginSurprise(id) { this.surprise = { id, hour: 0, state: 'due' }; this.surpriseFx = {}; return this.triggerSurprise(); }
   /** Starts a given happening today (for tests and scripted moments). */
   beginHappening(id) { const h = HAPPENINGS.find(x => x.id === id); if (h) { this.happening = null; this.happeningFx = {}; this.#startHappening(h); } }
   /** The player's answer to today's happening: pay to fix it (the penalty is lifted) or take up the offer. */
@@ -366,6 +381,7 @@ export class TycoonGame {
     this.missions.fill(this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k));
     this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null; this.special = null;
     if (!this.month.start) this.month.begin(this.#monthSnapshot());
+    this.weather = this.forecast || rollWeather(seasonOf(this.clock.day)); this.forecast = null; this.surprise = null; this.surpriseFx = {};
     if (this.isSunday) { this.#dayOff(); return; }
     this.dayOff = false; this.marketing.startDay();
     // A neon sign in the window brings in followers every open day.
@@ -373,6 +389,8 @@ export class TycoonGame {
     this.happening = null; this.happeningFx = {};
     if (this.progression.level >= 2) { const h = rollHappening(); if (h) this.#startHappening(h); }
     this.special = rollSpecial(this.progression.level, this.clock.openHour, this.clock.closeHour);
+    // A surprise later in the day, but never on top of a morning happening.
+    if (!this.happening) this.surprise = rollSurprise(this.weather, this.clock.openHour, this.clock.closeHour);
     const move = this.rival.startDay(this.clock.day, this.standing);
     if (move) this.news.push(move);
     // A discounting rival tempts a few regulars away.
@@ -433,11 +451,12 @@ export class TycoonGame {
     this.weekLog.push(this.report);
     this.month.log(this.report); if (MonthlyLedger.isMonthEnd(this.clock.day)) this.#settleMonth(this.report);
     this.recentRevenue.push(this.report.totalRevenue); if (this.recentRevenue.length > 6) this.recentRevenue.shift();
+    this.forecast = rollWeather(seasonOf(this.clock.day + 1)); this.surpriseFx = {};
     this.updateProgress(); this.save(); return this.report;
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, forecast: this.forecast, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
@@ -454,6 +473,6 @@ export class TycoonGame {
     this.regularBook.restore(d.regularBook); this.regularBook.trim(this.regulars); this.specialLog = d.specialLog || [];
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
-    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0;
+    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
   }
 }

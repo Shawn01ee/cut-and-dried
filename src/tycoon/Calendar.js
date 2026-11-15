@@ -55,7 +55,6 @@ export const HAPPENINGS = [
   { id: 'shortage', weight: 1, fix: 400, effect: { materials: 2 } },
   { id: 'dryer', weight: .8, fix: 150, effect: { dry: .7 } },
   { id: 'trend', weight: 1.2, effect: { cut: 1.3, cutPay: 1.15 }, days: 3 },
-  { id: 'rain', weight: 1.2, effect: { demand: .8, patience: 1.1 } },
   { id: 'festival', weight: 1, effect: { demand: 1.2 }, offer: { cost: 200, followers: 500 } },
   { id: 'inspection', weight: .8, inspection: true },
 ];
