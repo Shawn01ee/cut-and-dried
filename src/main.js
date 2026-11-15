@@ -833,15 +833,17 @@ let npTimer=0;
 function showNow(text){const el=$('#nowPlaying');el.textContent='♪ '+text;el.style.top=($('#ctrl').getBoundingClientRect().bottom+6)+'px';el.classList.add('show');const mine=++npTimer;setTimeout(()=>{if(npTimer===mine)el.classList.remove('show');},4000);}
 audio.onTrack=id=>{showNow(tx('mu.'+id));if($('#playlist').classList.contains('show'))renderPlaylist();};
 /** The playlist panel: play any track, choose which ones rotate, and how the next one is picked. */
-function renderPlaylist(){const el=$('#playlist'),cur=audio.trackId;el.style.top=($('#ctrl').getBoundingClientRect().bottom+6)+'px';
+function renderPlaylist(){const el=$('#playlist'),cur=audio.trackId,custom=audio.playlist==='custom';el.style.top=($('#ctrl').getBoundingClientRect().bottom+6)+'px';
   el.innerHTML=`<div class="brow"><b>${tx('pl.title')}</b><span class="sp"></span><button data-pl="close">×</button></div>
+  <div class="seg pll">${audio.playlists.map(k=>`<button data-pl="list.${k}" class="${audio.playlist===k?'sel':''}">${tx('pl.list.'+k)}</button>`).join('')}</div>
   <div class="seg">${['auto','order','repeat'].map(k=>`<button data-pl="mode.${k}" class="${audio.mode===k?'sel':''}">${tx('pl.mode.'+k)}</button>`).join('')}</div><div class="dim">${tx('pl.modeD.'+audio.mode)}</div>
-  ${audio.tracks.map(t=>`<div class="plr ${t.id===cur?'on':''}"><button data-pl="play.${t.id}" title="${tx('pl.play')}">${t.id===cur?'♪':'▶'}</button><span>${tx('mu.'+t.id)}</span><span class="dim">${tx('pl.e.'+t.energy)} · ${t.tempo}</span><input type="checkbox" data-pl="use.${t.id}" ${t.enabled?'checked':''} title="${tx('pl.use')}"></div>`).join('')}
+  <div class="plist">${audio.tracks.filter(t=>custom||t.inList).map(t=>`<div class="plr ${t.id===cur?'on':''}"><button data-pl="play.${t.id}" title="${tx('pl.play')}">${t.id===cur?'♪':'▶'}</button><span>${tx('mu.'+t.id)}</span><span class="dim">${tx('pl.e.'+t.energy)} · ${t.tempo}</span>${custom?`<input type="checkbox" data-pl="use.${t.id}" ${t.enabled?'checked':''} title="${tx('pl.use')}">`:'<i></i>'}</div>`).join('')}</div>
   <div class="brow"><span class="dim">${tx('pl.note')}</span><span class="sp"></span><button data-pl="next">${tx('m.nextTrack')}</button></div>`;}
 $('#bTrack').onclick=()=>{const el=$('#playlist');el.classList.toggle('show');if(el.classList.contains('show'))renderPlaylist();};
 $('#playlist').addEventListener('click',e=>{const b=e.target.closest('[data-pl]');if(!b)return;const [a,v]=b.dataset.pl.split('.');
   if(a==='close')$('#playlist').classList.remove('show');
   else if(a==='mode'){audio.setMode(v);renderPlaylist();}
+  else if(a==='list'){audio.setPlaylist(v);renderPlaylist();}
   else if(a==='play'){audio.playTrack(v);showNow(tx('mu.next'));}
   else if(a==='use'){audio.toggleTrack(v);renderPlaylist();}
   else if(a==='next'){audio.nextTrack();showNow(tx('mu.next'));}});
