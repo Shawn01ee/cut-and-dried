@@ -1,5 +1,7 @@
 import { rand, clamp } from '../core/math.js';
 
+/** The hair show from level 11: its cost, the followers it brings, the reputation, and a week of extra demand. */
+export const HAIR_SHOW = { cost: 5000, share: .04, minFollowers: 2000, rep: 3, demand: .15, days: 7, every: 7 };
 /** Paid campaigns: cost, how many days they run, extra demand while running and followers gained. */
 export const CAMPAIGNS = {
   flyers: { cost: 90, days: 2, demand: .15, followers: [5, 20] },
@@ -37,7 +39,7 @@ export class Marketing {
   constructor(economy) {
     this.economy = economy;
     this.channels = Object.fromEntries(Object.keys(CHANNELS).map(id => [id, { followers: START_FOLLOWERS[id], lastDay: -99, last: null }]));
-    this.active = []; this.booked = null; this.influencerDay = 0; this.version = 0;
+    this.active = []; this.booked = null; this.influencerDay = 0; this.showReady = 0; this.version = 0;
   }
   get followers() { return Object.values(this.channels).reduce((sum, c) => sum + c.followers, 0); }
   get demandMultiplier() { return 1 + this.active.reduce((sum, a) => sum + a.demand, 0); }
@@ -48,6 +50,16 @@ export class Marketing {
     const running = this.active.find(a => a.id === id);
     if (running) { running.daysLeft = Math.max(running.daysLeft, days); running.demand = Math.max(running.demand, demand); } else this.active.push({ id, daysLeft: days, demand });
     this.version++;
+  }
+  /**
+   * A hair show: costs money, brings followers (a share of the current following, at least a floor) and a week of extra
+   * demand. Once a week. Returns the followers gained, or null if it cannot be held.
+   */
+  hairShow(day) {
+    if (day < this.showReady || !this.economy.spend('marketing', HAIR_SHOW.cost)) return null;
+    const gained = Math.max(HAIR_SHOW.minFollowers, Math.round(this.followers * HAIR_SHOW.share));
+    this.#gain('instagram', gained); this.#boost('hairShow', HAIR_SHOW.days, HAIR_SHOW.demand); this.showReady = day + HAIR_SHOW.every; this.version++;
+    return gained;
   }
   #gain(channel, n) { const c = this.channels[channel]; c.followers = Math.max(0, Math.round(c.followers + n)); this.version++; }
 
@@ -91,13 +103,13 @@ export class Marketing {
 
   /** Campaigns run for whole days, counting the day they were bought. */
   startDay() { this.active.forEach(a => a.daysLeft--); this.active = this.active.filter(a => a.daysLeft > 0); this.version++; }
-  toJSON() { return { channels: this.channels, active: this.active, booked: this.booked, influencerDay: this.influencerDay }; }
+  toJSON() { return { channels: this.channels, active: this.active, booked: this.booked, influencerDay: this.influencerDay, showReady: this.showReady }; }
   restore(d) {
     if (!d) return;
     if (d.channels) Object.entries(d.channels).forEach(([id, c]) => { if (this.channels[id]) Object.assign(this.channels[id], c); });
     // Saves from before channels: everything was Instagram.
     else this.channels.instagram = { followers: d.followers ?? START_FOLLOWERS.instagram, lastDay: d.reelDay || -99, last: d.lastReel || null };
-    Object.assign(this, { active: d.active || [], booked: d.booked || (d.influencerBooked ? { followers: 20000 } : null), influencerDay: d.influencerDay || 0 });
+    Object.assign(this, { active: d.active || [], booked: d.booked || (d.influencerBooked ? { followers: 20000 } : null), influencerDay: d.influencerDay || 0, showReady: d.showReady || 0 });
     this.version++;
   }
 }

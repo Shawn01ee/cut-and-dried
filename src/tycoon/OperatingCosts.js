@@ -1,7 +1,7 @@
 import { FURNITURE } from '../building/FurnitureCatalog.js';
 
 // Daily figures in AUD, roughly in line with a Melbourne shopfront.
-const RENT_BY_LEVEL = [0, 160, 190, 240, 310, 390, 450, 520], RENT_PER_EXPANSION = 60, BRANCH_RENT = 260;
+const RENT_BY_LEVEL = [0, 160, 190, 240, 310, 390, 450, 520, 600, 680, 760, 850, 950], RENT_PER_EXPANSION = 60, BRANCH_RENT = 260;
 const UTILITIES_BASE = 25, UTILITIES_PER_CHAIR = 12, MAINTENANCE_RATE = .01;
 // A thrifty manager (Lia's talent) keeps utilities and upkeep down.
 export const THRIFT = .85;

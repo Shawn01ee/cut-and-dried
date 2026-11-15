@@ -5,7 +5,7 @@ import { Economy } from './Economy.js';
 import { Reputation } from './Reputation.js';
 import { Progression } from './Progression.js';
 import { OperatingCosts } from './OperatingCosts.js';
-import { Marketing } from './Marketing.js';
+import { Marketing, HAIR_SHOW } from './Marketing.js';
 import { ReviewBoard } from './ReviewBoard.js';
 import { ReviewRewards } from './ReviewRewards.js';
 import { Hospitality } from './Hospitality.js';
@@ -29,6 +29,8 @@ const OLD_BRANCH_COST = { downtown: 10000, premium: 18000, barber: 24000, colour
 // People who walk past a salon nobody has heard of yet and come in, per eight hours.
 const WALK_INS = 2.5;
 const MATERIALS = { colour: 18, wave: 14 }, CARD_FEE = .016, SPA_FEE = 45;
+/** Unlocks from level 8: booked clients, clinic treatments, membership, sponsorship and Sunday seminars. */
+export const BOOKED_SHARE = .3, BOOKED_PATIENCE = 1.5, TREATMENT_FEE = 45, TREATMENT_SHARE = .4, MEMBERSHIP_FEE = 3, SPONSOR_MAX = 1500, SEMINAR_BASE = 1000, SEMINAR_PER_LEVEL = 300;
 export const STARTING_CASH = 2000;
 // Earlier saves used these ids for the stylist now called Shawn.
 const LEGACY_IDS = { jun: 'owen', sean: 'owen', shawn: 'owen', jules: 'daniel', mia: 'sophia', sophie: 'ruby', max: 'hugo' };
@@ -73,7 +75,7 @@ export class TycoonGame {
   /** 0 for Monday up to 6 for Sunday; day 1 is a Monday. */
   get weekday() { return (this.clock.day - 1) % 7; }
   get isSunday() { return this.weekday === 6; }
-  get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned, branch: this.layout.branchOpen }; }
+  get context() { return { served: this.served, staff: this.staff.hired.length, rep: this.reputation.value, earned: this.economy.totalEarned, branch: this.layout.branchOpen, branchTier: this.layout.branchTier, reviews: this.reviews.count, rating: this.reviews.count ? this.reviews.rating : 0, regulars: this.regulars, followers: this.marketing.followers }; }
   /** Revenue over the last week of opening days. */
   get weekRevenue() { return this.recentRevenue.reduce((a, b) => a + b, 0); }
   /** Where the salon stands on opening the second one. */
@@ -97,8 +99,8 @@ export class TycoonGame {
   get branchDeskReach() { const d = this.staff.receptionistAt(1); return d && d.hired ? .8 + (d.skills.marketing || 0) / 250 : .5; }
   get demandParts() {
     return {
-      add: { walk: WALK_INS, branch: this.layout.branchOpen ? (WALK_INS + this.comfortAt(1) * .15) * this.branchDeskReach : 0, rep: this.reputation.value * .25, comfort: this.comfort * .15, followers: this.marketing.followerClients, regulars: Math.min(15, this.regulars * .12) },
-      mult: { price: PRICE_DEMAND[this.priceLevel], marketing: this.marketing.demandMultiplier, reviews: this.reviews.demandMultiplier, rival: 1 - this.rival.pull(this.standing), award: this.isUnlocked('award') ? 1.1 : 1 },
+      add: { walk: WALK_INS, branch: this.layout.branchOpen ? (WALK_INS + this.comfortAt(1) * .15) * this.branchDeskReach : 0, rep: this.reputation.value * .25, comfort: this.comfort * .15, followers: this.marketing.followerClients, regulars: this.isUnlocked('stamp') ? Math.min(20, this.regulars * .16) : Math.min(15, this.regulars * .12) },
+      mult: { price: PRICE_DEMAND[this.priceLevel], marketing: this.marketing.demandMultiplier, reviews: this.reviews.demandMultiplier, rival: 1 - this.rival.pull(this.standing), award: this.isUnlocked('award') ? 1.1 : 1, booking: this.isUnlocked('booking') ? 1.08 : 1, fame: this.isUnlocked('hallOfFame') ? 1.05 : 1 },
     };
   }
   /** Roughly how many clients want to come per eight hours. There is no cap: seats and chairs decide how many can be served. */
@@ -157,13 +159,14 @@ export class TycoonGame {
   /** A client for the main salon. Branch clients (`walkIn` false) are never influencers or difficult clients. */
   /** A client for salon `site`. Branch clients (`walkIn` false) are never influencers or difficult clients. */
   newCustomer(usedNames, walkIn = true, site = 0) {
+    const booked = walkIn && this.isUnlocked('booking') && Math.random() < BOOKED_SHARE;
     const influencer = walkIn ? this.marketing.takeInfluencer() : null;
     const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
-      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1),
+      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1),
       villain: walkIn && !influencer ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor,
     });
-    c.site = site;
+    c.site = site; c.booked = booked;
     if (c.vip) { const k = this.synergies.reduce((m, x) => m * (x.vipPatience || 1), 1); c.pat *= k; c.maxPat *= k; }
     return c;
   }
@@ -171,7 +174,7 @@ export class TycoonGame {
   chargeMaterials(ops) { ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', MATERIALS[op.type]); }); }
   completeService(customer, worker, byOwner) {
     const comfort = this.comfortAt(customer.site || 0), syn = this.synergies, result = this.evaluator.evaluate(customer, worker, comfort, {
-      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0), calm: syn.some(s => s.calm),
+      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0), calm: syn.some(s => s.calm),
     });
     if (customer.vip) result.payment = Math.round(result.payment * syn.reduce((k, s) => k * (s.vipPay || 1), 1));
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);
@@ -179,6 +182,10 @@ export class TycoonGame {
     if (customer.vip && customer.vipRoom) result.payment = Math.round(result.payment * 1.25);
     // A head spa is an add-on the client pays for.
     if (customer.spa && !customer.influencer) result.payment += SPA_FEE;
+    // A clinic treatment after colour or perm: paid on top, and the hair feels better for it.
+    if (this.isUnlocked('treatment') && !customer.influencer && ['colour', 'perm'].includes(customer.requestedService) && Math.random() < TREATMENT_SHARE) {
+      customer.treatment = true; this.economy.earn('treatment', TREATMENT_FEE); result.satisfaction = Math.min(1, result.satisfaction + .04);
+    }
     const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + comfort * .03 : 1);
     this.reputation.add(gain); worker.recordService(result.satisfaction, result.payment);
     if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate);
@@ -207,7 +214,7 @@ export class TycoonGame {
     if (customer.villain && worker && worker !== this.staff.owner) worker.addStress(outcome.refusedRefund || outcome.refunded || outcome.haggleRefused || outcome.discount ? 7 : 4);
     // Happy clients may become regulars; a bad visit can lose one.
     if (!customer.villain && !customer.influencer) {
-      if (result.satisfaction >= .8 && Math.random() < .35) this.regulars++;
+      if (result.satisfaction >= .8 && Math.random() < (this.isUnlocked('stamp') ? .5 : .35)) this.regulars++;
       else if (result.satisfaction < .5 && this.regulars && Math.random() < .5) this.regulars--;
     }
     let followers = 0, influencerPost = null;
@@ -251,6 +258,13 @@ export class TycoonGame {
   }
   syncMissions() { this.missions.sync(k => this.#missionState(k)); }
   claimMission(i) { return this.missions.claim(i, this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k)); }
+  /** Hosts a hair show: costs money, brings followers, reputation and a week of extra clients. Once a week. */
+  hostHairShow() {
+    if (!this.isUnlocked('hairShow')) return null;
+    const gained = this.marketing.hairShow(this.clock.day);
+    if (gained == null) return null;
+    this.reputation.add(HAIR_SHOW.rep); this.updateProgress(); return gained;
+  }
   /** Buys the second salon's next expansion. */
   expandBranch() { const next = this.layout.nextBranchExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.branchTier++; this.updateProgress(); this.save(); return true; }
   expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 2) this.layout.addAnnexPlants(); return true; }
@@ -269,7 +283,7 @@ export class TycoonGame {
     const move = this.rival.startDay(this.clock.day, this.standing);
     if (move) this.news.push(move);
     // A discounting rival tempts a few regulars away.
-    this.regulars = Math.max(0, this.regulars - Math.round(this.regulars * this.rival.discount * .2));
+    this.regulars = Math.max(0, this.regulars - Math.round(this.regulars * this.rival.discount * .2 * (this.isUnlocked('membership') ? .5 : 1)));
     this.trollAt = Math.random() < this.trollChance ? rand(.1, .9) * this.clock.dayLength : null;
     this.clock.startDay();
   }
@@ -281,6 +295,7 @@ export class TycoonGame {
   #dayOff() {
     this.dayOff = true; this.trollAt = null; this.clock.isOpen = false; this.clock.elapsed = 0;
     this.operatingCosts.chargeDayOff(); this.staff.restDay();
+    if (this.isUnlocked('seminar')) this.economy.earn('seminar', SEMINAR_BASE + this.staff.owner.level * SEMINAR_PER_LEVEL);
     const sunday = { day: this.clock.day, ...this.economy.closeDay(), served: 0, reputation: 0, reviews: { count: 0, average: 0 }, followers: { change: 0 } };
     this.month.log(sunday); if (MonthlyLedger.isMonthEnd(this.clock.day)) this.#settleMonth(sunday);
     this.weekReport = this.#weekSummary([...this.weekLog, sunday]); this.weekLog = [];
@@ -307,6 +322,8 @@ export class TycoonGame {
   closeDay() {
     const e = this.economy, sales = this.layout.dailySales * (this.isUnlocked('brandLine') ? 2 : 1);
     if (sales) e.earn('products', sales);
+    if (this.isUnlocked('membership') && this.regulars) e.earn('membership', this.regulars * MEMBERSHIP_FEE);
+    if (this.isUnlocked('sponsor')) e.earn('sponsor', Math.min(SPONSOR_MAX, Math.round(this.marketing.followers / 200)));
     this.operatingCosts.accrue(1); this.#autoReply();
     this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours);
     const money = this.finance.closeDay(e.dailyProfit, e.dailyRevenue, this.clock.day);
