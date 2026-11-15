@@ -1,4 +1,5 @@
 import { Employee, RAISE, GRUDGE_DAYS } from './Employee.js';
+import { PROGRAMMES, TALK_EVERY, TALK_RELIEF, birthdayOf, concernOf } from './Welfare.js';
 
 /**
  * The stylists who can be hired. Skills run 0 to 100; the specialty adds +10 on top.
@@ -81,6 +82,8 @@ export class StaffManager {
     // Front desk and floor help, never at a styling chair. Only the receptionist is there on day one.
     this.support = SUPPORT.map(d => Object.assign(new Employee(d), { effect: d.effect, site: d.site ?? null, hired: !!d.startsHired }));
     this.commission = 0; this.dinnerDay = 0; this.seatShuffle = false; this.version = 0;
+    // Welfare programmes the salon runs, and news of them for the morning.
+    this.welfare = new Set(); this.news = [];
   }
   get all() { return [this.owner, ...this.candidates]; }
   get hired() { return this.candidates.filter(e => e.hired); }
@@ -96,7 +99,26 @@ export class StaffManager {
   /** True when someone with this job is hired and at their post (the receptionist can be out filming). */
   hasSupport(effect, site = null) { return this.support.some(e => e.hired && !e.away && e.effect === effect && (site == null || e.site === site)); }
   find(id) { return [...this.all, ...this.support].find(e => e.id === id); }
-  hire(employee) { if (employee.hired || !this.economy.spend('recruiting', employee.hireCost)) return false; Object.assign(employee, { hired: true, daysEmployed: 0, stress: 0, leaveFrom: 0, leaveTo: 0 }); this.version++; return true; }
+  hire(employee) { if (employee.hired || !this.economy.spend('recruiting', employee.hireCost)) return false; Object.assign(employee, { hired: true, daysEmployed: 0, stress: 0, leaveFrom: 0, leaveTo: 0, loyalty: 0, lastStress: null }); this.version++; return true; }
+  has(programme) { return this.welfare.has(programme); }
+  setWelfare(programme, on) { if (!PROGRAMMES[programme]) return; if (on) this.welfare.add(programme); else this.welfare.delete(programme); this.version++; }
+  /** What the programmes cost per working day, with this many stylists at work. */
+  welfareCostFor(heads) { return [...this.welfare].reduce((n, id) => n + (PROGRAMMES[id].perHead || 0) * heads, 0); }
+  /** The stress at which a stylist wants to quit: higher with health cover and long service. */
+  resignAt(e) { return Math.min(100, RESIGN_STRESS + (this.has('health') ? PROGRAMMES.health.resignAt : 0) + (e.loyalty || 0)); }
+  /** How much experience a service gives under the education allowance. */
+  get learning() { return this.has('education') ? PROGRAMMES.education.learning : 1; }
+  /** Services take a touch longer with guaranteed breaks. */
+  get pace() { return this.has('breaks') ? PROGRAMMES.breaks.speed : 1; }
+  /** A one-to-one with Lia, once a week each: eases stress and tells what is on their mind. */
+  canTalk(e, day) { return e.hired && e !== this.owner && day - e.talkDay >= TALK_EVERY; }
+  talk(e, day) { if (!this.canTalk(e, day)) return null; const concern = concernOf(e); e.talkDay = day; e.addStress(TALK_RELIEF); this.version++; return concern; }
+  /** The morning: birthdays are celebrated under the birthday programme. */
+  welfareMorning(date) {
+    if (!this.has('birthday')) return;
+    for (const e of this.hired) { const b = birthdayOf(e); if (b.month === date.month && b.date === date.date) { this.economy.charge('welfare', PROGRAMMES.birthday.gift); e.addStress(PROGRAMMES.birthday.stress); this.news.push({ key: 'wf.news.birthday', name: e.name, n: PROGRAMMES.birthday.gift }); } }
+    this.version++;
+  }
   fire(employee) { if (!employee.hired || employee === this.owner) return false; employee.hired = false; employee.status = 'idle'; this.version++; return true; }
   /** True when a hired stylist has this special talent. */
   hasPerk(perk) { return this.hired.some(e => e.perk === perk); }
@@ -152,15 +174,28 @@ export class StaffManager {
     const rate = COMMISSION[this.commission], calm = COMMISSION_CALM[this.commission];
     const pay = Math.round(this.hired.reduce((sum, e) => sum + e.today.earn, 0) * rate);
     if (pay) this.economy.charge('commission', pay);
-    const quitting = [];
-    for (const e of this.working(day)) {
-      // Every hour past eight adds stress and leaves some tiredness for tomorrow.
+    const quitting = [], at = this.working(day), W = PROGRAMMES;
+    const welfare = this.welfareCostFor(at.length); if (welfare) this.economy.charge('welfare', welfare);
+    for (const e of at) {
+      // Every hour past eight adds stress and leaves some tiredness for tomorrow. Yesterday's stress is kept by cause.
       const overtime = Math.max(0, hours - 8);
-      const load = e.fatigue * .2 + Math.max(0, e.today.served - 4) * 3 + 2 + overtime * 4;
+      const k = calm * (e.perk === 'calm' ? .6 : 1) / restRate * (this.has('breaks') ? W.breaks.load : 1);
+      const parts = { work: (Math.max(0, e.today.served - 4) * 3 + 2) * k, fatigue: e.fatigue * .2 * k, overtime: overtime * 4 * k, relief: -(restRate > 1 ? 4 : 0) + (this.has('meals') ? W.meals.stress : 0) };
       e.carry = Math.round(e.fatigue * overtime * .08);
-      e.addStress(load * calm * (e.perk === 'calm' ? .6 : 1) / restRate - (restRate > 1 ? 4 : 0));
+      const before = e.stress; e.addStress(parts.work + parts.fatigue + parts.overtime + parts.relief);
+      e.lastStress = { ...Object.fromEntries(Object.entries(parts).map(([n, v]) => [n, Math.round(v * 10) / 10])), total: Math.round((e.stress - before) * 10) / 10 };
       e.daysEmployed++; if (e.grudge > 0) e.grudge--;
-      if (e.stress >= RESIGN_STRESS) quitting.push(e);
+      // Long-service awards on every round number of days.
+      if (this.has('longService') && e.daysEmployed % W.longService.every === 0) {
+        this.economy.charge('welfare', W.longService.pay); e.addStress(W.longService.stress); e.loyalty = Math.min(W.longService.maxLoyalty, (e.loyalty || 0) + W.longService.loyalty);
+        this.news.push({ key: 'wf.news.longService', name: e.name, n: e.daysEmployed });
+      }
+      if (e.stress >= this.resignAt(e)) quitting.push(e);
+    }
+    // Paid leave on request: the most stressed stylist past the line (and not quitting) takes tomorrow off.
+    if (this.has('leave')) {
+      const tired = at.filter(e => e.stress >= W.leave.at && !quitting.includes(e) && !e.leaveBooked(day + 1)).sort((a, b) => b.stress - a.stress)[0];
+      if (tired && this.sendOnLeave(tired, day, 1)) this.news.push({ key: 'wf.news.leave', name: tired.name, n: Math.round(tired.stress) });
     }
     this.version++;
     return quitting;
@@ -169,6 +204,8 @@ export class StaffManager {
   get baseBoost() { return COMMISSION_BOOST[this.commission]; }
   /** Whether stylists get a random chair each morning. */
   setSeatShuffle(on) { this.seatShuffle = !!on; this.version++; }
-  toJSON() { return { commission: this.commission, seatShuffle: this.seatShuffle }; }
-  restore(d) { this.commission = d?.commission || 0; this.seatShuffle = !!d?.seatShuffle; this.version++; }
+  toJSON() { return { commission: this.commission, seatShuffle: this.seatShuffle, welfare: [...this.welfare] }; }
+  restore(d) { this.commission = d?.commission || 0; this.seatShuffle = !!d?.seatShuffle; this.welfare = new Set((d?.welfare || []).filter(id => PROGRAMMES[id])); this.version++; }
+  /** A stylist's birthday, for their card. */
+  birthdayOf(e) { return birthdayOf(e); }
 }

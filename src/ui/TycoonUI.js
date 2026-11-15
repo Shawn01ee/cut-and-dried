@@ -7,7 +7,8 @@ import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION, GRUDGE_PENALTY } from '../empl
 import { clamp } from '../core/math.js';
 // Which skill each specialty raises, to highlight it on the card.
 const SPECIAL_SKILL = { cut: 'cutting', colour: 'colouring', perm: 'perming' };
-import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD } from '../employees/StaffManager.js';
+import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD, RESIGN_STRESS } from '../employees/StaffManager.js';
+import { PROGRAMMES, WELFARE_IDS, TALK_EVERY, TALK_RELIEF } from '../employees/Welfare.js';
 import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS, HAIR_SHOW } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
@@ -48,7 +49,7 @@ export class TycoonUI {
   #staffRow(e) {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, s = e.effectiveSkills, owner = e === g.staff.owner, now = this.hooks.now(), day = g.clock.day, cash = g.economy;
     let actions = '';
-    if (!owner && e.hired) actions = `<button data-do="train:${e.id}" ${!cash.canAfford(g.staff.trainingCostFor(e)) || !e.canTrain || !g.isUnlocked('training') ? 'disabled' : ''}>${t('staff.train', g.staff.trainingCostFor(e))}</button><button data-do="bonus:${e.id}" ${cash.canAfford(BONUS) ? '' : 'disabled'}>${t('staff.bonus', BONUS)}</button><button data-do="leave:${e.id}" ${e.leaveBooked(day) ? 'disabled' : ''}>${t('staff.leave', LEAVE_DAYS)}</button><button data-do="rest:${e.id}" ${e.restUntil > now || e.onLeave(day) ? 'disabled' : ''}>${t(e.restUntil > now ? 'staff.resting' : 'staff.rest')}</button><button data-do="fire:${e.id}">${t('staff.fire')}</button>`;
+    if (!owner && e.hired) actions = `<button data-do="talk:${e.id}" ${g.staff.canTalk(e, day) ? '' : 'disabled'}>${t('wf.talk')}</button><button data-do="train:${e.id}" ${!cash.canAfford(g.staff.trainingCostFor(e)) || !e.canTrain || !g.isUnlocked('training') ? 'disabled' : ''}>${t('staff.train', g.staff.trainingCostFor(e))}</button><button data-do="bonus:${e.id}" ${cash.canAfford(BONUS) ? '' : 'disabled'}>${t('staff.bonus', BONUS)}</button><button data-do="leave:${e.id}" ${e.leaveBooked(day) ? 'disabled' : ''}>${t('staff.leave', LEAVE_DAYS)}</button><button data-do="rest:${e.id}" ${e.restUntil > now || e.onLeave(day) ? 'disabled' : ''}>${t(e.restUntil > now ? 'staff.resting' : 'staff.rest')}</button><button data-do="fire:${e.id}">${t('staff.fire')}</button>`;
     if (!e.hired) {
       const locked = !g.isUnlocked('staff') || (e.unlock && !g.isUnlocked(e.unlock)), seat = this.hooks.hasOpenChair();
       actions = locked ? `<span class="dim">${t('build.lockedAt')}</span>` : `${seat ? '' : `<span class="dim">${t('staff.noChair')}</span>`}<button class="go" data-do="hire:${e.id}" ${!seat || !cash.canAfford(e.hireCost) ? 'disabled' : ''}>${t('staff.hire', e.hireCost)}</button>`;
@@ -60,8 +61,27 @@ export class TycoonUI {
     const r = g.reviews.ratingFor(e.name), perf = e.hired ? `${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
     const special = SPECIAL_SKILL[e.specialty], stats = [['cut', s.cutting, 'cutting'], ['colour', s.colouring, 'colouring'], ['perm', s.perming, 'perming'], ['speed', s.speed, 'speed'], ['service', s.customerService, 'customerService']];
     const rows = [[e.specialty ? 'special' : null, `<span class="gold">${e.specialty ? t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100)) : ''}</span>`],
-      [owner ? 'scope' : null, t('staff.allround')], [e.perk ? 'perk' : null, `<span class="good">${e.perk ? t('perk.' + e.perk) : ''}</span>`], ['times', times], [e.hired ? 'state' : 'pay', info], [perf ? 'perf' : null, perf], [this.hooks.seatOf(e) >= 0 ? 'seat' : null, this.#seatChips(e)]];
+      [owner ? 'scope' : null, t('staff.allround')], [e.perk ? 'perk' : null, `<span class="good">${e.perk ? t('perk.' + e.perk) : ''}</span>`], ['times', times], [e.hired ? 'state' : 'pay', info], [e.hired && !owner ? 'risk' : null, e.hired && !owner ? this.#risk(e) : ''], [perf ? 'perf' : null, perf], [this.hooks.seatOf(e) >= 0 ? 'seat' : null, this.#seatChips(e)]];
     return `<div class="scard r-${this.#kind(e)}">${this.#cardHead(e, actions)}${this.#statBars(stats.map(([k, v, key]) => [k, v, key === special]))}${this.#rows(rows)}</div>`;
+  }
+  /** How close a stylist is to quitting, and what moved their stress yesterday. */
+  #risk(e) {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, at = g.staff.resignAt(e), s = e.lastStress, b = g.staff.birthdayOf(e), sg = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v);
+    const cls = e.stress >= at - 10 ? 'bad' : e.stress >= at - 30 ? 'gold' : 'good';
+    const why = s ? ` · ${t('wf.yesterday', sg(s.total), sg(s.work), sg(s.fatigue), sg(s.overtime), sg(s.relief))}` : '';
+    return `<span class="${cls}">${t('wf.risk', Math.round(e.stress), at)}</span>${why} · <span class="dim">${t('wf.bday', b.month, b.date)}${e.loyalty ? ' · ' + t('wf.loyal', e.loyalty) : ''}${g.staff.canTalk(e, g.clock.day) ? '' : ' · ' + t('wf.talkIn', TALK_EVERY - (g.clock.day - e.talkDay))}</span>`;
+  }
+  /** Welfare: each programme with what it does and costs, today's bill, and who is closest to quitting. */
+  #welfare() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff, heads = st.working(g.clock.day).length, W = PROGRAMMES, pct = v => Math.round(Math.abs(1 - v) * 100);
+    const effect = { meals: t('wf.e.meals', -W.meals.stress), health: t('wf.e.health', W.health.resignAt, RESIGN_STRESS, RESIGN_STRESS + W.health.resignAt), breaks: t('wf.e.breaks', pct(W.breaks.load), pct(W.breaks.speed)),
+      education: t('wf.e.education', pct(W.education.learning)), leave: t('wf.e.leave', W.leave.at), birthday: t('wf.e.birthday', W.birthday.gift, -W.birthday.stress),
+      longService: t('wf.e.longService', W.longService.every, W.longService.pay, -W.longService.stress, W.longService.loyalty, W.longService.maxLoyalty) };
+    const cost = id => W[id].perHead ? t('wf.c.perHead', W[id].perHead, W[id].perHead * heads) : W[id].gift ? t('wf.c.gift', W[id].gift) : W[id].pay ? t('wf.c.award', W[id].pay) : t('wf.c.free');
+    const rows = WELFARE_IDS.map(id => { const on = st.has(id); return `<div class="frow"><div class="fx"><b class="${on ? 'good' : ''}">${on ? '✓ ' : ''}${t('wf.' + id)}</b> <span class="dim">${cost(id)}</span><div class="dim">${effect[id]}</div></div><button class="${on ? '' : 'go'}" data-do="welfare:${id}.${on ? 0 : 1}">${t(on ? 'wf.off' : 'wf.on')}</button></div>`; }).join('');
+    const risk = st.hired.slice().sort((a, b) => (b.stress - st.resignAt(b)) - (a.stress - st.resignAt(a))).map(e => { const at = st.resignAt(e), cls = e.stress >= at - 10 ? 'bad' : e.stress >= at - 30 ? 'gold' : 'good'; return `<div class="brow"><span>${this.i18n.name(e.name)}</span><span class="sp"></span><div class="meter" style="width:120px"><i style="width:${Math.round(e.stress / at * 100)}%;background:${cls === 'bad' ? '#d8314a' : cls === 'gold' ? '#ffd98a' : '#8fc25a'}"></i></div><span class="${cls}">${Math.round(e.stress)} / ${at}</span></div>`; }).join('');
+    return `<div class="bsec"><h4>${t('wf.title')}</h4><div class="dim">${t('wf.note', RESIGN_STRESS)}</div><div class="brow"><span>${t('wf.today', heads)}</span><span class="sp"></span><b class="gold">$${st.welfareCostFor(heads)}</b></div>${rows}</div>`
+      + `<div class="bsec"><h4>${t('wf.riskTitle')}</h4><div class="dim">${t('wf.talkNote', TALK_EVERY, -TALK_RELIEF)}</div>${risk || `<div class="dim">${t('wf.noStaff')}</div>`}</div>`;
   }
   /** Every team synergy: the ones today's team has first, each with what it needs and what it gives. */
   #synergies() {
@@ -108,7 +128,8 @@ export class TycoonUI {
   #staff() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff, page = this.staffPage, onTeam = page === 'team';
     const counts = { team: 1 + st.hired.length + st.support.filter(e => e.hired).length, hire: st.candidates.filter(e => !e.hired).length + st.support.filter(e => !e.hired).length };
-    const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['policy', t('st.policy')]].map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['policy', t('st.policy')], ['welfare', t('st.welfare', st.welfare.size)]].map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    if (page === 'welfare') return tabs + this.#welfare();
     if (page === 'policy') {
       const commission = COMMISSION.map((r, i) => `<button data-do="commission:${i}" class="${st.commission === i ? 'sel' : ''}">${Math.round(r * 100)}%</button>`).join('');
       return `${tabs}<div class="bsec"><h4>${t('staff.policy')}</h4><div class="brow"><span>${t('staff.commission')}</span><span class="sp"></span><span class="seg">${commission}</span></div>
@@ -354,7 +375,7 @@ export class TycoonUI {
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
       post: () => this.hooks.post(value), campaign: () => { if (g.runCampaign(value)) this.hooks.spent(); }, influencer: () => { if (g.staff.receptionist.hired) g.marketing.bookInfluencer(g.clock.day); },
-      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, clp: () => { this.clientPage = value; }, bdp: () => { this.buildPage = value; }, bdc: () => { this.shopCat = value; }, bdo: () => { this.ownedCat = value; }, stp: () => { this.staffPage = value; }, sfr: () => { this.staffRole = value; if (value !== 'all' && value !== 'designer') { this.staffSpec = 'all'; this.staffPerk = 'all'; } }, rhire: () => { const [id, site] = value.split('.'), who = g.staff.find(id); if (who && g.staff.hireAt(who, +site)) this.hooks.syncSupport(); }, bzp: () => { this.bizPage = value; }, bzs: () => { const [p, k] = value.split('.'); this.bizSub[p] = k; }, lsort: () => { this.ladderSort = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
+      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, clp: () => { this.clientPage = value; }, welfare: () => { const [id, on] = value.split('.'); g.staff.setWelfare(id, on === '1'); }, talk: () => { const c = g.staff.talk(e, g.clock.day); if (c) this.hooks.talked(e, c); }, bdp: () => { this.buildPage = value; }, bdc: () => { this.shopCat = value; }, bdo: () => { this.ownedCat = value; }, stp: () => { this.staffPage = value; }, sfr: () => { this.staffRole = value; if (value !== 'all' && value !== 'designer') { this.staffSpec = 'all'; this.staffPerk = 'all'; } }, rhire: () => { const [id, site] = value.split('.'), who = g.staff.find(id); if (who && g.staff.hireAt(who, +site)) this.hooks.syncSupport(); }, bzp: () => { this.bizPage = value; }, bzs: () => { const [p, k] = value.split('.'); this.bizSub[p] = k; }, lsort: () => { this.ladderSort = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
       amen: () => g.hospitality.toggle(value), autoreply: () => { g.reviews.autoReply = !g.reviews.autoReply; g.reviews.version++; }, hrs: () => g.shiftHours(value[0] === 'o' ? 0 : 1, value[1] === '+' ? 1 : -1),
       commission: () => g.staff.setCommission(+value), shuffle: () => g.staff.setSeatShuffle(value === '1'),
       seat: () => { const [id, i] = value.split('.'), who = id === 'owner' ? g.staff.owner : g.staff.find(id); if (who) this.hooks.moveSeat(who, +i); }, dinner: () => { if (g.staff.teamDinner(g.clock.day)) this.hooks.spent(); },

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { $, V, UP, rand, pick, clamp, lerp, smooth, angLerp, fwd, rgt } from './core/math.js';
 import { MAX_HEARTS, OCCASION_PAY, OCCASION_NEED } from './tycoon/Regulars.js';
 import { SPECIAL_FAIL_REP } from './tycoon/SpecialClients.js';
+import { TALK_RELIEF } from './employees/Welfare.js';
 import { lab2lin, labCss, labMix, hexCss, PAL_LAB, PAL_RGB } from './rendering/color.js';
 import { STR, NS, CAP } from './hair/strands.js';
 import { profile, SHAPES, WAVES, DYES, dyeLab, cloneHair, hasColour, opColour, opWave, opCut, applyPlan, score, aiPlan, blankPlan } from './hair/rules.js';
@@ -940,6 +941,7 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   // a new season, and calendar events on their first day
   if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));
+  game.staff.news.splice(0).forEach(n=>news.push(tx(n.key,nm(n.name),n.n)));
   {const s=game.special;if(s)news.push(tx('sp.news',s.hour+':00',tx('sp.'+s.kind),Math.round(s.need*100),s.reward.toLocaleString(),s.followers.toLocaleString(),s.rep));}
   news.forEach((n,i)=>later(.6+i*1.4,()=>popup(n,recep.head,'big')));
   happeningCard();
@@ -961,7 +963,7 @@ function happeningCard(){const h=game.happening;if(!h)return;const t=tx('hap.'+h
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
 const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},branchExpanded:()=>{syncFurniture();syncChairs();focusSite(1);},syncSupport,openBranch,hairShow:n=>{audio.play('levelUp');popup(tx('show.done',n.toLocaleString()),recep.head,'big');},openMonth:()=>{monthFrom='panel';openMenu('month','game');paused=true;},viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
-  post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e),seats:()=>{const n=[0,0];return stations.map(s=>{const site=siteOf(s.item.x);return {vip:s.item.id==='vipRoom',site,num:++n[site]};});},seatOf:e=>stations.findIndex(s=>s.sty===e),moveSeat:(e,i)=>moveToSeat(e,i)});
+  talked:(e,concern)=>{audio.play('happy');incidents.show({title:tx('wf.talkT',nm(e.name)),text:'“'+tx('wf.say.'+concern)+'”',options:[{label:tx('wf.talkOk',-TALK_RELIEF),run:()=>{}}]});},post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e),seats:()=>{const n=[0,0];return stations.map(s=>{const site=siteOf(s.item.x);return {vip:s.item.id==='vipRoom',site,num:++n[site]};});},seatOf:e=>stations.findIndex(s=>s.sty===e),moveSeat:(e,i)=>moveToSeat(e,i)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});

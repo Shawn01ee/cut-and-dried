@@ -29,6 +29,8 @@ export class Employee {
     this.stress = 0; this.leaveFrom = 0; this.leaveTo = 0; this.daysEmployed = 0; this.boost = 0;
     // `grudge`: days left of sulking after being talked out of quitting; `persuaded`: how often that has happened; `raises`: pay rises given.
     this.grudge = 0; this.persuaded = 0; this.raises = 0; this.baseSalary = salary;
+    // `loyalty` raises the stress they put up with before quitting; `talkDay` is the last one-to-one with Lia; `lastStress` is yesterday's stress, by cause.
+    this.loyalty = 0; this.talkDay = -99; this.lastStress = null;
   }
   get fatigue() { return 100 - this.stamina; }
   get trainingCost() { return 250 * this.level; }
@@ -87,13 +89,14 @@ export class Employee {
     if (key) this.skills[key] = Math.min(100, this.skills[key] + 2);
   }
   recordService(satisfaction, payment) { this.stats.served++; this.stats.sum += satisfaction; this.stats.earn += payment; this.today.served++; this.today.earn += payment; }
-  toJSON() { return { id: this.id, site: this.site, grudge: this.grudge, persuaded: this.persuaded, raises: this.raises, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
+  toJSON() { return { id: this.id, site: this.site, loyalty: this.loyalty, talkDay: this.talkDay, lastStress: this.lastStress, grudge: this.grudge, persuaded: this.persuaded, raises: this.raises, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
   restore(data) {
     // Someone who has never worked here keeps today's skills, so balance changes reach older saves too.
     const worked = data.hired || data.level > 1 || data.experience > 0 || (data.stats && data.stats.served > 0);
     Object.assign(this, { skills: worked ? { ...this.skills, ...data.skills } : this.skills, experience: data.experience, level: data.level, hired: data.hired, stats: data.stats });
     // Fields added later default to a settled, rested stylist.
     if (data.site !== undefined) this.site = data.site;
+    this.loyalty = data.loyalty || 0; this.talkDay = data.talkDay ?? -99; this.lastStress = data.lastStress || null;
     this.grudge = data.grudge || 0; this.persuaded = data.persuaded || 0; this.raises = data.raises || 0; this.salary = Math.round(this.baseSalary * RAISE ** this.raises);
     Object.assign(this, { stress: data.stress || 0, leaveFrom: data.leaveFrom || 0, leaveTo: data.leaveTo || 0, daysEmployed: data.daysEmployed ?? 99 });
   }
