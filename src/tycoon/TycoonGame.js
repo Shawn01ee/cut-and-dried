@@ -140,7 +140,7 @@ export class TycoonGame {
   get reelQuality() { return clamp(.1 + this.synergies.reduce((n, x) => n + (x.reel || 0), 0) + (this.has('photoZone') ? .12 : 0) + Math.min(.2, this.staff.hired.filter(e => e.perk === 'trend').length * .1) + .55 * this.lastSatisfaction + this.comfort * .012 + (this.reviews.count ? (this.reviews.rating - 3) * .05 : 0)); }
   /** Chance that someone posts a fake one-star review today; a bigger audience attracts more of them. */
   get trollChance() { return this.progression.level < 2 ? 0 : Math.min(.45, .12 + this.marketing.followers / 4000); }
-  updateProgress() { this.progression.update(this.context); this.layout.branchChairs = this.isUnlocked('branchGrow') ? 9 : 6; this.syncMissions(); this.#applySynergyBoosts(); }
+  updateProgress() { this.progression.update(this.context); this.syncMissions(); this.#applySynergyBoosts(); }
   isUnlocked(feature) { return this.progression.isUnlocked(feature); }
   /** Clients arrive at the same rate whatever the hours, so a longer day brings more of them. `dailyDemand` is per eight hours. */
   nextArrival() { return rand(.8, 1.2) * this.clock.hourLength * 8 / this.dailyDemand; }
@@ -251,6 +251,8 @@ export class TycoonGame {
   }
   syncMissions() { this.missions.sync(k => this.#missionState(k)); }
   claimMission(i) { return this.missions.claim(i, this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k)); }
+  /** Buys the second salon's next expansion. */
+  expandBranch() { const next = this.layout.nextBranchExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.branchTier++; this.updateProgress(); this.save(); return true; }
   expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 2) this.layout.addAnnexPlants(); return true; }
   tick(dt) {
     this.clock.tick(dt); this.operatingCosts.accrue(this.clock.workedFraction);
