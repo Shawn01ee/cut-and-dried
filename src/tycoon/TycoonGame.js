@@ -13,7 +13,7 @@ import { Finance } from './Finance.js';
 import { Rival } from './Rival.js';
 import { Missions } from './Missions.js';
 import { MonthlyLedger, MONTH_DAYS, summariseDays } from './MonthlyLedger.js';
-import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS } from './Calendar.js';
+import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS, dateOf } from './Calendar.js';
 import { SYNERGIES, teamOf } from './Synergies.js';
 import { RegularBook, FAVOURITE_SATISFACTION, HEART_LOYAL, LOYAL_PAY, OCCASION_PAY } from './Regulars.js';
 import { rollSpecial, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from './SpecialClients.js';
@@ -148,7 +148,7 @@ export class TycoonGame {
   get synergies() { const T = teamOf([this.staff.owner, ...this.staff.working(this.clock.day)], this.staff.support); return SYNERGIES.filter(s => s.has(T)); }
   /** How much quicker a service of `type` goes: equipment, then the team's synergies. */
   /** How fast a kind of service goes at a salon: its furniture and today's team synergies. */
-  speedFor(type, site = 0) { const fx = this.dayFx; return this.layout.speedBonusAt(site, type) * this.processSpeedFor(type) * (fx.speed ?? 1) * (type === 'shampoo' ? fx.wash ?? 1 : type === 'dry' ? fx.dry ?? 1 : 1); }
+  speedFor(type, site = 0) { const fx = this.dayFx; return this.layout.speedBonusAt(site, type) * this.processSpeedFor(type) * (fx.speed ?? 1) * this.staff.pace * (type === 'shampoo' ? fx.wash ?? 1 : type === 'dry' ? fx.dry ?? 1 : 1); }
   /** How much quicker colour or perm processes: only the team's synergies change that. */
   processSpeedFor(type) { return this.synergies.reduce((k, s) => k * ((s.speed && s.speed[type]) || 1), 1); }
   /** Synergy boosts to skills: the base boost from performance pay, plus mentoring for juniors. */
@@ -248,7 +248,7 @@ export class TycoonGame {
     if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate * (this.layout.countAt('massageChair', customer.site || 0) ? FURNITURE.massageChair.staffTire : 1));
     // A mentor on the team helps everyone else learn faster.
     const learning = this.staff.hasPerk('mentor') && worker.perk !== 'mentor' ? 1.5 : 1;
-    if (worker.gainExperience(Math.round((result.specialist ? 15 : 10) * learning))) this.bus.emit('staff:levelup', worker);
+    if (worker.gainExperience(Math.round((result.specialist ? 15 : 10) * learning * this.staff.learning))) this.bus.emit('staff:levelup', worker);
     this.served++; this.servedToday++; this.satisfactionSum += result.satisfaction; this.lastSatisfaction = result.satisfaction;
     const M = this.missions; M.record('serve'); if (result.satisfaction >= .85) M.record('happy'); if (customer.vip) M.record('vip');
     if (customer.requestedService === 'colour') M.record('colour'); else if (customer.requestedService === 'perm') M.record('perm');
@@ -355,7 +355,7 @@ export class TycoonGame {
   }
   startDay() {
     if (this.nextHours) { this.clock.setHours(...this.nextHours); this.nextHours = null; }
-    this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day);
+    this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day); this.staff.welfareMorning(dateOf(this.clock.day));
     this.missions.fill(this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k));
     this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null; this.special = null;
     if (!this.month.start) this.month.begin(this.#monthSnapshot());
