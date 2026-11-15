@@ -65,6 +65,8 @@ const SUPPORT = [
 /** Performance pay as a share of each stylist's takings: steadier staff and a small skill lift, at a cost. */
 export const COMMISSION = [0, .05, .1, .15];
 const COMMISSION_BOOST = [0, 2, 4, 6], COMMISSION_CALM = [1, .85, .7, .55];
+/** The better known a stylist, the harder they are to talk round. */
+const RANK_PERSUASION = { master: -.25, senior: -.15, designer: 0, junior: .1 };
 export const BONUS = 200, LEAVE_DAYS = 2, RESIGN_LEAVE = 3, DINNER_PER_HEAD = 45, MARKETING_COURSE = 400;
 export const RESIGN_STRESS = 85;
 
@@ -112,7 +114,7 @@ export class StaffManager {
    * The chance of talking a stylist out of quitting: better the more experienced Lia is and the longer they have
    * worked here, worse each time it has been tried before.
    */
-  persuadeChance(e) { return Math.min(.85, Math.max(.15, .45 + this.owner.level * .05 + (e.daysEmployed >= 30 ? .1 : 0) - e.persuaded * .15)); }
+  persuadeChance(e) { return Math.min(.85, Math.max(.1, .45 + this.owner.level * .05 + (e.daysEmployed >= 30 ? .1 : 0) - e.persuaded * .15 + (RANK_PERSUASION[e.rank] || 0))); }
   /**
    * Answers a stylist who wants to quit. `how` is bonus, talk, raise, leave or go. Returns whether they stay;
    * a talk that fails, or letting them go, means they leave tonight.

@@ -20,13 +20,58 @@ const TENSE_BARS = [
   { chord: [53, 57, 60], bass: 41, melody: [[0, 65, 2], [3, 69, 1], [4, 72, 3], [8, 71, 2], [10, 69, 2], [12, 68, 4]] },
   { chord: [52, 56, 59], bass: 40, melody: [[0, 64, 3], [4, 68, 2], [6, 71, 2], [8, 74, 3], [12, 75, 2], [14, 76, 2]] },
 ];
+// More original loops for the salon's calm hours. Each track has its own tempo, chords and groove.
+const LOFI_BARS = [
+  { chord: [53, 57, 60, 64], bass: 41, melody: [[2, 72, 3], [6, 69, 2], [10, 72, 2], [12, 74, 4]] },
+  { chord: [52, 55, 59, 62], bass: 40, melody: [[0, 76, 4], [6, 74, 2], [8, 72, 6]] },
+  { chord: [50, 53, 57, 60], bass: 38, melody: [[2, 69, 2], [4, 72, 2], [6, 74, 3], [12, 77, 4]] },
+  { chord: [48, 52, 55, 58], bass: 36, melody: [[0, 76, 6], [8, 72, 2], [10, 74, 2], [12, 67, 4]] },
+  { chord: [46, 50, 53, 57], bass: 46, melody: [[2, 74, 3], [6, 72, 2], [8, 70, 4], [12, 69, 2]] },
+  { chord: [57, 60, 64, 67], bass: 45, melody: [[0, 72, 2], [2, 76, 2], [4, 79, 6], [12, 76, 4]] },
+  { chord: [55, 58, 62, 65], bass: 43, melody: [[0, 74, 3], [4, 72, 2], [6, 70, 2], [8, 74, 6]] },
+  { chord: [48, 52, 55, 58], bass: 48, melody: [[0, 72, 8], [10, 70, 2], [12, 67, 4]] },
+];
+const BOSSA_BARS = [
+  { chord: [57, 60, 64, 67], bass: 45, melody: [[0, 76, 3], [4, 74, 2], [6, 72, 2], [8, 76, 6]] },
+  { chord: [54, 57, 60, 64], bass: 50, melody: [[0, 74, 3], [4, 72, 2], [6, 69, 4], [12, 66, 4]] },
+  { chord: [55, 59, 62, 66], bass: 43, melody: [[0, 67, 2], [2, 71, 2], [4, 74, 6], [12, 71, 4]] },
+  { chord: [52, 55, 59, 60], bass: 48, melody: [[0, 72, 6], [8, 71, 2], [10, 72, 2], [12, 76, 4]] },
+  { chord: [53, 57, 60, 64], bass: 41, melody: [[0, 77, 3], [4, 76, 2], [6, 74, 2], [8, 72, 6]] },
+  { chord: [50, 53, 57, 59], bass: 47, melody: [[0, 74, 4], [4, 71, 2], [6, 69, 2], [8, 65, 6]] },
+  { chord: [52, 56, 59, 62], bass: 40, melody: [[0, 68, 3], [4, 71, 2], [6, 74, 2], [8, 76, 4], [12, 74, 4]] },
+  { chord: [57, 60, 64, 66], bass: 45, melody: [[0, 69, 10], [12, 64, 4]] },
+];
+const CITY_BARS = [
+  { chord: [53, 57, 60, 64], bass: 41, melody: [[0, 72, 2], [2, 74, 2], [4, 76, 4], [10, 79, 2], [12, 77, 4]] },
+  { chord: [55, 59, 62, 64], bass: 43, melody: [[0, 76, 2], [2, 74, 2], [4, 71, 4], [8, 74, 8]] },
+  { chord: [52, 55, 59, 62], bass: 40, melody: [[0, 71, 2], [2, 72, 2], [4, 74, 4], [10, 76, 2], [12, 79, 4]] },
+  { chord: [57, 60, 64, 67], bass: 45, melody: [[0, 81, 6], [8, 79, 2], [10, 76, 2], [12, 72, 4]] },
+  { chord: [50, 53, 57, 60], bass: 38, melody: [[0, 74, 2], [2, 77, 2], [4, 81, 4], [10, 79, 2], [12, 77, 4]] },
+  { chord: [55, 60, 62, 65], bass: 43, melody: [[0, 79, 6], [8, 77, 2], [10, 74, 2], [12, 72, 4]] },
+  { chord: [52, 55, 59, 60], bass: 48, melody: [[0, 76, 4], [4, 79, 4], [8, 84, 8]] },
+  { chord: [55, 57, 61, 64], bass: 45, melody: [[0, 81, 4], [4, 79, 2], [6, 76, 2], [8, 73, 8]] },
+];
+const NIGHT_BARS = [
+  { chord: [57, 59, 60, 64], bass: 45, melody: [[0, 76, 6], [8, 72, 4], [12, 71, 4]] },
+  { chord: [53, 57, 60, 64], bass: 41, melody: [[0, 72, 8], [10, 69, 6]] },
+  { chord: [52, 55, 59, 60], bass: 48, melody: [[0, 67, 4], [4, 71, 4], [8, 72, 8]] },
+  { chord: [55, 57, 62, 67], bass: 43, melody: [[0, 74, 6], [8, 71, 8]] },
+];
+/** The calm playlist: each track plays `loops` times, then the next one starts at the end of a bar. */
+export const TRACKS = [
+  { id: 'pop', tempo: 88, bars: BARS, loops: 4 },
+  { id: 'lofi', tempo: 72, bars: LOFI_BARS, loops: 3 },
+  { id: 'bossa', tempo: 96, bars: BOSSA_BARS, loops: 4 },
+  { id: 'city', tempo: 104, bars: CITY_BARS, loops: 4 },
+  { id: 'night', tempo: 66, bars: NIGHT_BARS, loops: 6 },
+];
 const MOODS = { calm: BARS, tense: TENSE_BARS };
 const MIN_GAP = { snip: .11, click: .03, chime: .4, cash: .08, clap: .6, swish: .15 };
 
 /** Synthesises all music and sound effects, so the game ships without audio files. */
 export class AudioManager {
   #ctx = null; #master = null; #music = null; #sfx = null; #noiseBuffer = null;
-  #nextTime = 0; #step = 0; #pass = 0; #lastPlayed = {}; #mood = 'calm'; #playing = 'calm';
+  #nextTime = 0; #step = 0; #pass = 0; #lastPlayed = {}; #mood = 'calm'; #playing = 'calm'; #track = 0; #skip = false;
 
   constructor(bus) {
     this.musicVolume = .5; this.sfxVolume = .8; this.muted = false;
@@ -86,14 +131,29 @@ export class AudioManager {
   }
   /** 'calm' or 'tense'. The music changes at the start of the next bar. */
   setMood(mood) { if (MOODS[mood]) this.#mood = mood; }
+  /** The calm track playing now, by id. */
+  get trackId() { return TRACKS[this.#track].id; }
+  /** Moves on to the next calm track at the start of the next bar. */
+  nextTrack() { this.#skip = true; }
+  /** Called with the new track's id whenever the calm track changes. */
+  onTrack = null;
+  #changed() { if (this.onTrack) this.onTrack(this.trackId); }
+  get #calm() { return TRACKS[this.#track]; }
+  get #stepLen() { return this.#playing === 'tense' ? STEP * .8 : 60 / this.#calm.tempo / 4; }
   #scheduleMusic() {
     if (!this.#ctx || this.#ctx.state !== 'running') return;
     while (this.#nextTime < this.#ctx.currentTime + SCHEDULE_AHEAD) {
-      if (this.#step % STEPS_PER_BAR === 0 && this.#mood !== this.#playing) { this.#playing = this.#mood; this.#step = 0; this.#pass = 0; }
-      const tense = this.#playing === 'tense';
-      if (tense) this.#playTenseStep(this.#step, this.#nextTime); else this.#playStep(this.#step, this.#nextTime);
-      this.#nextTime += tense ? STEP * .8 : STEP; this.#step++;
-      if (this.#step >= MOODS[this.#playing].length * STEPS_PER_BAR) { this.#step = 0; this.#pass++; }
+      if (this.#step % STEPS_PER_BAR === 0) {
+        if (this.#mood !== this.#playing) { this.#playing = this.#mood; this.#step = 0; this.#pass = 0; }
+        else if (this.#skip && this.#playing === 'calm') { this.#skip = false; this.#track = (this.#track + 1) % TRACKS.length; this.#step = 0; this.#pass = 0; this.#changed(); }
+      }
+      const tense = this.#playing === 'tense', bars = tense ? TENSE_BARS : this.#calm.bars;
+      if (tense) this.#playTenseStep(this.#step, this.#nextTime); else this.#playCalm(this.#step, this.#nextTime);
+      this.#nextTime += this.#stepLen; this.#step++;
+      if (this.#step >= bars.length * STEPS_PER_BAR) {
+        this.#step = 0; this.#pass++;
+        if (!tense && this.#pass >= this.#calm.loops) { this.#track = (this.#track + 1) % TRACKS.length; this.#pass = 0; this.#changed(); }
+      }
     }
   }
   #playTenseStep(step, t) {
@@ -105,6 +165,45 @@ export class AudioManager {
     if (s === 0 || s === 10) bar.chord.forEach(n => this.#tone(out, { freq: midiHz(n + 12), start: t, dur: st * 2, type: 'square', vol: .025 }));
     if (s === 7) this.#tone(out, { freq: midiHz(bar.bass + 18), start: t, dur: st, type: 'square', vol: .03 });
     bar.melody.filter(([at]) => at === s).forEach(([, note, len]) => this.#tone(out, { freq: midiHz(note), start: t, dur: st * len, type: 'triangle', vol: .1, attack: .01 }));
+  }
+  /** One step of whichever calm track is playing. */
+  #playCalm(step, t) {
+    const id = this.#calm.id;
+    if (id === 'pop') return this.#playStep(step, t);
+    const bar = this.#calm.bars[Math.floor(step / STEPS_PER_BAR)], s = step % STEPS_PER_BAR, st = this.#stepLen, out = this.#music;
+    const melody = (type, vol, shift = 0) => bar.melody.filter(([at]) => at === s).forEach(([, note, len]) => this.#tone(out, { freq: midiHz(note + shift), start: t, dur: st * len, type, vol, attack: .015 }));
+    if (id === 'lofi') {
+      // laid-back kick, soft rim, swung hats, warm electric-piano chords
+      if (s === 0 || s === 10) this.#tone(out, { freq: 95, to: 45, start: t, dur: .16, type: 'sine', vol: .2 });
+      if (s === 4 || s === 12) this.#noise(out, { start: t, dur: .06, vol: .035, type: 'bandpass', freq: 2600 });
+      if (s % 2 === 0) this.#noise(out, { start: t + (s % 4 === 2 ? st * .33 : 0), dur: .025, vol: .014, freq: 7500 });
+      if (s === 0) this.#tone(out, { freq: midiHz(bar.bass), start: t, dur: st * 6, type: 'triangle', vol: .22 });
+      if (s === 10) this.#tone(out, { freq: midiHz(bar.bass + 7), start: t, dur: st * 3, type: 'triangle', vol: .18 });
+      if (s === 0 || s === 8) bar.chord.forEach(n => this.#tone(out, { freq: midiHz(n + 12), start: t + .02, dur: st * 7, type: 'triangle', vol: .03, attack: .04 }));
+      melody('triangle', .07);
+    } else if (id === 'bossa') {
+      // clave and shaker, bossa bass, syncopated guitar comping, nylon-like melody
+      if ([0, 3, 6, 10, 12].includes(s)) this.#noise(out, { start: t, dur: .03, vol: .03, type: 'bandpass', freq: 3200 });
+      this.#noise(out, { start: t, dur: .02, vol: s % 2 ? .008 : .014, freq: 9000 });
+      if (s === 0 || s === 8) this.#tone(out, { freq: midiHz(bar.bass), start: t, dur: st * 3, type: 'triangle', vol: .22 });
+      if (s === 6 || s === 14) this.#tone(out, { freq: midiHz(bar.bass + 7), start: t, dur: st * 2, type: 'triangle', vol: .17 });
+      if ([0, 3, 6, 10, 13].includes(s)) bar.chord.forEach(n => this.#tone(out, { freq: midiHz(n), start: t, dur: st * 1.5, type: 'triangle', vol: .03 }));
+      melody('sine', .09);
+    } else if (id === 'city') {
+      // four on the floor, open hat, octave bass, bright arpeggio and pulse lead
+      if (s % 4 === 0) this.#tone(out, { freq: 120, to: 50, start: t, dur: .12, type: 'sine', vol: .22 });
+      if (s === 4 || s === 12) this.#noise(out, { start: t, dur: .1, vol: .05, type: 'bandpass', freq: 1700 });
+      this.#noise(out, { start: t, dur: s === 14 ? .12 : .02, vol: s === 14 ? .02 : .011, freq: 8000 });
+      if (s % 2 === 0) this.#tone(out, { freq: midiHz(bar.bass + (s % 4 === 2 ? 12 : 0)), start: t, dur: st * 1.2, type: 'sawtooth', vol: .045 });
+      if (s % 2 === 1) this.#tone(out, { freq: midiHz(bar.chord[(s >> 1) % bar.chord.length] + 12), start: t, dur: st * .9, type: 'square', vol: .02 });
+      melody('square', .05);
+    } else if (id === 'night') {
+      // slow pads, a soft heartbeat and a bell melody an octave up
+      if (s === 0) bar.chord.forEach(n => this.#tone(out, { freq: midiHz(n), start: t, dur: st * 16, type: 'triangle', vol: .035, attack: .5 }));
+      if (s === 0) this.#tone(out, { freq: midiHz(bar.bass), start: t, dur: st * 14, type: 'sine', vol: .2, attack: .2 });
+      if (s % 4 === 2) this.#noise(out, { start: t, dur: .05, vol: .01, freq: 6000 });
+      melody('sine', .07, 12);
+    }
   }
   #playStep(step, t) {
     const out = this.#music, bar = BARS[Math.floor(step / STEPS_PER_BAR)], s = step % STEPS_PER_BAR;
