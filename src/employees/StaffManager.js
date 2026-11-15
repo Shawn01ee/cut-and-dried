@@ -1,4 +1,4 @@
-import { Employee } from './Employee.js';
+import { Employee, RAISE, GRUDGE_DAYS } from './Employee.js';
 
 /**
  * The stylists who can be hired. Skills run 0 to 100; the specialty adds +10 on top.
@@ -65,7 +65,7 @@ const SUPPORT = [
 /** Performance pay as a share of each stylist's takings: steadier staff and a small skill lift, at a cost. */
 export const COMMISSION = [0, .05, .1, .15];
 const COMMISSION_BOOST = [0, 2, 4, 6], COMMISSION_CALM = [1, .85, .7, .55];
-export const BONUS = 200, LEAVE_DAYS = 2, DINNER_PER_HEAD = 45, MARKETING_COURSE = 400;
+export const BONUS = 200, LEAVE_DAYS = 2, RESIGN_LEAVE = 3, DINNER_PER_HEAD = 45, MARKETING_COURSE = 400;
 export const RESIGN_STRESS = 85;
 
 /** Owns the roster: who can be hired, who works here, what they cost and how they are holding up. */
@@ -107,7 +107,28 @@ export class StaffManager {
   trainMarketing(e) { if (!e.hired || (e.skills.marketing || 0) >= 100 || !this.economy.spend('training', this.marketingCourseCost(e))) return false; e.skills.marketing = Math.min(100, (e.skills.marketing || 0) + 10); this.version++; return true; }
   giveBonus(e) { if (!e.hired || !this.economy.spend('bonus', BONUS)) return false; e.addStress(-25); this.version++; return true; }
   /** Two days of paid leave from tomorrow. Someone else has to cover the chair. */
-  sendOnLeave(e, day) { if (!e.hired || e.leaveBooked(day)) return false; e.leaveFrom = day + 1; e.leaveTo = day + LEAVE_DAYS; this.version++; return true; }
+  sendOnLeave(e, day, days = LEAVE_DAYS) { if (!e.hired || e.leaveBooked(day)) return false; e.leaveFrom = day + 1; e.leaveTo = day + days; this.version++; return true; }
+  /**
+   * The chance of talking a stylist out of quitting: better the more experienced Lia is and the longer they have
+   * worked here, worse each time it has been tried before.
+   */
+  persuadeChance(e) { return Math.min(.85, Math.max(.15, .45 + this.owner.level * .05 + (e.daysEmployed >= 30 ? .1 : 0) - e.persuaded * .15)); }
+  /**
+   * Answers a stylist who wants to quit. `how` is bonus, talk, raise, leave or go. Returns whether they stay;
+   * a talk that fails, or letting them go, means they leave tonight.
+   */
+  answerResignation(e, how, day) {
+    if (!e.hired) return false;
+    if (how === 'bonus') { this.economy.charge('bonus', e.salary * 2); e.addStress(-45); }
+    else if (how === 'raise') { e.raises++; e.salary = Math.round(e.baseSalary * RAISE ** e.raises); e.addStress(-30); }
+    else if (how === 'leave') { if (!this.sendOnLeave(e, day, RESIGN_LEAVE)) return this.answerResignation(e, 'go', day); e.addStress(-35); }
+    else if (how === 'talk') {
+      const stays = Math.random() < this.persuadeChance(e); e.persuaded++;
+      if (!stays) { e.quits = true; this.version++; return false; }
+      e.grudge = GRUDGE_DAYS; e.addStress(-15);
+    } else { e.quits = true; this.version++; return false; }
+    this.version++; return true;
+  }
   dinnerCost() { return DINNER_PER_HEAD * (1 + this.hired.length + this.support.filter(e => e.hired).length); }
   /** A team dinner once a day: everyone unwinds a little. */
   teamDinner(day) { if (this.dinnerDay === day || !this.hired.length || !this.economy.spend('bonus', this.dinnerCost())) return false; this.dinnerDay = day; this.hired.forEach(e => e.addStress(-12)); this.version++; return true; }
@@ -136,7 +157,7 @@ export class StaffManager {
       const load = e.fatigue * .2 + Math.max(0, e.today.served - 4) * 3 + 2 + overtime * 4;
       e.carry = Math.round(e.fatigue * overtime * .08);
       e.addStress(load * calm * (e.perk === 'calm' ? .6 : 1) / restRate - (restRate > 1 ? 4 : 0));
-      e.daysEmployed++;
+      e.daysEmployed++; if (e.grudge > 0) e.grudge--;
       if (e.stress >= RESIGN_STRESS) quitting.push(e);
     }
     this.version++;

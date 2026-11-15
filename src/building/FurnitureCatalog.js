@@ -40,8 +40,8 @@ export const FURNITURE = {
   cafeBar: { price: 3000, comfort: 2, w: 3, d: 1, minTier: 4, max: 1, dailySales: 80, needs: [[0, .6]] },
   // Older pieces, kept so earlier saves still load; no longer sold.
   basin: { price: 600, comfort: 1, w: 2, d: 2, needs: [[.25, .75], [-.45, .75]], legacy: true },
-  shampoo: { price: 800, comfort: 1, speedBonus: .1, legacy: true },
-  colour: { price: 900, comfort: 1, speedBonus: .05, requires: 'colour' },
+  shampoo: { price: 800, comfort: 1, speedBonus: .1, speedFor: 'shampoo', legacy: true },
+  colour: { price: 900, comfort: 1, speedBonus: .05, speedFor: 'colour', requires: 'colour' },
   staffRoom: { price: 1000, comfort: 0, w: 2, d: 1, staffRest: true, requires: 'staff' },
   coffeeBar: { price: 700, comfort: 1, w: 2, d: 1 },
 };

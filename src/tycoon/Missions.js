@@ -12,7 +12,7 @@ import { pick } from '../core/math.js';
 const KINDS = {
   serve: { from: 1, who: 'ruby', reward: 60, goal: lv => 4 + lv * 2 },
   happy: { from: 1, who: 'lia', reward: 80, goal: lv => 2 + lv },
-  comfort: { from: 1, who: 'ruby', reward: 70, state: true, needs: 'furniture', goal: (lv, now) => now + 2 + Math.floor(lv / 2) },
+  comfort: { from: 1, who: 'ruby', reward: 70, state: true, needs: 'furniture', goal: (lv, now) => now + 2 + Math.floor(lv / 2), cap: 25 },
   reply: { from: 1, who: 'ruby', reward: 50, goal: lv => 3 + lv },
   post: { from: 1, who: 'ruby', reward: 60, needs: 'marketing', goal: lv => 2 + Math.ceil(lv / 2) },
   five: { from: 1, who: 'shawn', reward: 80, goal: lv => 1 + Math.ceil(lv / 2) },
@@ -67,7 +67,9 @@ export class Missions {
   toJSON() { return { open: this.open, done: this.done, earned: this.earned }; }
   restore(d) {
     if (!d) return;
-    Object.assign(this, { open: (d.open || []).filter(m => KINDS[m.kind]).map(m => ({ line: 0, ...m })), done: d.done || 0, earned: d.earned || 0 });
+    // goals set before a cap existed are brought within reach
+    const reach = m => { const cap = KINDS[m.kind].cap; return cap == null ? m : { ...m, goal: Math.min(m.goal, cap), progress: Math.min(m.progress, cap) }; };
+    Object.assign(this, { open: (d.open || []).filter(m => KINDS[m.kind]).map(m => reach({ line: 0, ...m })), done: d.done || 0, earned: d.earned || 0 });
     this.version++;
   }
 }

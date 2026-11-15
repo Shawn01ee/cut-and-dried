@@ -111,7 +111,8 @@ export class TycoonGame {
   /** The synergies today's team has. */
   get synergies() { const T = teamOf([this.staff.owner, ...this.staff.working(this.clock.day)], this.staff.support); return SYNERGIES.filter(s => s.has(T)); }
   /** How much quicker a service of `type` goes: equipment, then the team's synergies. */
-  speedFor(type) { return this.layout.speedBonus * this.processSpeedFor(type); }
+  /** How fast a kind of service goes at a salon: its furniture and today's team synergies. */
+  speedFor(type, site = 0) { return this.layout.speedBonusAt(site, type) * this.processSpeedFor(type); }
   /** How much quicker colour or perm processes: only the team's synergies change that. */
   processSpeedFor(type) { return this.synergies.reduce((k, s) => k * ((s.speed && s.speed[type]) || 1), 1); }
   /** Synergy boosts to skills: the base boost from performance pay, plus mentoring for juniors. */
@@ -166,7 +167,7 @@ export class TycoonGame {
     if (c.vip) { const k = this.synergies.reduce((m, x) => m * (x.vipPatience || 1), 1); c.pat *= k; c.maxPat *= k; }
     return c;
   }
-  serviceProfileOf(worker) { return worker.serviceProfile(this.layout.speedBonus); }
+  serviceProfileOf(worker, site = 0) { return worker.serviceProfile(this.layout.speedBonusAt(site, 'cut')); }
   chargeMaterials(ops) { ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', MATERIALS[op.type]); }); }
   completeService(customer, worker, byOwner) {
     const comfort = this.comfortAt(customer.site || 0), syn = this.synergies, result = this.evaluator.evaluate(customer, worker, comfort, {

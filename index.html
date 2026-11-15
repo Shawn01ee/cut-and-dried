@@ -130,8 +130,10 @@ body.closeup #hud,body.closeup #ctrl{display:none}
 #incident{position:fixed;left:50%;top:96px;transform:translateX(-50%);display:none;padding:7px 10px;font-size:16px;text-align:center;min-width:240px;max-width:min(92vw,420px);z-index:6}
 #incident.show{display:block}
 #incident .itext{margin:4px 0 6px}
-#incident .ibtns{display:flex;gap:6px;justify-content:center}
-#incident .ibtns button{flex:1;padding:4px 6px}
+#incident .ibtns{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+#incident .ibtns button{flex:1;padding:4px 6px}#incident .ibtns button b{font-weight:400}
+#incident .ibtns.list{flex-direction:column;gap:4px}#incident .ibtns.list button{display:flex;justify-content:space-between;align-items:baseline;gap:12px;text-align:left;padding:5px 8px}
+#incident .ibtns.list button b{white-space:nowrap}#incident .ibtns.list button span{color:#9c98a2;font-size:.85em;text-align:right}#incident .ibtns.list button:hover span{color:#dcd9dc}
 #incident .tbar{height:3px;background:#2a2633;margin-top:6px}
 #incident .tbar i{display:block;height:100%;width:100%;background:#ffd98a}
 body.inmenu #incident{display:none}
