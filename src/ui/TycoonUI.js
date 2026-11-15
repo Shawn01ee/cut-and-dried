@@ -13,6 +13,7 @@ import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS, HAIR_SHOW } from
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
 import { dateOf, seasonOf, eventsOn, nextEvent, SEASONS } from '../tycoon/Calendar.js';
+import { WEATHER, SURPRISES } from '../tycoon/Weather.js';
 import { ReviewRewards, milestoneBase, ratingMultiplier, streakPay } from '../tycoon/ReviewRewards.js';
 import { INVESTMENTS, LOANS, MISSION, MAX_SHARE } from '../tycoon/Finance.js';
 import { missionWho } from '../tycoon/Missions.js';
@@ -35,7 +36,7 @@ export class TycoonUI {
   key(page) {
     const g = this.game, b = this.build.active;
     return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, g.layout.branchTier, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
-      g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage, Object.values(this.bizSub).join(), this.ladderSort, this.clientPage, this.buildPage, this.shopCat, this.ownedCat, g.layout.items.map(it => it.id).join(), g.regularBook.version, g.special && g.special.state, g.specialLog.length].join('|');
+      g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.weather, g.surprise && g.surprise.state, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage, Object.values(this.bizSub).join(), this.ladderSort, this.clientPage, this.buildPage, this.shopCat, this.ownedCat, g.layout.items.map(it => it.id).join(), g.regularBook.version, g.special && g.special.state, g.specialLog.length].join('|');
   }
   render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#clients(), prog: () => this.#growth() }[page](); }
 
@@ -220,7 +221,8 @@ export class TycoonUI {
   #calendar() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, day = g.clock.day, d = dateOf(day), season = seasonOf(day), nx = nextEvent(day);
     const fx = f => Object.entries(f).filter(([k, v]) => typeof v === 'number' && !['month', 'from', 'to'].includes(k) && t('fx.' + k) !== 'fx.' + k).map(([k, v]) => t('fx.' + k) + ' ×' + (Math.round(v * 100) / 100)).join(' · ');
-    const rows = [[t('season.' + season), fx(SEASONS[season]) || t('cal.plain')], ...eventsOn(day).map(e => [t('ev.' + e.id), fx(e)]), ...(g.happening ? [[t('hap.' + g.happening.id + '.t'), g.happening.kind === 'inspection' ? t(g.happening.pass ? 'cal.inspPass' : 'cal.inspFail') : fx(g.happeningFx) || t('cal.handled')]] : []), ...(day <= g.trendUntil ? [[t('hap.trend.t'), t('cal.until', g.trendUntil - day + 1)]] : [])];
+    const su = g.surprise && g.surprise.state !== 'due' ? g.surprise : null;
+    const rows = [[t('season.' + season), fx(SEASONS[season]) || t('cal.plain')], [t('wx.' + g.weather), fx(WEATHER[g.weather]) || t('cal.plain')], ...(su ? [[t('su.' + su.id + '.t'), (def => su.state === 'fixed' ? t('cal.handled') : def.followers ? t('su.followers', def.followers) : def.walkIns ? t('su.walkIns', def.walkIns) : g.surpriseFx.drinks === 0 ? t('fx.noDrinks') : fx(g.surpriseFx) || t('cal.handled'))(SURPRISES.find(x => x.id === su.id))]] : []), ...eventsOn(day).map(e => [t('ev.' + e.id), fx(e)]), ...(g.happening ? [[t('hap.' + g.happening.id + '.t'), g.happening.kind === 'inspection' ? t(g.happening.pass ? 'cal.inspPass' : 'cal.inspFail') : fx(g.happeningFx) || t('cal.handled')]] : []), ...(day <= g.trendUntil ? [[t('hap.trend.t'), t('cal.until', g.trendUntil - day + 1)]] : [])];
     return `<div class="bsec"><h4>${t('cal.title', d.month, d.date)}</h4>${rows.map(([a, b]) => `<div class="brow"><span>${a}</span><span class="sp"></span><span class="dim">${b}</span></div>`).join('')}${nx ? `<div class="dim">${t('cal.next', t('ev.' + nx.event.id), nx.in)}</div>` : ''}</div>`;
   }
   #demand() {
