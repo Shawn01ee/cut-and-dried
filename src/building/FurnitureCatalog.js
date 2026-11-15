@@ -37,6 +37,19 @@ export const FURNITURE = {
   stockroom: { price: 1200, comfort: 0, w: 2, d: 2, minTier: 1, max: 1, materials: .8 },
   cctv: { price: 400, comfort: 0, max: 1, catchDasher: .8 },
   airPurifier: { price: 650, comfort: 1, max: 1, cleanAir: .5 },
+  sharpener: { price: 500, comfort: 0, max: 1, speedBonus: .1, speedFor: 'cut' },
+  digitalPerm: { price: 1100, comfort: 0, max: 1, speedBonus: .15, speedFor: 'wave', requires: 'perm' },
+  proDryer: { price: 600, comfort: 0, max: 1, speedBonus: .15, speedFor: 'dry' },
+  scalpScanner: { price: 900, comfort: 0, max: 1, treatment: .15, requires: 'treatment' },
+  champagneFridge: { price: 800, comfort: 1, max: 1, vipPay: 1.1, requires: 'vip' },
+  chargingStation: { price: 250, comfort: 0, max: 1, patience: 1.05 },
+  signboard: { price: 350, comfort: 0, max: 1, demand: 1.05 },
+  neonSign: { price: 800, comfort: 1, max: 1, dailyFollowers: 20 },
+  vendingMachine: { price: 700, comfort: 0, max: 1, dailySales: 40, needs: [[0, .6]] },
+  massageChair: { price: 1300, comfort: 0, w: 2, d: 1, minTier: 1, max: 1, staffTire: .75 },
+  aromaDiffuser: { price: 400, comfort: 1, max: 1, calmStress: .5 },
+  // `vacuum`: bits of hair it clears from the floor per game hour.
+  robotVacuum: { price: 900, comfort: 0, max: 1, vacuum: 30 },
   // A shampoo booth: basin, reclining chair and oak screens. Clients are washed here before their chair.
   shampooBooth: { price: 900, comfort: 2, w: 3, d: 3, max: [3, 3, 3, 4, 5, 6], needs: [[0, 1]] },
   // Pieces that open as the salon grows (`minTier` is the salon size).
@@ -59,6 +72,15 @@ export const seatApproach = ([x, z, t = 0]) => [x + Math.round(Math.sin(t * Math
 /** Pieces sold in the furniture list. Styling chairs have their own button; the desk cannot be bought twice. */
 export const FURNITURE_IDS = Object.keys(FURNITURE).filter(id => id !== 'station' && id !== 'desk' && !FURNITURE[id].legacy);
 export const CHAIR_PRICE = FURNITURE.station.price;
+/** Shop and inventory categories: services, the front of house, running the salon, selling and promotion, and decoration. */
+export const CATEGORIES = {
+  service: ['station', 'processIsland', 'shampooBooth', 'spaBooth', 'vipRoom', 'colour', 'towelStation', 'sterilizer', 'sharpener', 'digitalPerm', 'proDryer', 'scalpScanner', 'island', 'basin', 'shampoo', 'dryer'],
+  waiting: ['desk', 'bench', 'bench2', 'sofa', 'kiosk', 'chargingStation', 'champagneFridge', 'coffeeBar', 'cafeBar', 'wardrobe'],
+  ops: ['staffRoom', 'academy', 'stockroom', 'cctv', 'airPurifier', 'massageChair', 'aromaDiffuser', 'robotVacuum'],
+  sales: ['displayTable', 'shelf', 'vendingMachine', 'photoZone', 'signboard', 'neonSign'],
+  deco: ['partition', 'loungeRug', 'plant', 'lamp', 'rug', 'mat', 'sideTable', 'mirror', 'bookcase'],
+};
+export const categoryOf = id => Object.keys(CATEGORIES).find(k => CATEGORIES[k].includes(id)) || 'deco';
 export const chairsOn = id => FURNITURE[id].chairs ? FURNITURE[id].chairs.length : 0;
 /** The second salon grows twice: a back room, then the shop beside it. */
 export const BRANCH_EXPANSIONS = [{ cost: 20000, requires: 'branches' }, { cost: 38000, requires: 'branchGrow' }];
