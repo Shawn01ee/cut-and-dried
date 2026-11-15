@@ -11,18 +11,18 @@ const index = list => Math.floor(Math.random() * list.length);
 export class CustomerFactory {
   #nextId = 0;
 
-  create(usedNames, { colour, perm, advancedCuts, vipChance, priceMultiplier, patienceMultiplier, budgetFactor = 1, villain = null, influencer = null }) {
+  create(usedNames, { colour, perm, advancedCuts, vipChance, priceMultiplier, patienceMultiplier, budgetFactor = 1, villain = null, influencer = null, colourBias = 1, permBias = 1 }) {
     // About four in ten clients are men: mostly short hair, fewer colours and perms.
     const male = Math.random() < .42, natI = index(NATURAL), nat = NATURAL[natI];
     const L0 = male ? (Math.random() < .12 ? rand(14, 30) : rand(4, 12)) : rand(14, 58), w0 = Math.random() < (male ? .75 : .6) ? rand(0, .4) : rand(.8, 2.4);
     const lab = hexLab(nat[1]); lab.L += rand(-.02, .02);
     const hair = { len: STR.map(s => Math.max(3, L0 * (s.z === 3 ? rand(.8, 1) : 1) + rand(-2.5, 2.5))), lab, wave: w0, damage: rand(0, .5) };
-    let wave = Math.random() < (male ? .8 : .45) ? Math.round(clamp(w0, 0, 3)) : pick(male ? [0, 1, 1] : [0, 1, 1, 2, 2, 3]);
+    let wave = Math.random() >= clamp((male ? .2 : .55) * permBias, 0, .95) ? Math.round(clamp(w0, 0, 3)) : pick(male ? [0, 1, 1] : [0, 1, 1, 2, 2, 3]);
     if (!perm) { wave = Math.round(clamp(w0, 0, 3)); hair.wave = wave; }
     const shape = male ? pick(advancedCuts ? ['Undercut', 'Undercut', 'Layered', 'Blunt'] : ['Blunt', 'Layered', 'Layered']) : pick(advancedCuts ? ['Blunt', 'Blunt', 'Layered', 'Layered', 'A-line', 'Undercut'] : ['Blunt', 'Blunt', 'Layered']);
     const L = this.#targetLength(hair, shape, wave);
     let col = { t: 'nat', i: natI }, targetLab = { ...lab }, recolour = false;
-    if (colour && Math.random() >= (male ? .7 : .33)) {
+    if (colour && Math.random() < clamp((male ? .3 : .67) * colourBias, 0, .95)) {
       let wi; do { wi = index(WANT); } while (labDist(hexLab(WANT[wi][1]), lab) < .05);
       col = { t: 'want', i: wi }; targetLab = hexLab(WANT[wi][1]); recolour = true;
     }
