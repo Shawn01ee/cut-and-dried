@@ -16,6 +16,9 @@ const SETTLING_DAYS = 3, SETTLING_PENALTY = 6;
  * A stylist's data: skills, level, tiredness within the day and stress that builds up across days.
  * `fig` is a rendering handle attached by the scene and never saved.
  */
+/** Skills lost while sulking after being talked out of quitting, and how much each pay rise adds. */
+export const GRUDGE_PENALTY = 12, GRUDGE_DAYS = 5, RAISE = 1.15;
+
 export class Employee {
   constructor({ id, name, gender = null, hairdo = null, shades = false, beard = false, skin = null, role, style, rank = 'designer', unlock = null, specialty = null, perk = null, skills, salary, hireCost = 0, bias = 0, fine = false, single = false, apron, hair, long = false }) {
     Object.assign(this, { id, name, role, style, rank, unlock, specialty, perk, skills: { ...skills }, salary, hireCost, bias, fine, single, apron, hair, long });
@@ -24,6 +27,8 @@ export class Employee {
     this.stamina = 100; this.experience = 0; this.level = 1; this.status = 'idle'; this.assignedCustomer = null;
     this.hired = false; this.restUntil = 0; this.stats = { served: 0, sum: 0, earn: 0 }; this.today = { served: 0, earn: 0 }; this.fig = null;
     this.stress = 0; this.leaveFrom = 0; this.leaveTo = 0; this.daysEmployed = 0; this.boost = 0;
+    // `grudge`: days left of sulking after being talked out of quitting; `persuaded`: how often that has happened; `raises`: pay rises given.
+    this.grudge = 0; this.persuaded = 0; this.raises = 0; this.baseSalary = salary;
   }
   get fatigue() { return 100 - this.stamina; }
   get trainingCost() { return 250 * this.level; }
@@ -34,7 +39,7 @@ export class Employee {
   leaveBooked(day) { return this.leaveTo >= day; }
   /** Skills with the specialty bonus, incentives and the settling-in dip applied. */
   get effectiveSkills() {
-    const s = { ...this.skills }, key = SPECIALTY_SKILL[this.specialty], shift = this.boost - (this.settling ? SETTLING_PENALTY : 0);
+    const s = { ...this.skills }, key = SPECIALTY_SKILL[this.specialty], shift = this.boost - (this.settling ? SETTLING_PENALTY : 0) - (this.grudge > 0 ? GRUDGE_PENALTY : 0);
     if (key) s[key] += SPECIALTY_BONUS;
     for (const k of ['cutting', 'colouring', 'perming', 'speed', 'customerService']) s[k] = clamp(s[k] + shift, 0, 100);
     return s;
@@ -82,13 +87,14 @@ export class Employee {
     if (key) this.skills[key] = Math.min(100, this.skills[key] + 2);
   }
   recordService(satisfaction, payment) { this.stats.served++; this.stats.sum += satisfaction; this.stats.earn += payment; this.today.served++; this.today.earn += payment; }
-  toJSON() { return { id: this.id, site: this.site, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
+  toJSON() { return { id: this.id, site: this.site, grudge: this.grudge, persuaded: this.persuaded, raises: this.raises, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
   restore(data) {
     // Someone who has never worked here keeps today's skills, so balance changes reach older saves too.
     const worked = data.hired || data.level > 1 || data.experience > 0 || (data.stats && data.stats.served > 0);
     Object.assign(this, { skills: worked ? { ...this.skills, ...data.skills } : this.skills, experience: data.experience, level: data.level, hired: data.hired, stats: data.stats });
     // Fields added later default to a settled, rested stylist.
     if (data.site !== undefined) this.site = data.site;
+    this.grudge = data.grudge || 0; this.persuaded = data.persuaded || 0; this.raises = data.raises || 0; this.salary = Math.round(this.baseSalary * RAISE ** this.raises);
     Object.assign(this, { stress: data.stress || 0, leaveFrom: data.leaveFrom || 0, leaveTo: data.leaveTo || 0, daysEmployed: data.daysEmployed ?? 99 });
   }
 }

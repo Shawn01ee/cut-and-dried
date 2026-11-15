@@ -2,7 +2,7 @@ import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS } from '../building/F
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
 import { portraitURL, crownURL } from './Portrait.js';
 import { REVIEW_REP } from '../tycoon/TycoonGame.js';
-import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION } from '../employees/Employee.js';
+import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION, GRUDGE_PENALTY } from '../employees/Employee.js';
 import { clamp } from '../core/math.js';
 // Which skill each specialty raises, to highlight it on the card.
 const SPECIAL_SKILL = { cut: 'cutting', colour: 'colouring', perm: 'perming' };
@@ -37,6 +37,8 @@ export class TycoonUI {
     else if (e.leaveBooked(day)) tags.push(`<span class="gold">${t('st2.leaveSoon')}</span>`);
     else if (!this.hooks.hasChair(e)) tags.push(`<span class="dim">${t('st2.bench')}</span>`);
     if (e.settling) tags.push(`<span class="dim">${t('st2.settling')}</span>`);
+    if (e.grudge > 0) tags.push(`<span class="bad">${t('st2.grudge', e.grudge, GRUDGE_PENALTY)}</span>`);
+    if (e.raises) tags.push(`<span class="dim">${t('st2.raised', e.raises)}</span>`);
     return tags.join(' ');
   }
   #staffRow(e) {
@@ -49,7 +51,8 @@ export class TycoonUI {
     }
     const info = owner ? t('staff.ownerLv', e.level, e.experience, e.experienceToNext) + ' · ' + t('staff.you')
       : e.hired ? `${t('staff.pay', e.level, e.salary, Math.round(e.fatigue), e.experience, e.experienceToNext)} · <span class="${level(e.stress)}">${t('staff.stress', Math.round(e.stress))}</span> ${this.#status(e)}` : t('staff.wage', e.salary);
-    const times = `${t('staff.times', e.totalMinutes('cut', g.speedFor('cut'), g.processSpeedFor('cut')), e.totalMinutes('colour', g.speedFor('colour'), g.processSpeedFor('colour')), e.totalMinutes('wave', g.speedFor('wave'), g.processSpeedFor('wave')), e.totalMinutes('dry', g.speedFor('dry'), g.processSpeedFor('dry')))}`;
+    const seat = this.hooks.seatOf(e), at = seat >= 0 ? this.hooks.seats()[seat].site : 0, mins = k => e.totalMinutes(k, g.speedFor(k, at), g.processSpeedFor(k));
+    const times = `${t('staff.times', mins('cut'), mins('colour'), mins('wave'), mins('dry'))}`;
     const r = g.reviews.ratingFor(e.name), perf = e.hired ? `${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
     const special = SPECIAL_SKILL[e.specialty], stats = [['cut', s.cutting, 'cutting'], ['colour', s.colouring, 'colouring'], ['perm', s.perming, 'perming'], ['speed', s.speed, 'speed'], ['service', s.customerService, 'customerService']];
     const rows = [[e.specialty ? 'special' : null, `<span class="gold">${e.specialty ? t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100)) : ''}</span>`],
@@ -167,7 +170,7 @@ export class TycoonUI {
     const by = this.ladderSort, th = (k, label) => `<th class="${by === k ? 'on' : ''}">${t(label)}</th>`;
     const sorts = `<div class="seg ssub">${['earn', 'today', 'sat', 'rating', 'served'].map(k => `<button data-do="lsort:${k}" class="${by === k ? 'sel' : ''}">${t('lsort.' + k)}</button>`).join('')}</div>`;
     if (page === 'rank') return `${tabs}${sorts}<div class="bsec"><h4>${t('biz.ladder')}</h4><table class="lad"><tr><th>#</th><th>${t('lad.stylist')}</th>${th('served', 'lad.done')}${th('sat', 'lad.avg')}${th('rating', 'lad.rating')}${th('today', 'lad.today')}${th('earn', 'lad.earn')}</tr>${rows.map((s, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}"><td>${i + 1}</td><td style="color:${nameColour(s)}">${rankMark(s)}${this.i18n.name(s.name)}</td><td>${s.stats.served}</td><td>${s.stats.served ? Math.round(s.stats.sum / s.stats.served * 100) + '%' : '–'}</td><td>${rated(s)}</td><td>$${s.today.earn.toLocaleString()}</td><td>$${s.stats.earn.toLocaleString()}</td></tr>`).join('')}</table></div>`;
-    return tabs + sub(['today', 'month', 'costs']) + { today: () => `<div class="bsec"><h4>${t('biz.finance')}</h4>${line('biz.cash', money(e.cash))}${line('biz.rev', money(e.dailyRevenue))}${line('biz.exp', money(-e.dailyOperatingCost))}${line('biz.profit', money(e.dailyProfit))}${e.dailyInvestment ? line('biz.invest', money(-e.dailyInvestment)) : ''}${line('biz.total', g.served)}${line('biz.sat', g.served ? Math.round(g.averageSatisfaction * 100) + '%' : '–')}${line('biz.rep', rep.starText + ' ' + Math.floor(rep.value))}${line('biz.comfort', g.comfort)}${line('biz.regulars', g.regulars)}</div>`, month: () => this.#month(), costs: () => costs }[this.bizSub.money]();
+    return tabs + sub(['today', 'month', 'costs']) + { today: () => `<div class="bsec"><h4>${t('biz.finance')}</h4>${line('biz.cash', money(e.cash))}${line('biz.rev', money(e.dailyRevenue))}${line('biz.exp', money(-e.dailyOperatingCost))}${line('biz.profit', money(e.dailyProfit))}${e.dailyInvestment ? line('biz.invest', money(-e.dailyInvestment)) : ''}${line('biz.total', g.served)}${line('biz.sat', g.served ? Math.round(g.averageSatisfaction * 100) + '%' : '–')}${line('biz.rep', rep.starText + ' ' + Math.floor(rep.value))}${line('biz.comfort', `${g.comfort} <span class="dim">(${t('biz.comfortMax')})</span>`)}${line('biz.regulars', g.regulars)}</div>`, month: () => this.#month(), costs: () => costs }[this.bizSub.money]();
   }
   /** Where today's clients come from. */
   #demand() {
