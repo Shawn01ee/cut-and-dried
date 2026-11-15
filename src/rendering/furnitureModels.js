@@ -106,6 +106,30 @@ export const FURNITURE_MODELS = {
     [[-.25, -.2, 0x2f6fd6], [-.1, -.22, 0xe25c8f], [.08, -.2, 0x1fa39a], [.24, -.22, 0xffd98a], [-.2, .15, 0xf6f3ee], [-.05, .17, 0xd8314a]].forEach(([x, z, c]) => g.box(.09, .18, .09, c, x, .83, z));
     g.box(.16, .2, .16, 0xb88a5a, .22, .84, .18).box(.22, .26, .22, 0x3a7a3a, .22, 1.05, .18);
   },
+  // a scissor sharpener on a small workbench
+  sharpener: (g, fx) => { g.box(.42, .7, .34, 0x8a6040, 0, .35, 0).box(.46, .04, .38, 0x3a2618, 0, .72, 0).box(.2, .12, .16, 0x45404f, -.06, .8, 0).box(.04, .2, .2, 0xbdb9c0, .1, .86, 0).box(.12, .02, .03, 0xdcd9dc, -.1, .75, .12); fx.glow(.03, .03, .02, -.06, .84, .09); },
+  // a digital perm machine: a pole with the heater box and its coloured rods hanging down
+  digitalPerm: (g, fx) => { g.box(.34, .04, .34, 0x1d1a26, 0, .02, 0).box(.06, 1.3, .06, 0xbdb9c0, 0, .67, 0).box(.4, .32, .26, 0xf6f3ee, 0, 1.4, 0).box(.3, .12, .02, 0x7fb6f0, 0, 1.44, .14); [-.15, -.05, .05, .15].forEach((x, k) => g.box(.025, .5, .025, [0xe25c8f, 0xffd98a, 0x1fa39a, 0x2f6fd6][k], x, 1.0, .1)); fx.glow(.28, .1, .02, 0, 1.44, .15); },
+  // a professional dryer rack: a dark cabinet with three dryers on hooks
+  proDryer: g => { g.box(.44, .9, .3, 0x1d1a26, 0, .45, 0).box(.46, .04, .32, 0x45404f, 0, .92, 0).box(.42, .5, .04, 0x2e2a38, 0, 1.2, -.14); [-.13, 0, .13].forEach((x, k) => g.box(.08, .2, .1, [0xe25c8f, 0xf6f3ee, 0x1d1a26][k], x, 1.25, -.08).box(.04, .1, .04, 0x45404f, x, 1.1, -.08)); },
+  // a scalp scanner: a white cart with a screen and a handheld camera
+  scalpScanner: (g, fx) => { g.box(.36, .7, .3, 0xf6f3ee, 0, .35, 0).box(.38, .03, .32, 0xbdb9c0, 0, .71, 0).box(.32, .24, .04, 0x1d1a26, 0, .9, -.08).box(.28, .2, .02, 0x8fc25a, 0, .9, -.06).box(.05, .14, .05, 0xdcd9dc, .14, .8, .08); fx.glow(.26, .18, .02, 0, .9, -.05); },
+  // a champagne fridge with a lit glass door
+  champagneFridge: (g, fx) => { g.box(.44, .9, .4, 0x2e2a38, 0, .45, 0).box(.36, .76, .02, 0x7fb6f0, 0, .48, .2); [.25, .5, .75].forEach(y => [-.1, 0, .1].forEach(x => g.box(.05, .14, .05, 0x2d4a3a, x, y, .12))); g.box(.04, .3, .03, 0xbdb9c0, .16, .5, .22); fx.glow(.32, .7, .02, 0, .48, .21); },
+  // a phone charging tower with coloured cables
+  chargingStation: (g, fx) => { g.box(.3, .04, .3, 0x45404f, 0, .02, 0).box(.22, 1.0, .22, 0xdcd9dc, 0, .52, 0).box(.18, .12, .02, 0x1d1a26, 0, .9, .12); [[0xe25c8f, .6], [0x1fa39a, .5], [0xffd98a, .4]].forEach(([c, y]) => g.box(.12, .02, .03, c, 0, y, .12)); fx.glow(.14, .08, .02, 0, .9, .13); },
+  // an A-board with chalk prices
+  signboard: g => { g.box(.5, .04, .24, 0x3a2618, 0, .02, 0).box(.04, .9, .04, 0x8a6040, -.22, .45, 0).box(.04, .9, .04, 0x8a6040, .22, .45, 0).box(.44, .7, .04, 0x1d1a26, 0, .55, .02); [.75, .62, .5, .38].forEach((y, k) => g.box(k ? .3 : .36, .025, .01, k ? 0xf6f3ee : 0xffd98a, 0, y, .045)); },
+  // a pink neon sign on a stand
+  neonSign: (g, fx) => { g.box(.3, .04, .3, 0x1d1a26, 0, .02, 0).box(.05, .9, .05, 0x45404f, 0, .47, 0).box(.56, .4, .04, 0x1d1a26, 0, 1.1, 0); g.box(.4, .03, .02, 0xff9fc4, 0, 1.22, .03).box(.03, .2, .02, 0xff9fc4, -.18, 1.1, .03).box(.3, .03, .02, 0x7fb6f0, .02, 1.0, .03); fx.glow(.46, .3, .02, 0, 1.11, .04); },
+  // a drinks vending machine
+  vendingMachine: (g, fx) => { g.box(.5, 1.5, .44, 0xd8314a, 0, .75, 0).box(.32, .9, .02, 0x7fb6f0, -.05, 1.0, .22); [.7, .95, 1.2].forEach(y => [-.15, -.05, .05].forEach((x, k) => g.box(.06, .12, .04, [0xffd98a, 0x1fa39a, 0xf6f3ee][k], x, y, .2))); g.box(.1, .3, .02, 0xbdb9c0, .18, 1.0, .22).box(.3, .1, .02, 0x1d1a26, -.05, .3, .22); fx.glow(.3, .86, .02, -.05, 1.0, .23); },
+  // a massage chair for the team, deep and reclined
+  massageChair: g => { g.box(.7, .3, .44, 0x45404f, 0, .15, 0).box(.62, .14, .4, 0x2e2a38, 0, .36, .02).box(.62, .7, .14, 0x2e2a38, 0, .72, -.18).box(.1, .3, .44, 0x1d1a26, -.36, .46, 0).box(.1, .3, .44, 0x1d1a26, .36, .46, 0).box(.5, .2, .2, 0x2e2a38, 0, .2, .3).box(.3, .06, .1, 0x8a6040, 0, 1.1, -.18); },
+  // an aroma diffuser on a little stand
+  aromaDiffuser: (g, fx) => { g.box(.3, .6, .3, 0xb88a5a, 0, .3, 0).box(.32, .03, .32, 0x3a2618, 0, .61, 0).box(.14, .16, .14, 0xf6f3ee, 0, .71, 0).box(.06, .04, .06, 0xdcd9dc, 0, .81, 0).box(.04, .14, .04, 0x8a4fc2, .1, .7, .08); fx.glow(.08, .12, .08, 0, .9, 0); },
+  // a robot vacuum on its dock
+  robotVacuum: (g, fx) => { g.box(.34, .2, .1, 0xdcd9dc, 0, .1, -.16).box(.3, .06, .3, 0x1d1a26, 0, .03, .06).box(.22, .02, .22, 0x45404f, 0, .07, .06); g.box(.04, .02, .02, 0x8fc25a, 0, .08, .2); fx.glow(.04, .02, .02, 0, .085, .21); },
   // a self check-in kiosk: a slim stand with a glowing touch screen
   kiosk: (g, fx) => { g.box(.32, .04, .26, 0x1d1a26, 0, .02, 0).box(.1, 1.0, .1, 0xbdb9c0, 0, .52, 0).box(.44, .58, .1, 0x1d1a26, 0, 1.22, 0).box(.38, .5, .02, 0x7fb6f0, 0, 1.22, .06); fx.glow(.36, .46, .02, 0, 1.22, .07); },
   // the towel laundry: a washer under the counter and stacks of fresh towels

@@ -134,7 +134,7 @@ export class TycoonGame {
   get demandParts() {
     return {
       add: { walk: WALK_INS, branch: this.layout.branchOpen ? (WALK_INS + this.comfortAt(1) * .15) * this.branchDeskReach : 0, rep: this.reputation.value * .25, comfort: this.comfort * .15, followers: this.marketing.followerClients, regulars: this.isUnlocked('stamp') ? Math.min(20, this.regulars * .16) : Math.min(15, this.regulars * .12) },
-      mult: { price: PRICE_DEMAND[this.priceLevel], marketing: this.marketing.demandMultiplier, reviews: this.reviews.demandMultiplier, rival: 1 - this.rival.pull(this.standing), award: this.isUnlocked('award') ? 1.1 : 1, calendar: this.dayFx.demand ?? 1, booking: this.isUnlocked('booking') ? 1.08 : 1, fame: this.isUnlocked('hallOfFame') ? 1.05 : 1 },
+      mult: { price: PRICE_DEMAND[this.priceLevel], marketing: this.marketing.demandMultiplier, reviews: this.reviews.demandMultiplier, rival: 1 - this.rival.pull(this.standing), award: this.isUnlocked('award') ? 1.1 : 1, calendar: this.dayFx.demand ?? 1, booking: this.isUnlocked('booking') ? 1.08 : 1, fame: this.isUnlocked('hallOfFame') ? 1.05 : 1, signs: [0, 1].reduce((k, s) => k * (this.layout.countAt('signboard', s) ? FURNITURE.signboard.demand : 1), 1) },
     };
   }
   /** Roughly how many clients want to come per eight hours. There is no cap: seats and chairs decide how many can be served. */
@@ -199,7 +199,7 @@ export class TycoonGame {
     const influencer = walkIn && !reg ? this.marketing.takeInfluencer() : null;
     const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
-      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1) * (this.layout.countAt('kiosk', site) ? FURNITURE.kiosk.patience : 1) * (fx.patience ?? 1),
+      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel], patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1) * (this.layout.countAt('kiosk', site) ? FURNITURE.kiosk.patience : 1) * (this.layout.countAt('chargingStation', site) ? FURNITURE.chargingStation.patience : 1) * (fx.patience ?? 1),
       villain: walkIn && !influencer && !reg ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor * (fx.budget ?? 1),
       colourBias: (fx.colour ?? 1) / (fx.cut ?? 1), permBias: (fx.perm ?? 1) / (fx.cut ?? 1), as: reg,
     });
@@ -235,16 +235,17 @@ export class TycoonGame {
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);
     if (customer.vip && worker.perk === 'vip') result.payment = Math.round(result.payment * 1.2);
     if (customer.vip && customer.vipRoom) result.payment = Math.round(result.payment * 1.25);
+    if (customer.vip && this.layout.countAt('champagneFridge', customer.site || 0)) result.payment = Math.round(result.payment * FURNITURE.champagneFridge.vipPay);
     // A head spa is an add-on the client pays for.
     { const fx = this.dayFx, k = (fx.pay ?? 1) * (customer.requestedService === 'haircut' ? fx.cutPay ?? 1 : 1); if (k !== 1 && !customer.influencer) result.payment = Math.round(result.payment * k); }
     if (customer.spa && !customer.influencer) result.payment += SPA_FEE;
     // A clinic treatment after colour or perm: paid on top, and the hair feels better for it.
-    if (this.isUnlocked('treatment') && !customer.influencer && ['colour', 'perm'].includes(customer.requestedService) && Math.random() < TREATMENT_SHARE) {
+    if (this.isUnlocked('treatment') && !customer.influencer && ['colour', 'perm'].includes(customer.requestedService) && Math.random() < TREATMENT_SHARE + (this.layout.countAt('scalpScanner', customer.site || 0) ? FURNITURE.scalpScanner.treatment : 0)) {
       customer.treatment = true; this.economy.earn('treatment', TREATMENT_FEE); result.satisfaction = Math.min(1, result.satisfaction + .04);
     }
     const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + comfort * .03 : 1);
     this.reputation.add(gain); worker.recordService(result.satisfaction, result.payment);
-    if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate);
+    if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate * (this.layout.countAt('massageChair', customer.site || 0) ? FURNITURE.massageChair.staffTire : 1));
     // A mentor on the team helps everyone else learn faster.
     const learning = this.staff.hasPerk('mentor') && worker.perk !== 'mentor' ? 1.5 : 1;
     if (worker.gainExperience(Math.round((result.specialist ? 15 : 10) * learning))) this.bus.emit('staff:levelup', worker);
@@ -267,7 +268,7 @@ export class TycoonGame {
     if (outcome.dashed) this.incidents.dashed += result.payment;
     // A difficult visit wears on the stylist who did it.
     const worker = this.staff.all.find(e => e.name === result.stylist);
-    if (customer.villain && worker && worker !== this.staff.owner) worker.addStress(outcome.refusedRefund || outcome.refunded || outcome.haggleRefused || outcome.discount ? 7 : 4);
+    if (customer.villain && worker && worker !== this.staff.owner) worker.addStress((outcome.refusedRefund || outcome.refunded || outcome.haggleRefused || outcome.discount ? 7 : 4) * (this.layout.countAt('aromaDiffuser', customer.site || 0) ? FURNITURE.aromaDiffuser.calmStress : 1));
     // A regular's hearts move with the visit; other happy clients may become regulars, and a bad visit can lose one.
     let regular = null, newRegular = false;
     if (customer.regular) regular = this.#regularVisited(customer, outcome.refunded ? 0 : result.satisfaction, result.stylist);
@@ -360,6 +361,8 @@ export class TycoonGame {
     if (!this.month.start) this.month.begin(this.#monthSnapshot());
     if (this.isSunday) { this.#dayOff(); return; }
     this.dayOff = false; this.marketing.startDay();
+    // A neon sign in the window brings in followers every open day.
+    { const neon = [0, 1].filter(s => this.layout.countAt('neonSign', s)).length; if (neon) this.marketing.addFollowers(neon * FURNITURE.neonSign.dailyFollowers); }
     this.happening = null; this.happeningFx = {};
     if (this.progression.level >= 2) { const h = rollHappening(); if (h) this.#startHappening(h); }
     this.special = rollSpecial(this.progression.level, this.clock.openHour, this.clock.closeHour);
