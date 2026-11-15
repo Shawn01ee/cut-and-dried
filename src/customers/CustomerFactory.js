@@ -11,9 +11,9 @@ const index = list => Math.floor(Math.random() * list.length);
 export class CustomerFactory {
   #nextId = 0;
 
-  create(usedNames, { colour, perm, advancedCuts, vipChance, priceMultiplier, patienceMultiplier, budgetFactor = 1, villain = null, influencer = null, colourBias = 1, permBias = 1 }) {
-    // About four in ten clients are men: mostly short hair, fewer colours and perms.
-    const male = Math.random() < .42, natI = index(NATURAL), nat = NATURAL[natI];
+  create(usedNames, { colour, perm, advancedCuts, vipChance, priceMultiplier, patienceMultiplier, budgetFactor = 1, villain = null, influencer = null, colourBias = 1, permBias = 1, as = null }) {
+    // About four in ten clients are men: mostly short hair, fewer colours and perms. `as` brings back a known client.
+    const male = as && as.gender ? as.gender === 'm' : Math.random() < .42, natI = index(NATURAL), nat = NATURAL[natI];
     const L0 = male ? (Math.random() < .12 ? rand(14, 30) : rand(4, 12)) : rand(14, 58), w0 = Math.random() < (male ? .75 : .6) ? rand(0, .4) : rand(.8, 2.4);
     const lab = hexLab(nat[1]); lab.L += rand(-.02, .02);
     const hair = { len: STR.map(s => Math.max(3, L0 * (s.z === 3 ? rand(.8, 1) : 1) + rand(-2.5, 2.5))), lab, wave: w0, damage: rand(0, .5) };
@@ -29,7 +29,7 @@ export class CustomerFactory {
     const rewave = Math.abs(wave - hair.wave) > .4, vip = !influencer && Math.random() < vipChance;
     // Melbourne salon prices in AUD: a cut, plus colour and perm when the order needs them.
     const list = 85 + (recolour ? 150 : 0) + (rewave ? 140 : 0);
-    const pool = male ? MALE_NAMES : FEMALE_NAMES, free = pool.filter(n => !usedNames.has(n)), name = pick(free.length ? free : pool);
+    const pool = male ? MALE_NAMES : FEMALE_NAMES, free = pool.filter(n => !usedNames.has(n)), name = as && as.name ? as.name : pick(free.length ? free : pool);
     // An influencer is sponsored: the service is free in exchange for a post.
     if (influencer) influencer.handle = `@${name.toLowerCase()}.${pick(['hair', 'style', 'daily', 'melb'])}`;
     return new Customer({
