@@ -69,7 +69,7 @@ const panOff=V(),PAN_MAX=9,ZOOM_MIN=.6,ZOOM_MAX=3.2;
 function panBy(dx,dz,now){panOff.x=clamp(panOff.x+dx,-PAN_MAX,PAN_MAX);panOff.z=clamp(panOff.z+dz,-PAN_MAX,PAN_MAX);if(now)camPan.copy(camHome).add(panOff);}
 function recenter(){panOff.set(0,0,0);zoomGoal=1;}
 function updateCam(dt){
-  zoom+=(zoomGoal-zoom)*Math.min(1,dt*10);if(Math.abs(zoomGoal-zoom)<1e-3)zoom=zoomGoal;
+  zoom+=(zoomGoal-zoom)*Math.min(1,dt*6);if(Math.abs(zoomGoal-zoom)<1e-3)zoom=zoomGoal;
   const goal=Math.PI/4+camK*Math.PI/2;camAz+=(goal-camAz)*Math.min(1,dt*9);if(Math.abs(goal-camAz)<1e-3)camAz=goal;
   camBlend+=((styling?1:0)-camBlend)*Math.min(1,dt*6);if(Math.abs((styling?1:0)-camBlend)<.002)camBlend=styling?1:0;camPan.lerp(V().copy(camHome).add(panOff),Math.min(1,dt*4));camTarget.copy(camPan).lerp(camClose,camBlend);
   const a=W/H,vh=lerp(Math.max(10.8,12.8/a)*viewScale/zoom,Math.max(2.6,1.7/a),camBlend);
@@ -511,12 +511,14 @@ function helpersUpdate(dt){const messAt=site=>landedClips().filter(c=>siteOf(c.p
 /* ================= time, weather, timers ================= */
 let started=false,paused=false,booted=false,styling=null,savedCamK=0,lastChair=0;
 const canAuto=st=>autoOn&&!st.touched;
+/** Whether a free chair could take a client right now. */
+const canTake=s=>s.sty.restUntil<=simT&&!s.sweep&&!s.filming&&!pendingMoves.has(s.item)&&!queuedMoves.has(s.item);
 const ownerBusy=()=>stations.some(x=>(x.state==='work'||x.state==='reveal')&&x.worker===OWNER);
 const openChair=()=>stations.find(x=>x.vacant)||(()=>{const o=ownerStation();return o&&o.state==='free'&&!styling?o:null;})();
 /** Shows who is hired at the desks and on the floor, and shares the assistants out among the basins again. */
 function syncSupport(){restyleDesks();if(deskInfo)syncAnchors();recep.root.visible=game.staff.receptionist.hired;recep2.root.visible=game.layout.branchOpen&&game.staff.receptionistAt(1).hired&&!!deskAt[1];helpers.forEach(h=>{h.fig.root.visible=h.e.hired;if(h.e.hired||!h.task)return;if(h.task.kind==='wash')endWash(h.task.T);else{h.fig.setTool(null);h.fig.toolAim=null;h.fig.handL=h.fig.handR=null;}h.task=null;});}
 const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.2,1.38],[2,-.8,1.55],[4,-.8,1.8],[4,-1.8,1.95]];
-function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;annex2Group.visible=t>=4;rear2Group.visible=t>=5;walls.forEach(w=>{if(w.show)w.off=!w.show(t);});if(site===0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
+function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;annex2Group.visible=t>=4;rear2Group.visible=t>=5;walls.forEach(w=>{if(w.show&&!w.branch)w.off=!w.show(t);});syncBranchSize();if(site===0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
 function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='free')return;if(!game.staff.fire(e))return;e.fig.root.visible=false;if(st)vacate(st);}
@@ -680,7 +682,10 @@ function simStep(dt){simT+=dt;
       const waiting=queue.filter(q=>q.state==='wait'&&(q.site||0)===here&&(!q.vip||vipChair||!vipOnDuty||q.pat<q.maxPat*.5));
       // A stylist whose client is processing at the island takes a quick cut first, to be free when that client is ready.
       const islandClient=custs.some(q=>(q.state==='process'||q.state==='ready')&&q.resume&&q.resume.sty===st.sty);
-      const c=(vipChair&&waiting.find(q=>q.vip))||(islandClient&&waiting.find(q=>q.requestedService==='haircut'))||waiting.slice(0,3).find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
+      const vipNow=vipChair&&waiting.find(q=>q.vip),quick=islandClient&&waiting.find(q=>q.requestedService==='haircut');
+      // Fair turns: a free chair lets colleagues who have done fewer clients today go first, so the low-numbered chairs don't take everyone.
+      if(!vipNow&&!quick&&waiting.length){const mine=st.sty.today.served,fewer=stations.filter(s=>s!==st&&s.state==='free'&&!s.vacant&&siteOf(s.item.x)===here&&canTake(s)&&s.sty.today.served<mine).length;if(fewer>=waiting.length)return;}
+      const c=vipNow||quick||waiting.slice(0,3).find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
     else if(st.state==='work')runOps(st,dt);
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep&&!st.filming){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
@@ -833,9 +838,9 @@ function zoomAt(z,x,y){z=clamp(z,ZOOM_MIN,ZOOM_MAX);if(z===zoomGoal)return;const
  */
 canvas.addEventListener('wheel',e=>{e.preventDefault();const unit=e.deltaMode===1?16:e.deltaMode===2?innerHeight:1,dx=e.deltaX*unit,dy=e.deltaY*unit;
   const trackpad=e.deltaMode===0&&(Math.abs(dx)>0||Math.abs(dy)<40||!Number.isInteger(dy));
-  if(e.ctrlKey||e.metaKey)zoomAt(zoomGoal*Math.exp(clamp(-dy*.006,-.08,.08)),e.clientX,e.clientY);
+  if(e.ctrlKey||e.metaKey)zoomAt(zoomGoal*Math.exp(clamp(-dy*.0025,-.04,.04)),e.clientX,e.clientY);
   else if(trackpad){if(!styling)dragView(e.clientX,e.clientY,e.clientX-dx,e.clientY-dy);}
-  else zoomAt(zoomGoal*(dy<0?1.08:1/1.08),e.clientX,e.clientY);},{passive:false});
+  else zoomAt(zoomGoal*(dy<0?1.05:1/1.05),e.clientX,e.clientY);},{passive:false});
 const ptrs=new Map();let pinch0=0,zoom0=1,down=null,dragging=false,mid0=null;
 const midOf=()=>{const [a,b]=[...ptrs.values()];return [(a[0]+b[0])/2,(a[1]+b[1])/2];};
 /** Moves the view so the ground under (x0, y0) ends up under (x1, y1). */
@@ -884,20 +889,24 @@ function morningNews(){game.news.splice(0).forEach((k,i)=>later(.6+i*1.4,()=>pop
       {label:tx('inc.raise'),note:tx('inc.raiseN',Math.round(e.salary*(RAISE-1))),run:answer('raise')},{label:tx('inc.leave'),note:tx('inc.leaveN',RESIGN_LEAVE),run:answer('leave')},{label:tx('inc.letGo'),note:tx('inc.letGoN'),run:answer('go')}]});});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},syncSupport,openBranch,openMonth:()=>{monthFrom='panel';openMenu('month','game');paused=true;},viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},branchExpanded:()=>{syncFurniture();syncChairs();focusSite(1);},syncSupport,openBranch,openMonth:()=>{monthFrom='panel';openMenu('month','game');paused=true;},viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
   post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e),seats:()=>{const n=[0,0];return stations.map(s=>{const site=siteOf(s.item.x);return {vip:s.item.id==='vipRoom',site,num:++n[site]};});},seatOf:e=>stations.findIndex(s=>s.sty===e),moveSeat:(e,i)=>moveToSeat(e,i)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});
 
 /* ================= branches: separate salons beside the main one ================= */
-let site=0,branchShell=null;
+let site=0,branchShell=null,branchZones=[];
+/** Shows the second salon's expansions and the walls that go with its size. */
+function syncBranchSize(){const bt=game.layout.branchTier;branchZones.forEach((z,i)=>z.visible=bt>=i+1);walls.forEach(w=>{if(w.branch&&w.show)w.off=!w.show(bt);});}
 function signTexture(text){const w=Math.max(140,text.length*12+8);return canvasTex(w,22,g=>paintSign(g,w,22,text));}
 /** The second salon's building: the first salon's shell further down the street, with its own sign and light. */
 function buildBranchShell(){if(branchShell||!game.layout.branchOpen)return;const root=new THREE.Group();root.position.set(BRANCH_X,0,0);world.add(root);branchShell=root;
   const copy=o=>{const c=o.clone();c.visible=true;root.add(c);return c;},sign=signTexture('CIEL GROUND 2');
   copy(salonMesh);extras.forEach(copy);salonFloor(8,6,0,0,root);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7,root);
-  walls.slice(0,4).forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});walls.push({n:w.n,full,low,off:false});});
+  // the first salon's walls up to its second expansion, shown by the second salon's own size
+  walls.slice(0,10).forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});walls.push({n:w.n,full,low,off:false,show:w.show,branch:true});});
+  branchZones=[copy(backGroup),copy(annexGroup)];branchZones.forEach(z=>z.traverse(o=>{if(o.isPointLight)inLights.push(o);}));syncBranchSize();
   const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(0,2.4,0);root.add(light);inLights.push(light);}
 /** Opens the second salon, if the game allows it, and shows it. */
 function openBranch(){if(!game.openBranch())return false;buildBranchShell();syncFurniture();renderSites();focusSite(1);audio.play('levelUp');popup(tx('br.opened'),recep.head,'big');return true;}

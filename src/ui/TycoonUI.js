@@ -26,7 +26,7 @@ export class TycoonUI {
 
   key(page) {
     const g = this.game, b = this.build.active;
-    return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
+    return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, g.layout.branchTier, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
       g.clock.day, g.nextHours && g.nextHours.join(), this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage, Object.values(this.bizSub).join(), this.ladderSort].join('|');
   }
   render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#marketing(), rev: () => this.#reviews(), prog: () => this.#growth() }[page](); }
@@ -140,7 +140,8 @@ export class TycoonUI {
   /** The second salon: what it takes to open, then that it is open. */
   #branch() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, B = g.branchStatus;
-    const body = g.layout.branchOpen ? `<div class="good">${t('br.isOpen')}</div><div class="brow"><span class="sp"></span><button data-do="view:1">${t('br.view')}</button></div>`
+    const nx = g.layout.nextBranchExpansion, grow = !g.layout.branchOpen ? '' : nx ? `<div class="brow"><span>${t('br.size', g.layout.branchTier + 1, g.layout.maxChairsAt(1))}</span><span class="sp"></span><button class="go" data-do="bexpand" ${!g.isUnlocked(nx.requires) || !g.economy.canAfford(nx.cost) ? 'disabled' : ''}>${g.isUnlocked(nx.requires) ? t('br.expandBuy', nx.cost.toLocaleString(), [9, 12][g.layout.branchTier]) : t('br.expandLocked')}</button></div>` : `<div class="dim">${t('br.maxed', g.layout.maxChairsAt(1))}</div>`;
+    const body = g.layout.branchOpen ? `<div class="good">${t('br.isOpen')}</div><div class="brow"><span class="sp"></span><button data-do="view:1">${t('br.view')}</button></div>${grow}`
       : `${B.checks.map(c => `<div class="brow"><span class="${c.ok ? 'good' : 'dim'}">${c.ok ? '✓' : '·'} ${t('br.c.' + c.k, ...c.args)}</span></div>`).join('')}<div class="brow"><span class="dim">${t('br.cost', B.cost.toLocaleString())}</span><span class="sp"></span><button class="go" data-do="openBranch" ${B.ready ? '' : 'disabled'}>${t('br.open')}</button></div>`;
     return `<div class="bsec"><h4>${t('br.title')}</h4>${body}<div class="dim">${t('br.note')}</div></div>`;
   }
@@ -281,7 +282,7 @@ export class TycoonUI {
       hire: () => this.hooks.hire(e), fire: () => this.hooks.fire(e),
       shire: () => { if (g.staff.hire(e)) this.hooks.syncSupport(); }, sfire: () => { if (g.staff.fire(e)) this.hooks.syncSupport(); }, train: () => { if (g.trainStaff(e)) g.bus.emit('staff:levelup', e); }, claim: () => { if (g.claimMission(+value)) this.hooks.spent(); },
       rest: () => { e.restUntil = this.hooks.now() + 20; e.rest(50); },
-      price: () => { g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), monthView: () => this.hooks.openMonth(), view: () => this.hooks.viewSite(+value),
+      price: () => { g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), bexpand: () => { if (g.expandBranch()) this.hooks.branchExpanded(); }, monthView: () => this.hooks.openMonth(), view: () => this.hooks.viewSite(+value),
       expand: () => { if (g.expand()) this.hooks.expanded(); },
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),

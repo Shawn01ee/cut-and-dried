@@ -1,4 +1,4 @@
-import { FURNITURE, EXPANSIONS, chairsOn } from './FurnitureCatalog.js';
+import { FURNITURE, EXPANSIONS, BRANCH_EXPANSIONS, chairsOn } from './FurnitureCatalog.js';
 
 /** The second salon (2호점) stands further down the street; this is its centre. */
 /** The most furniture can speed up any one kind of service. */
@@ -20,6 +20,8 @@ export const inRect = (c, [a, b, d, e]) => c.x >= a && c.x <= b && c.z >= d && c
  * deeper, then wider (the whole shop next door), then deeper again.
  */
 export const ZONE_TIER = { main: 0, back: 1, annex: 2, rear: 3, annex2: 4, rear2: 5 };
+/** The second salon's areas, by the expansion that opens them. */
+export const BRANCH_ZONE_TIER = { branch: 0, bBack: 1, bAnnex: 2 };
 /**
  * When an expansion takes a wall away, furniture that stood against it moves to the new wall:
  * `side` is which wall, `at` where it stood, and dx/dz how far the new one is.
@@ -53,7 +55,7 @@ const turn = (x, z, r) => [[x, z], [z, -x], [-x, -z], [-z, x]][r];
 export class SalonLayout {
   #index = new Map();
   constructor() {
-    this.cells = []; this.items = []; this.tier = 0; this.branchOpen = false; this.branchChairs = 6;
+    this.cells = []; this.items = []; this.tier = 0; this.branchOpen = false; this.branchTier = 0;
     const add = (x, z, outdoor, zone) => { const c = { x, z, outdoor, zone }; this.cells.push(c); this.#index.set(this.#key(x, z), c); };
     const area = (x0, z0, nx, nz, outdoor, zone) => { for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) add(x0 + i * .5, z0 + j * .5, outdoor, zone); };
     area(-3.75, -2.75, 16, 12, false, 'main'); area(-4.25, 3.45, 18, 6, true, 'main');
@@ -63,6 +65,8 @@ export class SalonLayout {
     area(8.25, -6.75, 8, 20, false, 'annex2'); area(8.75, 3.45, 8, 6, true, 'annex2');
     area(-3.75, -8.75, 32, 4, false, 'rear2');
     area(BRANCH_X - 3.75, -2.75, 16, 12, false, 'branch'); area(BRANCH_X - 4.25, 3.45, 18, 6, true, 'branch');
+    area(BRANCH_X - 3.75, -4.75, 16, 4, false, 'bBack');
+    area(BRANCH_X + 4.25, -4.75, 8, 16, false, 'bAnnex'); area(BRANCH_X + 4.75, 3.45, 8, 6, true, 'bAnnex');
   }
   #key(x, z) { return `${Math.round(x * 4)},${Math.round(z * 4)}`; }
   cellAt(x, z) { return this.#index.get(this.#key(x, z)) || null; }
@@ -71,7 +75,8 @@ export class SalonLayout {
   #inSite(site) { return this.items.filter(it => siteOf(it.x) === site); }
   /** Styling chairs at one salon, and how many it has room for. */
   chairsAt(site) { return this.#inSite(site).reduce((n, it) => n + chairsOn(it.id), 0); }
-  maxChairsAt(site) { return site ? (this.branchOpen ? this.branchChairs : 0) : this.maxChairs; }
+  maxChairsAt(site) { return site ? (this.branchOpen ? [6, 9, 12][this.branchTier] : 0) : this.maxChairs; }
+  get nextBranchExpansion() { return this.branchOpen ? BRANCH_EXPANSIONS[this.branchTier] || null : null; }
   /** Whether either salon has room for another chair. */
   get chairRoom() { return [0, 1].some(s => this.chairsAt(s) < this.maxChairsAt(s)); }
   countAt(id, site) { return this.#inSite(site).filter(it => it.id === id).length; }
@@ -81,7 +86,7 @@ export class SalonLayout {
   maxOf(id, site = 0) { const m = FURNITURE[id].max; return m == null ? Infinity : Array.isArray(m) ? m[site ? 1 : this.tier] : m; }
   get nextExpansion() { return EXPANSIONS[this.tier] || null; }
   /** The cell is part of the salon at its current size. */
-  isOpen(c) { return c.zone === 'branch' ? this.branchOpen : ZONE_TIER[c.zone] <= this.tier; }
+  isOpen(c) { return c.zone in BRANCH_ZONE_TIER ? this.branchOpen && BRANCH_ZONE_TIER[c.zone] <= this.branchTier : ZONE_TIER[c.zone] <= this.tier; }
   /** Furniture may go here: open floor, plus the pavement from the first expansion. */
   placeable(c) { return this.isOpen(c) && (!c.outdoor || this.tier >= 1) && !POSTS.some(r => inRect(c, r)); }
   /** Edges of an item's footprint. */
@@ -149,9 +154,9 @@ export class SalonLayout {
   }
   /** Opens the second salon with the basics: a desk, one chair, a shampoo booth and a bench. */
   openBranch() { this.branchOpen = true; BRANCH_START.forEach(([id, x, z, r]) => this.add(id, x + BRANCH_X, z, r)); }
-  toJSON() { return { version: 2, tier: this.tier, branchOpen: this.branchOpen, items: this.items.map(({ id, x, z, rotation }) => ({ id, x, z, rotation })) }; }
+  toJSON() { return { version: 2, tier: this.tier, branchOpen: this.branchOpen, branchTier: this.branchTier, items: this.items.map(({ id, x, z, rotation }) => ({ id, x, z, rotation })) }; }
   restore(data) {
-    this.tier = data.tier; this.branchOpen = !!data.branchOpen;
+    this.tier = data.tier; this.branchOpen = !!data.branchOpen; this.branchTier = data.branchTier || 0;
     if (data.version === 2) { this.items = []; data.items.forEach(it => { if (FURNITURE[it.id] && this.footprint(it.id, it.x, it.z, it.rotation)) this.add(it.id, it.x, it.z, it.rotation); }); this.#ensureEssentials(); return; }
     // Saves from before furniture could move: start from the default salon and add what was bought.
     this.resetToDefault();

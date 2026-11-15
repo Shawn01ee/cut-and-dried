@@ -53,4 +53,6 @@ export const seatApproach = ([x, z, t = 0]) => [x + Math.round(Math.sin(t * Math
 export const FURNITURE_IDS = Object.keys(FURNITURE).filter(id => id !== 'station' && id !== 'desk' && !FURNITURE[id].legacy);
 export const CHAIR_PRICE = FURNITURE.station.price;
 export const chairsOn = id => FURNITURE[id].chairs ? FURNITURE[id].chairs.length : 0;
+/** The second salon grows twice: a back room, then the shop beside it. */
+export const BRANCH_EXPANSIONS = [{ cost: 20000, requires: 'branches' }, { cost: 38000, requires: 'branchGrow' }];
 export const EXPANSIONS = [{ cost: 2000, requires: 'chairs' }, { cost: 5500, requires: 'expansion' }, { cost: 11000, requires: 'annex' }, { cost: 18000, requires: 'branches' }, { cost: 28000, requires: 'branches' }];
