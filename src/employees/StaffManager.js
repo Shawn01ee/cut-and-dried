@@ -197,8 +197,11 @@ export class StaffManager {
       const tired = at.filter(e => e.stress >= W.leave.at && !quitting.includes(e) && !e.leaveBooked(day + 1)).sort((a, b) => b.stress - a.stress)[0];
       if (tired && this.sendOnLeave(tired, day, 1)) this.news.push({ key: 'wf.news.leave', name: tired.name, n: Math.round(tired.stress) });
     }
+    // Only one stylist asks to leave on any day: whoever is furthest past their limit. Others wait, and are counted.
+    quitting.sort((a, b) => (b.stress - this.resignAt(b)) - (a.stress - this.resignAt(a)));
+    this.waitingToQuit = Math.max(0, quitting.length - 1);
     this.version++;
-    return quitting;
+    return quitting.slice(0, 1);
   }
   /** The skill boost performance pay gives everyone. */
   get baseBoost() { return COMMISSION_BOOST[this.commission]; }

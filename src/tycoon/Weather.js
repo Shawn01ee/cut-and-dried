@@ -9,12 +9,16 @@ export const WEATHER = {
   storm: { demand: .75, patience: 1.15 },
   heat: { demand: .9, cut: 1.2 },
   cold: { demand: .9, perm: 1.1 },
+  snow: { demand: .7, patience: 1.1 },
 };
+/** Snow settles on the pavement (depth 0-1, per game hour while it snows) and melts once it stops. Assistants go out to
+ * clear it from `SHOVEL_AT`; above `SLIP_DEPTH` an arriving client may slip. */
+export const SNOW_RATE = .25, SNOW_MELT = .25, SHOVEL_AT = .3, SHOVEL_CLEARS = .8, SLIP_DEPTH = .5, SLIP_CHANCE = .12, SLIP_REP = -.5;
 /** How likely each kind is in each season: hot, dry summers, wet winters and stormy springs. */
 const ODDS = {
   summer: { sunny: .45, cloudy: .2, rain: .1, storm: .07, heat: .18 },
   autumn: { sunny: .35, cloudy: .3, rain: .25, storm: .08, heat: .02 },
-  winter: { sunny: .2, cloudy: .35, rain: .3, storm: .07, cold: .08 },
+  winter: { sunny: .2, cloudy: .33, rain: .28, storm: .06, cold: .08, snow: .05 },
   spring: { sunny: .3, cloudy: .3, rain: .25, storm: .12, heat: .03 },
 };
 export function rollWeather(season) {
@@ -30,16 +34,16 @@ export function rollWeather(season) {
 export const SURPRISES = [
   { id: 'leak', weather: ['storm'], fix: 300, effect: { wash: .7 } },
   { id: 'outage', weather: ['storm'], fix: 400, effect: { speed: .8 } },
-  { id: 'coffee', weather: ['storm', 'rain', 'cloudy', 'sunny'], fix: 150, effect: { drinks: 0 } },
+  { id: 'coffee', weather: ['storm', 'rain', 'cloudy', 'sunny', 'snow'], fix: 150, effect: { drinks: 0 } },
   { id: 'aircon', weather: ['heat'], fix: 250, effect: { patience: .85 } },
-  { id: 'boiler', weather: ['cold'], fix: 200, effect: { wash: .6 } },
+  { id: 'boiler', weather: ['cold', 'snow'], fix: 200, effect: { wash: .6 } },
   { id: 'umbrella', weather: ['rain', 'storm'], walkIns: 2 },
   { id: 'tourGroup', weather: ['sunny', 'cloudy'], walkIns: 3 },
   { id: 'streetShoot', weather: ['sunny', 'heat'], followers: 150 },
   { id: 'delivery', weather: ['sunny', 'cloudy', 'rain', 'heat', 'cold'], fix: 100, effect: { materials: 1.5 } },
 ];
 /** The chance of a surprise on an open day without a morning happening, by the weather. */
-export const SURPRISE_CHANCE = { storm: .6, heat: .35, cold: .35, rain: .15, sunny: .12, cloudy: .1 };
+export const SURPRISE_CHANCE = { storm: .6, heat: .35, cold: .35, snow: .3, rain: .15, sunny: .12, cloudy: .1 };
 /** Today's surprise, if any: which, and at what hour (well inside opening hours). */
 export function rollSurprise(weather, openHour, closeHour) {
   if (Math.random() >= (SURPRISE_CHANCE[weather] || 0)) return null;
