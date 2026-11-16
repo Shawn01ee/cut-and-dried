@@ -6,6 +6,7 @@ import { TALK_RELIEF } from './employees/Welfare.js';
 import { GRADE_PAY, TREND_PAY } from './hair/StyleMenu.js';
 import { decorThemeOf } from './tycoon/Decor.js';
 import { LINES } from './i18n/dialogue.js';
+import { shows, featuresAt } from './tycoon/Features.js';
 import { DECOR_MODELS } from './rendering/decorModels.js';
 import { WEATHER, SHOVEL_AT, SHOVEL_CLEARS, SLIP_DEPTH, SLIP_CHANCE, SLIP_REP } from './tycoon/Weather.js';
 import { lab2lin, labCss, labMix, hexCss, PAL_LAB, PAL_RGB } from './rendering/color.js';
@@ -747,7 +748,7 @@ game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');queue.slice()
 game.bus.on('mission:done',m=>{popup(tx('ms.done',tx('ms.t.'+m.kind)),recep.head,'big');audio.play('levelUp');renderPanel(true);});
 $('#offday').addEventListener('click',e=>{const b=e.target.closest('[data-off]');if(!b)return;if(b.dataset.off==='week')openMenu('week','game');else{game.save();beginDay();}});
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
-game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');renderPanel(true);});
+game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');const f=featuresAt(l);if(f.length)later(1.6,()=>popup(tx('feat.opened',f.map(k=>tx('feat.'+k)).join(' · ')),recep.head,'big'));renderPanel(true);});
 game.bus.on('review:bonus',b=>{popup(b.kind==='streak'?tx('rv.bonusStreak',b.streak,b.amount.toLocaleString()):tx('rv.bonusMilestone',b.at,b.amount.toLocaleString(),b.rating.toFixed(1),b.mult.toFixed(2)),recep.head,'big');audio.play('cash');renderPanel(true);});
 game.bus.on('review:new',r=>{if(sel==='rev')game.reviews.markRead();if(r.stars<=2){popup(tx('rv.newLow','★'.repeat(r.stars)),recep.head,'');audio.play('bad');}});
 function openStyling(st){if(site!==siteOf(st.item.x))focusSite(siteOf(st.item.x));if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=bestCamK(st);document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
@@ -887,7 +888,8 @@ let sel=0;const tabs=$('#tabs'),pbody=$('#pbody');let panelKey='';
 function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span>`;if(st.state==='await')return tx(st.cust.inWash?'st.shampoo':'st.walk');
   if(st.state==='consult')return canAuto(st)?tx('st.auto',Math.max(0,st.timer).toFixed(0)):`<span class="gold">${tx('st.wait')}</span>`;
   if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}% · ${tx('st.left',Math.max(0,Math.ceil(o.minutes*(1-clamp(o.t/o.dur)))))}`;}return tx('st.reveal');}
-function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['syn','tab.syn'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']],unread=game.reviews.unread;
+function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['syn','tab.syn'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']].filter(([k])=>shows('tab.'+k,game.progression.level)),unread=game.reviews.unread;
+  if(typeof sel!=='number'&&!T.some(([k])=>k===sel))sel=lastChair;
   tabs.innerHTML=T.map(([k,l])=>`<button data-t="${k}" class="${(k==='salon'?typeof sel==='number':sel===k)?'sel':''}">${tx(l)}${k==='rev'&&unread&&sel!=='rev'?`<span class="badge">${unread>99?'99+':unread}</span>`:''}${k==='prog'&&game.missions.claimable?`<span class="badge">${game.missions.claimable}</span>`:''}</button>`).join('')+`<button class="tog" id="bMin">${$('#panel').classList.contains('min')?'▴':'▾'}</button>`;
   tabs.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{sel=b.dataset.t==='salon'?lastChair:b.dataset.t;$('#panel').classList.remove('min');renderPanel(true);const pb=$('#pbody');pb.classList.remove('fade');void pb.offsetWidth;pb.classList.add('fade');});
   $('#bMin').onclick=()=>{$('#panel').classList.toggle('min');renderTabs();};}
