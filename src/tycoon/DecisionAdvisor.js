@@ -7,6 +7,9 @@ export class DecisionAdvisor {
     if (m.lost.patience) add('patience', m.lost.patience);
     if (m.lost.closing) add('closing', m.lost.closing);
     if (report.overtime) add('overtime', report.overtime, report.overtimePay);
+    const partMissed=Object.values(report.departments||{}).reduce((n,p)=>n+(p.missed||0),0);
+    if (partMissed) add('departments',partMissed);
+    if (report.network?.operatingLosses) add('network',report.network.operatingLosses);
     if (!out.length) {
       if (m.served && !m.happy) add('style', m.served);
       else add('observe');

@@ -55,3 +55,17 @@ test('English and Korean render a first day and all advice without missing keys 
     }
   }
 });
+
+test('department misses and franchise losses appear as observed counts with actionable context', () => {
+  const report = { metrics:{arrivals:0,served:0,satisfaction:null,lost:{seats:0,patience:0,closing:0}},
+    departments:{makeup:{booked:3,completed:2,missed:1},nails:{booked:0,completed:0,missed:0},idol:{booked:1,completed:0,missed:1}},
+    network:{outlets:2,closed:1,operatingLosses:1,localProfit:-500,hqContribution:30} };
+  report.advice=new DecisionAdvisor().suggest(report);
+  assert.deepEqual(report.advice.map(a=>a.id),['departments','network']);
+  for(const lang of ['en','ko']) {
+    const html=new DayInsights(new I18n(lang)).render(report);
+    assert.doesNotMatch(html,/ins\.|undefined|NaN/);
+    assert.match(html,lang==='ko'?/마감 미완료 1건/:/unfinished at close 1/);
+    assert.match(html,lang==='ko'?/본사 기여 \+\$30/:/HQ contribution \+\$30/);
+  }
+});

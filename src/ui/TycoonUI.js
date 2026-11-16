@@ -1,3 +1,5 @@
+import { NetworkPanel } from './NetworkPanel.js';
+import { DepartmentsPanel } from './DepartmentsPanel.js';
 import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS, CATEGORIES, categoryOf } from '../building/FurnitureCatalog.js';
 import { siteOf } from '../building/SalonLayout.js';
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
@@ -38,12 +40,12 @@ const level = v => v >= 70 ? 'bad' : v >= 40 ? 'gold' : 'good';
 
 /** Renders the Staff, Build, Business, Promo, Reviews and Growth pages and routes their button presses. */
 export class TycoonUI {
-  constructor(game, build, i18n, hooks) { Object.assign(this, { game, build, i18n, hooks }); this.reviewFilter = 'all'; this.reviewLimit = 25; this.staffPage = 'team'; this.staffRole = 'all'; this.staffSpec = 'all'; this.staffPerk = 'all'; this.bizPage = 'money'; this.bizSub = { money: 'today', fund: 'value', ops: 'demand' }; this.ladderSort = 'earn'; this.clientPage = 'reviews'; this.mktPage = 'promo'; this.concept = 'classic'; this.line = 'signature'; this.buildPage = 'shop'; this.shopCat = 'service'; this.ownedCat = 'all'; }
+  constructor(game, build, i18n, hooks) { Object.assign(this, { game, build, i18n, hooks }); this.departmentsPanel = new DepartmentsPanel(game, i18n); this.networkPanel = new NetworkPanel(game, i18n); this.reviewFilter = 'all'; this.reviewLimit = 25; this.staffPage = 'team'; this.staffRole = 'all'; this.staffSpec = 'all'; this.staffPerk = 'all'; this.bizPage = 'money'; this.bizSub = { money: 'today', fund: 'value', ops: 'demand' }; this.ladderSort = 'earn'; this.clientPage = 'reviews'; this.mktPage = 'promo'; this.concept = 'classic'; this.line = 'signature'; this.buildPage = 'shop'; this.shopCat = 'service'; this.ownedCat = 'all'; }
   #t(k, ...a) { return this.i18n.t(k, ...a); }
 
   key(page) {
     const g = this.game, b = this.build.active;
-    return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, g.layout.branchTier, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
+    return [page, g.network.version, this.hooks.canLead?.(), g.departments.version, page === 'staff' && this.staffPage === 'parts' ? Math.floor(g.clock.hour * 6) : 0, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, g.layout.branchTier, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(),
       g.clock.day, g.nextHours && g.nextHours.join(), g.lastCall, g.closingPolicy, g.hq.version, this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.weather, g.surprise && g.surprise.state, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage, Object.values(this.bizSub).join(), this.ladderSort, this.clientPage, this.mktPage, this.concept, this.line, g.brand.version, g.contest && [g.contest.entrant, g.contest.result && g.contest.result.place].join(), g.matchUntil, this.buildPage, this.shopCat, this.ownedCat, g.layout.items.map(it => it.id).join(), g.regularBook.version, g.special && g.special.state, g.specialLog.length].join('|');
   }
   render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#mktPages(), rev: () => this.#clients(), prog: () => this.#growth() }[page](); }
@@ -140,7 +142,7 @@ export class TycoonUI {
     const t = (k, ...a) => this.#t(k, ...a), role = RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`;
     const chips = [e.specialty ? `<span class="chip spec">${t('style.' + SPEC_STYLE[e.specialty])}</span>` : e.style === 'AllRounder' ? `<span class="chip">${t('style.AllRounder')}</span>` : '', e.perk ? `<span class="chip perk">${t('perk.' + e.perk).split(' · ')[0]}</span>` : '', e.trait ? `<span class="chip trait" title="${t('trd.' + e.trait)}">${t('trait.' + e.trait)}</span>` : '', ...(e.certs || []).map(c => `<span class="chip cert">${t('cert.' + c)}</span>`)].join('');
     const kind = this.#kind(e), crown = kind === 'owner' ? `<img class="crown" src="${crownURL()}" alt="">` : '';
-    return `<div class="shead"><img class="face r-${kind}" src="${portraitURL(e, kind)}" alt=""><div class="who"><div class="brow"><b style="color:${nameColour(e)}">${crown}${rankMark(e)}${this.i18n.name(e.name)}</b>${kind === 'owner' ? `<span class="chip boss">${t('st.ownerTag')}</span>` : role}${e.gender ? `<span class="dim">${t('gender.' + e.gender)}</span>` : ''}</div>${chips ? `<div class="chips">${chips}</div>` : ''}</div><div class="act">${actions}</div></div>`;
+    return `<div class="shead"><img class="face r-${kind}" src="${portraitURL(e, kind)}" alt=""><div class="who"><div class="brow"><b style="color:${nameColour(e)}">${crown}${rankMark(e)}${this.i18n.name(e.name)}</b>${kind === 'owner' ? `<span class="chip boss">${t(this.game.network.executive ? 'role.CEO' : 'st.ownerTag')}</span>` : role}${e.gender ? `<span class="dim">${t('gender.' + e.gender)}</span>` : ''}</div>${chips ? `<div class="chips">${chips}</div>` : ''}</div><div class="act">${actions}</div></div>`;
   }
   /** Skills as short bars in one line; `hi` marks a specialty. */
   #statBars(list) {
@@ -173,7 +175,8 @@ export class TycoonUI {
     if (!open(this.staffPage)) this.staffPage = 'team';
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff, page = this.staffPage, onTeam = page === 'team';
     const counts = { team: 1 + st.hired.length + st.support.filter(e => e.hired).length, hire: st.candidates.filter(e => !e.hired && (e.rival == null || this.game.rival.released.includes(e.id))).length + st.support.filter(e => !e.hired).length };
-    const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['policy', t('st.policy')], ['welfare', t('st.welfare', st.welfare.size)], ['career', t('st.career', st.hired.filter(e => promotionStatus(e)?.ready).length || '')], ['rel', t('st.rel')]].filter(([k]) => open(k)).map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['parts', t('dept.tab')], ['policy', t('st.policy')], ['welfare', t('st.welfare', st.welfare.size)], ['career', t('st.career', st.hired.filter(e => promotionStatus(e)?.ready).length || '')], ['rel', t('st.rel')]].filter(([k]) => open(k)).map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    if (page === 'parts') return tabs + this.departmentsPanel.render();
     if (page === 'welfare') return tabs + this.#welfare();
     if (page === 'career') return tabs + this.#careers();
     if (page === 'rel') return tabs + this.#relations();
@@ -185,9 +188,9 @@ export class TycoonUI {
     }
     const pass = e => (this.staffSpec === 'all' || (e.specialty || 'none') === this.staffSpec) && (this.staffPerk === 'all' || e.hasPerk(this.staffPerk));
     const pool = st.candidates.filter(e => e.hired === onTeam && (onTeam || (e.rival == null || this.game.rival.released.includes(e.id))) && pass(e)), filtered = this.staffSpec !== 'all' || this.staffPerk !== 'all';
-    const groups = [['owner', onTeam && pass(st.owner) ? [st.owner] : []], ...['master', 'senior', 'designer', 'junior'].map(r => [r, pool.filter(e => e.rank === r)])];
+    const groups = [['owner', onTeam && pass(st.owner) ? [st.owner] : []], ...['deputy', 'master', 'senior', 'designer', 'junior'].map(r => [r, pool.filter(e => e.rank === r)])];
     const role = this.staffRole, designers = role === 'all' || role === 'designer', support = filtered || role === 'designer' ? [] : st.support.filter(e => e.hired === onTeam && (role === 'all' || (role === 'reception') === (e.effect === 'reception')));
-    const group = (r, list, row) => list.length ? `<div class="sgroup"><h5>${t('rank.' + r)} <span class="dim">${list.length}</span></h5>${list.map(row).join('')}</div>` : '';
+    const group = (r, list, row) => list.length ? `<div class="sgroup"><h5>${t(r === 'owner' && g.network.executive ? 'role.CEO' : 'rank.' + r)} <span class="dim">${list.length}</span></h5>${list.map(row).join('')}</div>` : '';
     const seg = (act, cur, opts) => `<span class="seg">${opts.map(([v, l]) => `<button data-do="${act}:${v}" class="${cur === v ? 'sel' : ''}">${l}</button>`).join('')}</span>`;
     const short = k => t(k).split(' · ')[0];
     const roles = `<div class="brow"><span class="dim">${t('sf.role')}</span>${seg('sfr', role, [['all', t('sf.all')], ['designer', t('sf.designers')], ['reception', t('sf.reception')], ['assistant', t('sf.assistant')]])}</div>`;
@@ -249,12 +252,13 @@ export class TycoonUI {
     const avg = s => s.stats.served ? s.stats.sum / s.stats.served : -1, rating = s => { const r = g.reviews.ratingFor(s.name); return r.count ? r.average + r.count / 1e4 : -1; };
     const BY = { earn: s => s.stats.earn, today: s => s.today.earn, sat: avg, rating, served: s => s.stats.served };
     const rows = [g.staff.owner, ...g.staff.hired].sort((a, b) => (BY[this.ladderSort](b) - BY[this.ladderSort](a)) || (b.stats.earn - a.stats.earn)), rated = s => { const r = g.reviews.ratingFor(s.name); return r.count ? `★${r.average.toFixed(1)} (${r.count})` : '–'; };
-    const hs = g.hospitality, treats = Object.entries(AMENITIES).map(([id, a]) => `<div class="brow"><span>${t('hs.' + id)}</span><span class="dim">${t('hs.cost', a.cost)}</span><span class="sp"></span>${hs.available(id) ? `<span class="seg"><button data-do="amen:${id}" class="${hs.isOffered(id) ? 'sel' : ''}">${t('hs.on')}</button><button data-do="amen:${id}" class="${hs.isOffered(id) ? '' : 'sel'}">${t('hs.off')}</button></span>` : `<span class="dim">${t('hs.needs', t('f.' + a.needs))}</span>`}</div>`).join('');
+    const hs = g.hospitality, treats = Object.entries(AMENITIES).map(([id, a]) => `<div class="brow"><span>${t('hs.' + id)}</span><span class="dim">${t('hs.cost', a.cost)}</span><span class="sp"></span>${hs.available(id) ? `<span class="seg"><button data-do="amen:${id}" class="${hs.isOffered(id) ? 'sel' : ''}">${t('hs.on')}</button><button data-do="amen:${id}" class="${hs.isOffered(id) ? '' : 'sel'}">${t('hs.off')}</button></span>` : `<span class="dim">${t('hs.needs', a.needs.map(n => t('f.' + n)).join(' / '))}</span>`}</div>`).join('');
     const lvl = g.progression.level, opsKeys = ['demand', 'menu', 'hours', 'price', 'treats'].filter(k => shows('ops.' + k, lvl));
     if (!shows('biz.' + this.bizPage, lvl)) this.bizPage = 'money'; if (!opsKeys.includes(this.bizSub.ops)) this.bizSub.ops = 'demand';
-    const page = this.bizPage, tabs = `<div class="seg stabs">${[['money', t('bz.money')], ['fund', t('bz.fund')], ['ops', t('bz.ops')], ['rank', t('bz.rank')], ['hq', t('bz.hq')]].filter(([k]) => shows('biz.' + k, lvl)).map(([k, l]) => `<button data-do="bzp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    const page = this.bizPage, tabs = `<div class="seg stabs">${[['money', t('bz.money')], ['fund', t('bz.fund')], ['ops', t('bz.ops')], ['rank', t('bz.rank')], ['network', t('net.tab')], ['hq', t('bz.hq')]].filter(([k]) => shows('biz.' + k, lvl)).map(([k, l]) => `<button data-do="bzp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
     const sub = keys => `<div class="seg ssub">${keys.map(k => `<button data-do="bzs:${page}.${k}" class="${this.bizSub[page] === k ? 'sel' : ''}">${t('bzs.' + k)}</button>`).join('')}</div>`;
     if (page === 'fund') return tabs + sub(['value', 'invest', 'loan']) + this.#funding(this.bizSub.fund);
+    if (page === 'network') return tabs + this.networkPanel.render(this.hooks.canLead?.());
     if (page === 'hq') return tabs + this.#hq();
     if (page === 'ops') return tabs + (opsKeys.length > 1 ? sub(opsKeys) : '') + { demand: () => this.#calendar() + this.#demand(), menu: () => this.#menu(), hours: () => `<div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>`, price: () => `<div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}`, treats: () => `<div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>` }[this.bizSub.ops]();
     const by = this.ladderSort, th = (k, label) => `<th class="${by === k ? 'on' : ''}">${t(label)}</th>`;
@@ -295,6 +299,7 @@ export class TycoonUI {
   /** Shawn: his trust, the rules of his orders, what is running now and how past orders ended. */
   #hq() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, H = g.hq, F = g.hqFx, day = g.clock.day, pct = v => Math.round(v * 100);
+    if (g.network.executive) return `<div class="bsec"><h4>${t('role.CEO')}</h4><p>${t('net.ceoDone')}</p></div>`;
     const bar = `<div class="brow"><span>${t('hq.trust')}</span><span class="sp"></span><b class="${H.trust >= TRUST.refuseMin ? 'good' : H.bossy ? 'bad' : 'gold'}">${H.trust} / 100</b></div>`;
     const rules = [t('hq.r.when', HQ_GAP[0], HQ_GAP[1], HQ_GAP_INVESTED[0], HQ_GAP_INVESTED[1]), t('hq.r.accept', TRUST.accept), t('hq.r.talk', pct(g.hqTalkOdds), -TRUST.talkWin, -TRUST.talkLose), t('hq.r.refuse', TRUST.refuseMin, -TRUST.refuse),
       t('hq.r.low', TRUST.low), t('hq.r.week', TRUST.weekProfit, -TRUST.weekLoss)].map(r => `<div class="dim">· ${r}</div>`).join('');
@@ -484,7 +489,7 @@ export class TycoonUI {
       : `<div class="dim">${lvl < SPECIAL_LEVEL ? t('sp.locked', SPECIAL_LEVEL) : t('sp.none', pct(SPECIAL_CHANCE))}</div>`;
     const kinds = Object.entries(SPECIALS).map(([k, v]) => `<div class="brow ${v.level <= lvl ? '' : 'dim'}"><b>${t('sp.' + k)}</b><span class="sp"></span><span>${v.level <= lvl ? t('sp.row', pct(v.need), v.reward.toLocaleString(), v.followers.toLocaleString(), v.rep) : t('sp.fromLv', v.level)}</span></div>`).join('');
     const log = g.specialLog.map(x => `<div class="brow"><span>${t('rv.day', x.day)} · ${t('sp.' + x.kind)}</span><span class="sp"></span><span class="${x.ok ? 'good' : 'bad'}">${x.sat}% ${x.ok ? '✓' : '✗'}</span></div>`).join('');
-    return `<div class="bsec"><h4>${t('sp.today')}</h4>${today}</div><div class="bsec"><h4>${t('sp.kinds')}</h4><div class="dim">${t('sp.note', SPECIAL_PRICE, SPECIAL_PATIENCE, -SPECIAL_FAIL_REP, pct(SPECIAL_CHANCE))}</div>${kinds}</div>`
+    return `<div class="bsec"><h4>${t('sp.today')}</h4>${today}${s?.kind==='idol'?`<div class="dim">${t('dept.idolFlow')}</div>`:''}</div><div class="bsec"><h4>${t('sp.kinds')}</h4><div class="dim">${t('sp.note', SPECIAL_PRICE, SPECIAL_PATIENCE, -SPECIAL_FAIL_REP, pct(SPECIAL_CHANCE))}</div>${kinds}</div>`
       + `<div class="bsec"><h4>${t('sp.log')}</h4>${log || `<div class="dim">${t('sp.logNone')}</div>`}</div>`;
   }
   #reviews() {
@@ -524,6 +529,8 @@ export class TycoonUI {
     const g = this.game, e = g.staff.find(value);
     const run = {
       hire: () => this.hooks.hire(e), fire: () => this.hooks.fire(e),
+      netflagship: () => { if(g.network.upgrade())this.hooks.networkChanged?.(); }, netopen: () => g.network.open(value), netcoach: () => g.network.coach(value), netpause: () => g.network.toggle(value), netlead: () => this.hooks.lead?.(),
+      depthire: () => g.departments.hire(value), deptfire: () => g.departments.fire(value), depttrain: () => g.departments.train(value), deptpromote: () => g.departments.promote(value),
       shire: () => { if (g.staff.hire(e)) this.hooks.syncSupport(); }, sfire: () => { if (g.staff.fire(e)) this.hooks.syncSupport(); }, train: () => { if (g.trainStaff(e)) g.bus.emit('staff:levelup', e); }, claim: () => { if (g.claimMission(+value)) this.hooks.spent(); },
       rest: () => { e.restUntil = this.hooks.now() + 20; e.rest(50); },
       price: () => { if (!g.priceLocked) g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), hairShow: () => { const n = g.hostHairShow(); if (n != null) this.hooks.hairShow(n); }, bexpand: () => { if (g.expandBranch()) this.hooks.branchExpanded(); }, monthView: () => this.hooks.openMonth(), view: () => this.hooks.viewSite(+value),
