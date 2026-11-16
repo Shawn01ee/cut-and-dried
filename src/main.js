@@ -4,6 +4,7 @@ import { SUPPLY_PENALTY } from './tycoon/Brand.js';
 import { STEPS } from './tycoon/Onboarding.js';
 import { OwnerRoutine } from './scene/OwnerRoutine.js';
 import { Toasts } from './ui/Toasts.js';
+import { LightRig } from './rendering/LightRig.js';
 import { concernOf } from './employees/Welfare.js';
 import { ORDERS as HQ_ORDERS, TRUST as HQ_TRUST } from './tycoon/Headquarters.js';
 import { MAX_HEARTS, OCCASION_PAY, OCCASION_NEED } from './tycoon/Regulars.js';
@@ -127,7 +128,11 @@ const hemi=new THREE.HemisphereLight(0xb6d2ec,0x5f9e45,1);world.add(hemi);
 const sun=new THREE.DirectionalLight(0xfff1c4,2.8);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
 Object.assign(sun.shadow.camera,{left:-9.5,right:9.5,top:9.5,bottom:-9.5,near:1,far:70});sun.shadow.camera.updateProjectionMatrix();sun.shadow.bias=-0.0006;sun.shadow.normalBias=0.03;
 world.add(sun);world.add(sun.target);
-const inLights=[V(-1.6,2.4,-0.6),V(2,2.4,0.6)].map(p=>{const l=new THREE.PointLight(0xffd98a,0,8,1.5);l.position.copy(p);world.add(l);return l;});
+const inLights=[];
+const FILL=.035;
+/** A soft warm fill for the room; the pools of light come from the furniture that gives light (see LightRig). */
+const fill=new THREE.AmbientLight(0xffe7c2,0);world.add(fill);
+const lightRig=new LightRig(world);
 const spots=[[V(-3.7,3.3,4.5),V(-1.8,0,3.4)],[V(4.3,3.3,3.7),V(2.6,0,4.7)],[V(-3.7,3.3,4.5),V(-.2,0,5)]].map(([p,t])=>{const s=new THREE.SpotLight(0xfff1c4,0,11,0.5,0,1);s.position.copy(p);s.target.position.copy(t);world.add(s);world.add(s.target);return s;});
 
 /* ================= build world ================= */
@@ -200,7 +205,7 @@ addWall(t=>t>=5,'z',-4.08,[[-9.16,-7,'s']],V(-1,0,0));
 addWall(t=>t>=5,'z',12.16,[[-9.16,-7,'s']],V(1,0,0));
 /** Floor, slab and a ceiling light for an area that opens with an expansion. */
 function zoneGroup(slab,floor,light){const g=new THREE.Group();g.visible=false;world.add(g);const A=new SB();A.box(...slab,0x45404f,slab[3],-.27,slab[4]);A.box(floor[0],.06,floor[1],0xdcd9dc,floor[2],-.02,floor[3]);A.build(g);
-  salonFloor(floor[0],floor[1],floor[2],floor[3],g);const l=new THREE.PointLight(0xffd98a,0,8,1.5);l.position.set(light[0],2.4,light[1]);g.add(l);inLights.push(l);return g;}
+  salonFloor(floor[0],floor[1],floor[2],floor[3],g);return g;}
 const backGroup=zoneGroup([9,.5,2.4,0,-4.1],[8,2,0,-4],[0,-4]);
 const annexGroup=zoneGroup([4.1,.5,11.6,6.55,.4],[4,8,6,-1],[6,-1]);
 {const A=new SB();A.box(4.1,.06,3,0xb7a99a,6.55,-.02,4.7).box(4.1,.1,.18,0x7d7884,6.55,0,6.11);A.build(annexGroup);tiledSurface(4,3,'#b7a99a','#9a8f84',6.5,4.7,annexGroup);}
@@ -726,7 +731,7 @@ function syncRoster(){const day=game.clock.day;
 function restoreGame(){const d=game.saves.load();if(!d)return;furnitureView.clear();stations.length=0;game.restore(d);syncFurniture();
   game.staff.hired.forEach(e=>{const st=openChair();if(st)placeStaff(e,st);});}
 /** Keeps stations, seats, the desk and the basin in step with the furniture layout. */
-function syncFurniture(){game.layout.items.forEach(it=>{if(!furnitureView.has(it))furnitureView.spawn(it);});furnitureView.prune(game.layout.items);syncStations();syncAnchors();}
+function syncFurniture(){game.layout.items.forEach(it=>{if(!furnitureView.has(it))furnitureView.spawn(it);});furnitureView.prune(game.layout.items);lightRig.sync(furnitureView.lightSources());syncStations();syncAnchors();}
 function syncStations(){const items=game.layout.items.filter(it=>FURNITURE[it.id].chairs);
   for(let i=stations.length-1;i>=0;i--)if(!items.includes(stations[i].item))stations.splice(i,1);
   items.forEach(it=>FURNITURE[it.id].chairs.forEach((_,k)=>{let st=stations.find(s=>s.item===it&&s.k===k);
@@ -820,7 +825,7 @@ function updateLights(dt){const P=PRE[phaseNow()],k=Math.min(1,dt*1.5),[grey,sun
   const lit=started&&!game.dayOff&&(game.clock.isOpen||game.clock.after),need=K=>lit?lerp(SHOP_LIT[K][0],SHOP_LIT[K][1],Math.max(grey,1-sunK)):0;
   L.hi=lerp(L.hi,P.hi,k);L.inI=lerp(L.inI,Math.max(P.inI,need('inI')),k);L.shop=lerp(L.shop,Math.max(P.glow,need('glow')),k);L.spI=lerp(L.spI,P.spI+(P===PRE.day?0:0),k);L.glow=lerp(L.glow,P.glow,k);
   scene.background.copy(L.sky);sun.color.copy(L.sun);sun.intensity=L.si;sun.position.copy(L.sp).normalize().multiplyScalar(30).add(camTarget);sun.target.position.copy(camTarget);hemi.color.copy(L.hs);hemi.groundColor.copy(L.hg);hemi.intensity=L.hi;
-  inLights.forEach(l=>l.intensity=L.inI);spots.forEach(s=>s.intensity=L.spI);GLASS.emissiveIntensity=L.glow*.6;STREET.emissiveIntensity=L.glow*1.2+.05;LAMP.emissiveIntensity=L.shop*1.2+.05;}
+  fill.intensity=L.inI*FILL;lightRig.setLevel(L.shop);spots.forEach(s=>s.intensity=L.spI);GLASS.emissiveIntensity=L.glow*.6;STREET.emissiveIntensity=L.glow*1.2+.05;LAMP.emissiveIntensity=L.shop*1.2+.05;}
 
 /* ================= seasonal decorations ================= */
 const LIT={},litMat=c=>LIT[c]||(LIT[c]=new THREE.MeshBasicMaterial({color:c}));
@@ -1230,7 +1235,7 @@ function buildBranchShell(){if(branchShell||!game.layout.branchOpen)return;const
   // the first salon's walls up to its second expansion, shown by the second salon's own size
   walls.slice(0,10).forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});full.children.filter(o=>o.userData.decor).forEach(o=>full.remove(o));walls.push({n:w.n,full,low,off:false,show:w.show,branch:true,along:w.along,c:w.c,a:w.a,b:w.b,glass:w.glass});});
   branchZones=[copy(backGroup),copy(annexGroup)];branchZones.forEach(z=>z.traverse(o=>{if(o.isPointLight)inLights.push(o);}));syncBranchSize();
-  const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(0,2.4,0);root.add(light);inLights.push(light);}
+  }
 /** Opens the second salon, if the game allows it, and shows it. */
 function openBranch(){if(!game.openBranch())return false;buildBranchShell();syncFurniture();renderSites();focusSite(1);audio.play('levelUp');popup(tx('br.opened'),recep.head,'big');return true;}
 function focusSite(i){site=i;build.cancel();recenter();if(i===0)syncChairs();else{camHome.set(BRANCH_X,.55,1.2);viewScale=1;}renderSites();renderPanel(true);}
