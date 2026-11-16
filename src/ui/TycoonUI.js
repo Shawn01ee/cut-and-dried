@@ -4,7 +4,7 @@ import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS, CATEGORIES, category
 import { siteOf } from '../building/SalonLayout.js';
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
 import { portraitURL, crownURL } from './Portrait.js';
-import { REVIEW_REP, PRICE_MULTIPLIER, LAST_CALLS, CLOSING, REBOOK_ACCEPT } from '../tycoon/TycoonGame.js';
+import { REVIEW_REP, PRICE_MULTIPLIER, LAST_CALLS, CLOSING, REBOOK_ACCEPT, TO_RIVAL, DESK_PLAN } from '../tycoon/TycoonGame.js';
 import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION, GRUDGE_PENALTY, TALENT_LEVELS } from '../employees/Employee.js';
 import { clamp } from '../core/math.js';
 // Which skill each specialty raises, to highlight it on the card.
@@ -321,6 +321,7 @@ export class TycoonUI {
       <div class="brow"><span>${t('hours.lastCall')}</span><span class="sp"></span><span class="seg">${LAST_CALLS.map(m => `<button data-do="lastcall:${m}" class="${g.lastCall === m ? 'sel' : ''}">${m ? t('hours.before', m) : t('hours.atClose')}</button>`).join('')}</span></div>
       <div class="brow"><span>${t('hours.closing')}</span><span class="sp"></span><span class="seg">${CLOSING.map(k => `<button data-do="closing:${k}" class="${g.closingPolicy === k ? 'sel' : ''}">${t('hours.cl.' + k)}</button>`).join('')}</span></div>
       <div class="dim">${t('hours.clNote.' + g.closingPolicy, Math.round(REBOOK_ACCEPT * 100))}</div>
+      <div class="dim">${t('hours.desk', DESK_PLAN.minutesPerClient)}</div>
       <div class="dim">${t('hours.lastCallNote', g.lastCall ? `${c - 1}:${String(60 - g.lastCall).padStart(2, '0')}` : `${c}:00`, Math.round(g.staff.payroll * 1.5 / 8))}</div>`;
   }
   /** The funding page: `part` is the salon's value, Shawn's investment or the bank. */
@@ -409,7 +410,7 @@ export class TycoonUI {
     const scouts = r.stylists.map(id => { const e = g.staff.find(id), cost = g.scoutCost(id); return `<div class="frow"><div class="fx"><b>${name(e.name)}</b> <span class="dim">${t('role.' + e.role)} · ${t('sk.cut')} ${e.skills.cutting} · ${t('sk.colour')} ${e.skills.colouring} · ${t('sk.perm')} ${e.skills.perming}</span></div><button class="go" data-do="scout:${id}" ${cost && g.economy.canAfford(cost) && this.hooks.hasOpenChair() ? '' : 'disabled'}>${cost ? t('rv2.scout', cost.toLocaleString()) : t('rv2.scoutLv', SCOUT_LEVEL)}</button></div>`; }).join('');
     return `<div class="bsec"><h4>${t('rv2.title')}</h4><div class="brow"><b>${r.name}</b><span class="dim">${t('rv2.tier', r.tier + 1)} · ${t('price.' + r.priceLevel)} · ★ ${r.rating.toFixed(1)}</span></div><div class="dim">${t('rv2.style.' + r.tier % 3)}</div>${r.move ? `<div class="${['mishap', 'scandal'].includes(r.move) ? 'good' : 'gold'}">${t('rival.now.' + r.move, r.daysLeft)}</div>` : `<div class="dim">${r.rest ? t('rv2.rest', r.rest) : t('rival.quiet')}</div>`}${war}`
       + `${r.history.length ? `<div class="dim">${t('rv2.history')}: ${r.history.map(h => t('rv2.h', h.day, t('rv2.m.' + h.id))).join(' · ')}</div>` : ''}</div>`
-      + `<div class="bsec"><h4>${t('rv2.share')}</h4><div class="brow"><span>Ciel Ground ${pct(share)}%</span><span class="sp"></span><span>${r.name} ${pct(1 - share)}%</span></div><div class="meter"><i style="width:${pct(share)}%"></i></div><div class="dim">${t('rv2.streak', r.streak, DOMINANT_DAYS, pct(DOMINANT), REOPEN_DAYS[0], REOPEN_DAYS[1])}</div></div>`
+      + `<div class="bsec"><h4>${t('rv2.share')}</h4><div class="brow"><span>Ciel Ground ${pct(share)}%</span><span class="sp"></span><span>${r.name} ${pct(1 - share)}%</span></div><div class="meter"><i style="width:${pct(share)}%"></i></div>${g.toRival.yesterday ? `<div class="bad">${t('rv2.lost', g.toRival.yesterday, r.name, (g.rivalCatch * 100).toFixed(1))}</div>` : ''}<div class="dim">${t('rv2.lostNote', Math.round(TO_RIVAL.share * 100), Math.round(TO_RIVAL.cap * 100))}</div><div class="dim">${t('rv2.streak', r.streak, DOMINANT_DAYS, pct(DOMINANT), REOPEN_DAYS[0], REOPEN_DAYS[1])}</div></div>`
       + `<div class="bsec"><h4>${t('rv2.staff')}</h4><div class="dim">${t('rv2.scoutNote')}</div>${scouts || `<div class="dim">${t('rv2.noStaff')}</div>`}</div>`;
   }
   #marketing() {
