@@ -22,8 +22,8 @@ export const ORDERS = {
 };
 /** How each answer moves Shawn's trust (0-100), and the trust a flat refusal needs. */
 export const TRUST = { start: 50, accept: 4, talkWin: -2, talkLose: -6, refuse: -25, refuseMin: 60, low: 20, ignored: -10, done: 4, weekProfit: 3, weekLoss: -3 };
-/** Days between orders: from day 8, from level 2; sooner with an investor stake. */
-export const HQ_GAP = [8, 14], HQ_GAP_INVESTED = [6, 10], HQ_FROM_DAY = 8, HQ_LEVEL = 2;
+/** Days between orders: from day 8, from level 4; sooner with an investor stake. */
+export const HQ_GAP = [8, 14], HQ_GAP_INVESTED = [6, 10], HQ_FROM_DAY = 8, HQ_LEVEL = 4;
 /** The chance a one-to-one talks him round: Lia's management, his trust, the rating and last week's profit. */
 export const talkOdds = ({ mgmt, trust, rating, weekProfit }) => clamp(.35 + mgmt * .003 + (trust - 50) * .005 + (rating ? (rating - 4) * .2 : 0) + (weekProfit > 0 ? .1 : weekProfit < 0 ? -.1 : 0), .15, .85);
 

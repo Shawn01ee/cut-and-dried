@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { $, V, UP, rand, pick, clamp, lerp, smooth, angLerp, fwd, rgt } from './core/math.js';
 import { SUPPLY_PENALTY } from './tycoon/Brand.js';
+import { STEPS } from './tycoon/Onboarding.js';
 import { concernOf } from './employees/Welfare.js';
 import { ORDERS as HQ_ORDERS, TRUST as HQ_TRUST } from './tycoon/Headquarters.js';
 import { MAX_HEARTS, OCCASION_PAY, OCCASION_NEED } from './tycoon/Regulars.js';
@@ -1024,14 +1025,18 @@ function hudChairs(list,row){const busy=list.filter(s=>s.cust).length,open=hudOp
   const shown=[...list.filter(s=>s.cust&&s.state==='work'),...list.filter(s=>s.cust&&s.state!=='work'),...list.filter(s=>!s.cust)].slice(0,HUD_ROWS).sort((a,b)=>a.i-b.i);
   return head+`<table class="foot">${shown.map(row).join('')}</table><div class="dim">${tx('hud.more',list.length-shown.length,list.filter(s=>!s.cust&&!shown.includes(s)).length)}</div>`;}
 $('#hud').addEventListener('pointerdown',e=>{if(!e.target.closest('[data-hud]'))return;e.preventDefault();hudOpen=!(hudOpen??stations.filter(st=>siteOf(st.item.x)===site).length<=10);try{localStorage.setItem('cd.hudOpen',JSON.stringify(hudOpen));}catch{/* the choice just isn't remembered */}updateHud();});
-function updateHud(){game.syncMissions();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
+/** Ruby's opening checklist: the next step under the HUD, a bonus when one is done. */
+function onboardingRow(){const O=game.onboarding,s=O.current,claim=game.missions.claimable,gift=claim?`<div class="obrow" data-ob="prog"><b>${tx('ob.claim',claim)}</b> ▶</div>`:'';if(!s)return gift;return `<div class="obrow" ${s.tab?`data-ob="${s.tab}"`:''}><b>${tx('ob.title',O.step,STEPS.length)}</b> ${tx('ob.'+s.id)}${s.tab?' ▶':''}</div>`+gift;}
+function checkOnboarding(){const s=game.onboarding.check(game);if(!s)return;audio.play('cash');popup(tx('ob.done',tx('ob.'+s.id),s.reward),recep.head,'big');const n=game.onboarding.current;if(n)later(1.8,()=>say(recep,tx('ob.say.'+n.id),true));else later(1.8,()=>say(recep,tx('ob.say.end'),true));renderPanel(true);}
+function updateHud(){game.syncMissions();checkOnboarding();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
   $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)}(${tx('wd.'+g.weekday)}) ${(d=>d.month+'/'+d.date)(dateOf(g.clock.day))} ${tx('season.'+seasonOf(g.clock.day))} ${tx('wx.'+g.weather)} ${g.dayOff?tx('hud.off'):g.clock.timeText+(g.clock.after?' · '+tx('hud.overtime'):!g.accepting&&g.clock.isOpen?' · '+tx('hud.lastCall'):'')}</span></h1>
   <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.rating',g.reviews.count?`★${g.reviews.rating.toFixed(1)} (${g.reviews.count})`:'–')}${row('hud.followers',g.marketing.followers.toLocaleString())}${row('hud.hours',`${g.clock.openHour}:00–${g.clock.closeHour}:00`)}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length+custs.filter(q=>q.state==='process'||q.state==='ready').length} / ${stations.length+terr.length+procSeats.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
   ${hudChairs(stations.filter(st=>siteOf(st.item.x)===site),st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</td><td class="${st.cust&&st.cust.villain?'bad':''}">${st.cust?(st.cust.special?'✦':st.cust.vip?'★':'')+(st.cust.regular?'♥':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`)}
   ${g.special&&(g.special.state==='due'||g.special.state==='arrived')?`<div class="gold">${tx('sp.hud',g.special.hour+':00',tx('sp.'+g.special.kind),Math.round(g.special.need*100),g.special.state==='arrived'?tx('sp.here'):'')}</div>`:''}
-  ${last?`<div class="dim">${tx('hud.last',nm(last.name),Math.round(last.all*100),nm(last.sty),last.mins.toFixed(1))}</div>`:''}`;}
+  ${last?`<div class="dim">${tx('hud.last',nm(last.name),Math.round(last.all*100),nm(last.sty),last.mins.toFixed(1))}</div>`:''}${started?onboardingRow():''}`;}
+$('#hud').addEventListener('click',ev=>{const b=ev.target.closest('[data-ob]');if(!b)return;const t=$(`[data-t="${b.dataset.ob}"]`);if(t)t.click();});
 
 /* controls */
 $('#bRotL').onclick=()=>camK--;$('#bRotR').onclick=()=>camK++;
@@ -1138,7 +1143,7 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   if(game.staff.waitingToQuit){news.push(tx('wf.alsoTired',game.staff.waitingToQuit));game.staff.waitingToQuit=0;}
   if(!game.dayOff&&['rain','storm','heat','cold','snow'].includes(game.weather))news.unshift(tx('wx.news.'+game.weather,fxText(WEATHER[game.weather])));
   // a new month brings new trends
-  if((day-1)%30===0){const T=game.trends;news.push(tx('tr.news',tx('cut.'+T.cutF),tx('cut.'+T.cutM),tx('perm.'+T.permF),tx('perm.'+T.permM),wantName(T.colour),Math.round((TREND_PAY-1)*100)));}
+  if((day-1)%30===0&&shows('ops.menu',game.progression.level)){const T=game.trends;news.push(tx('tr.news',tx('cut.'+T.cutF),tx('cut.'+T.cutM),tx('perm.'+T.permF),tx('perm.'+T.permM),wantName(T.colour),Math.round((TREND_PAY-1)*100)));}
   {const s=game.special;if(s)news.push(tx('sp.news',s.hour+':00',tx('sp.'+s.kind),Math.round(s.need*100),s.reward.toLocaleString(),s.followers.toLocaleString(),s.rep));}
   news.forEach((n,i)=>later(.6+i*1.4,()=>popup(n,recep.head,'big')));
   happeningCard();
