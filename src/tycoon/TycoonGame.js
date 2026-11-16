@@ -70,6 +70,14 @@ const blankIncidents = () => ({ refunds: 0, discounts: 0, dashed: 0 });
  * (overtime), or sent home. With bookings, most walk-ins who arrive after last call book for tomorrow too.
  */
 export const CLOSING = ['book', 'serve', 'send'], REBOOK_ACCEPT = .7, REBOOK_MAX = 8;
+/**
+ * Clients we could not see. With a rival open they go next door rather than writing about us: those turned away
+ * or sent home always, those who gave up waiting mostly (the rest leave a review about the wait). Yesterday's losses
+ * to the rival come off our share of the street, at `share` × the part of yesterday's clients they were (capped).
+ */
+export const TO_RIVAL = { gaveUp: .7, share: .5, cap: .2, noRivalReview: .1 };
+/** Ruby's planning at the desk: about how long a chair spends on one client, in minutes. */
+export const DESK_PLAN = { minutesPerClient: 60 };
 export class TycoonGame {
   constructor() {
     this.bus = new EventBus();
@@ -108,7 +116,7 @@ export class TycoonGame {
     this.customers = new CustomerFactory();
     this.evaluator = new ServiceEvaluator();
     this.saves = new SaveManager('cut-and-dried-career-v2');
-    this.priceLevel = 1; this.served = 0; this.servedToday = 0; this.satisfactionSum = 0; this.lastSatisfaction = 0;
+    this.priceLevel = 1; this.served = 0; this.servedToday = 0; this.toRival = { today: 0, yesterday: 0, served: 0 }; this.satisfactionSum = 0; this.lastSatisfaction = 0;
     this.repAtDayStart = 0; this.followersAtDayStart = 0; this.incidents = blankIncidents(); this.trollAt = null; this.report = null;
     // Regular clients come back on their own; stylists who want to quit and rival news wait for the morning.
     this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null; this.lastCall = 30; this.closingPolicy = 'book'; this.rebooked = []; this.rebookToday = [];
@@ -209,11 +217,15 @@ export class TycoonGame {
   get valuationParts() { return this.finance.valuationParts(this.#valueContext); }
   investIn(i) { return this.finance.takeInvestment(i, this.progression.level, this.valuation, this.clock.day); }
   buyBackStake() { return this.finance.buyBack(this.valuation); }
-  get standing() { return { rating: this.reviews.count ? this.reviews.rating : 0, followers: this.marketing.followers, priceLevel: this.priceLevel, matching: this.matching }; }
+  get standing() { return { rating: this.reviews.count ? this.reviews.rating : 0, followers: this.marketing.followers, priceLevel: this.priceLevel, matching: this.matching, lost: this.rivalCatch }; }
+  /** Our share of the street lost to the rival through yesterday's clients we could not see. */
+  get rivalCatch() { const R = this.toRival; return this.rival.open && R.yesterday ? Math.min(TO_RIVAL.cap, R.yesterday / (R.yesterday + R.served) * TO_RIVAL.share) : 0; }
+  /** A client we could not see goes next door when there is one; true if they did. */
+  #toRival() { if (!this.rival.open) return false; this.toRival.today++; return true; }
   /** True while we are matching the rival's price war. */
   get matching() { return this.clock.day <= this.matchUntil; }
   /** Our share of the street's would-be clients today. */
-  get marketShare() { return 1 - this.rival.pull(this.standing); }
+  get marketShare() { return Math.max(0, 1 - this.rival.pull(this.standing) - this.rivalCatch); }
   /** Researches a product for the brand: the quality is set by today's team and Lia. */
   startResearch(type, line) { return this.brand.startResearch(type, line, this.economy, this.brand.expectedQuality(type, [this.staff.owner, ...this.staff.hired], this.staff.management), this.clock.day); }
   /** Displays at both salons, which make clients likelier to buy at the desk. */
@@ -441,8 +453,10 @@ export class TycoonGame {
   /** A client who gave up waiting: a regular loses heart, a special booking is missed. */
   customerGaveUp(customer) {
     this.metrics.leave(customer, this.clock.isOpen ? 'patience' : 'closing');
-    this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day));
-    return { regular: customer.regular ? this.#regularVisited(customer, 0, null) : null, special: customer.special ? this.#settleSpecial(0) : null };
+    // Most who gave up go next door; the rest tell everyone about the wait.
+    const rival = !customer.special && Math.random() < TO_RIVAL.gaveUp && this.#toRival();
+    if (!rival) { this.reputation.add(-.6); this.#post(this.reviews.walkedOut(customer, this.clock.day)); }
+    return { rival, regular: customer.regular ? this.#regularVisited(customer, 0, null) : null, special: customer.special ? this.#settleSpecial(0) : null };
   }
   #regularVisited(customer, satisfaction, stylist) {
     const r = this.regularBook.visited(customer.regular, { satisfaction, stylist, occasion: customer.occasion });
@@ -478,7 +492,21 @@ export class TycoonGame {
     this.specialLog.unshift({ day: this.clock.day, kind: s.kind, ok, sat: Math.floor(satisfaction * 100) }); this.specialLog.length = Math.min(this.specialLog.length, 12);
     return { ok, ...s };
   }
-  customerTurnedAway(customer) { this.metrics.leave(customer, 'seats'); this.#post(this.reviews.turnedAway(customer, this.clock.day)); }
+  /** No seat for them: next door if there is one, otherwise home (now and then with a word online). True if they went to the rival. */
+  customerTurnedAway(customer) { this.metrics.leave(customer, 'seats'); if (this.#toRival()) return true; if (Math.random() < TO_RIVAL.noRivalReview) this.#post(this.reviews.turnedAway(customer, this.clock.day)); return false; }
+  /**
+   * With a receptionist at the desk, a walk-in is not let in to wait in vain: once the clients already waiting or in a
+   * chair (`ahead`) fill what the staffed chairs can start before last call, the desk is full for today.
+   */
+  deskFull(site, ahead, chairs) {
+    if (!this.staff.receptionistAt(site).hired || !this.accepting || !chairs) return false;
+    const left = (this.clock.closeHour - this.lastCall / 60 - this.clock.hour) * 60;
+    return ahead >= Math.floor(chairs * Math.max(0, left) / DESK_PLAN.minutesPerClient);
+  }
+  /** A walk-in the desk cannot fit in: booked for tomorrow when they agree, otherwise next door or home. Never a review. */
+  declineAtDesk(c) { if (this.closingPolicy !== 'send' && !c.villain && Math.random() < REBOOK_ACCEPT) { this.rebook(c); return 'book'; } this.metrics.leave(c, 'seats'); return this.#toRival() ? 'rival' : 'home'; }
+  /** Sent home at closing or after last call: next door if there is one. */
+  customerSentHome() { return this.#toRival(); }
   /** A new review: it moves the reputation by its stars and goes on the board. */
   #post(review) {
     if (review) {
@@ -539,6 +567,7 @@ export class TycoonGame {
     if (this.nextHours) { this.clock.setHours(...this.nextHours); this.nextHours = null; }
     this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day); this.staff.welfareMorning(dateOf(this.clock.day));
     { const lv = this.progression.level, tab = { marketing: 'tab.mkt', staff: 'tab.staff', training: 'tab.staff' }; this.missions.fill(lv, f => this.isUnlocked(f) && (!tab[f] || shows(tab[f], lv)), k => this.#missionState(k)); }
+    this.toRival = { today: 0, yesterday: this.toRival.today, served: this.servedToday };
     this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null; this.special = null;
     if (!this.month.start) this.month.begin(this.#monthSnapshot());
     { const day = this.clock.day, month = Math.floor((day - 1) / MONTH_DAYS), c = contestFor(month, this.progression.level);
@@ -638,7 +667,7 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, closingPolicy: this.closingPolicy, rebooked: this.rebooked, performance: this.explainer, departments: this.departments, network: this.network, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, onboarding: this.onboarding, hq: this.hq, hqFx: this.hqFx, storyBoost: this.storyBoost, storyPerks: this.storyPerks, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, toRival: this.toRival, closingPolicy: this.closingPolicy, rebooked: this.rebooked, performance: this.explainer, departments: this.departments, network: this.network, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, onboarding: this.onboarding, hq: this.hq, hqFx: this.hqFx, storyBoost: this.storyBoost, storyPerks: this.storyPerks, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.departments.restore(d.departments);
@@ -658,6 +687,6 @@ export class TycoonGame {
     this.regularBook.restore(d.regularBook); this.regularBook.trim(this.regulars); this.specialLog = d.specialLog || [];
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
-    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.onboarding.restore(d.onboarding, this); this.hq.restore(d.hq); this.hqFx = d.hqFx || {}; this.storyBoost = d.storyBoost || null; this.storyPerks = { hospitality: 0, contest: 0, ...d.storyPerks }; this.hospitality.extra = this.storyPerks.hospitality; this.lastCall = d.lastCall || 0; this.closingPolicy = CLOSING.includes(d.closingPolicy) ? d.closingPolicy : 'book'; this.rebooked = d.rebooked || []; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
+    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.onboarding.restore(d.onboarding, this); this.hq.restore(d.hq); this.hqFx = d.hqFx || {}; this.storyBoost = d.storyBoost || null; this.storyPerks = { hospitality: 0, contest: 0, ...d.storyPerks }; this.hospitality.extra = this.storyPerks.hospitality; this.lastCall = d.lastCall || 0; this.toRival = { today: 0, yesterday: 0, served: 0, ...d.toRival }; this.closingPolicy = CLOSING.includes(d.closingPolicy) ? d.closingPolicy : 'book'; this.rebooked = d.rebooked || []; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
   }
 }

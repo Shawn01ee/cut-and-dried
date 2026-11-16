@@ -12,7 +12,7 @@ export class DepartmentGuests {
         if(view.state!=='leaving'){view.state='leaving';this.walk(view.fig,this.door(),()=>{this.remove(view.fig);this.guests.delete(job.id);});}
         continue;
       }
-      if(job.state==='working'&&view.step!==job.step){view.step=job.step;view.state='serving';this.walk(view.fig,this.station(job),()=>{view.fig.mode='sit';view.fig.seatH=.55;view.fig.footY=.1;});}
+      if(job.state==='working'&&view.step!==job.step){view.step=job.step;view.state='serving';const spot=this.station(job);this.walk(view.fig,spot.pos,()=>{const f=view.fig;f.pos.copy(spot.pos);f.yaw=spot.yaw;if(spot.sit){f.mode='sit';f.seatH=spot.h;f.footY=.06;}});}
       else if(job.state==='arrived'&&view.state!=='waiting'){view.state='waiting';this.walk(view.fig,this.waiting(job));}
     }
   }

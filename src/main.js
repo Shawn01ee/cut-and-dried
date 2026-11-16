@@ -433,13 +433,15 @@ const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex
 function route(from,to){return [...nav.path(from,to).map(p=>V(p.x,0,p.z)),to.clone()];}
 const custs=[],queue=[];
 /** The booking model assigns each active specialist a specific workstation. */
+/** A spot on a department station (see FURNITURE `work`): world position and facing, turned with the piece. */
+function workSpot(it,who){const W=FURNITURE[it.id].work,[x,z,q]=W[who],p=game.layout.toWorld(it,x,z);return {pos:V(p.x,0,p.z),yaw:(it.rotation+q)*Math.PI/2,sit:who==='guest'||!!W.staffSits,h:W.h};}
 function departmentWorkplace(part, workerId=null){const d=game.departments,job=d.jobs.find(j=>j.state==='working'&&j.worker===workerId),stations=d.stations(part);return (job&&d.stationFor(job))||stations[Math.max(0,d.team(part).findIndex(e=>e.id===workerId))%stations.length]||null;}
 const departmentStaff=new DepartmentStaffView(game.departments,e=>new Fig({skin:e.skin,shirt:e.apron,pants:0x1d1a26,apron:e.apron,staffHair:e.hair,hairdo:e.hairdo}),
-  e=>{const it=departmentWorkplace(e.department,e.id);return it?V(it.x+.45,0,it.z-.5):null;},
+  e=>{const it=departmentWorkplace(e.department,e.id);return it?workSpot(it,'staff'):null;},
   fig=>{const i=figs.indexOf(fig);if(i>=0)figs.splice(i,1);fig.root.removeFromParent();});
 const departmentGuests=new DepartmentGuests(game,job=>new Fig({skin:pick(SKINS),shirt:job.steps[job.step]==='makeup'?0x7a5d6e:0xdcd9dc,pants:0x45404f,staffHair:0x2e1d14,hairdo:'long'}),
   (fig,to,done)=>{fig.mode='stand';const D=SITE_DOORS[0],entry=fig.pos.distanceTo(D.street)<.1?[D.door,D.out,D.inn]:[];fig.walkTo([...entry,...route(entry.length?D.inn:fig.pos,to)],done);},
-  job=>{const part=job.steps[job.step],it=game.departments.stationFor(job)||departmentWorkplace(part);return it?V(it.x,0,it.z+.7):V(0,0,1);},
+  job=>{const part=job.steps[job.step],it=game.departments.stationFor(job)||departmentWorkplace(part);return it?workSpot(it,'guest'):{pos:V(0,0,1),yaw:Math.PI,sit:false};},
   ()=>SITE_DOORS[0].street,fig=>{const i=figs.indexOf(fig);if(i>=0)figs.splice(i,1);fig.root.removeFromParent();},
   job=>{const it=game.layout.items.find(x=>['bench','bench2','sofa'].includes(x.id)&&siteOf(x.x)===0);return it?V(it.x+((job.id%3)-1)*.45,0,it.z+.5):V(-.5+(job.id%3)*.45,0,1);});
 
@@ -455,9 +457,10 @@ function spawnCustomer(o={}){
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(D.street);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);game.metrics.arrive(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');arrivalNews(c,o);
-  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.accepting){if(game.lateArrival(c)==='book'){game.rebook(c);c.rebooked=true;const dk=game.staff.receptionistAt(site).hired?deskFig(site):null;if(dk)say(dk,line('desk.rebook'),true);later(1.2,()=>say(fig,line('rebook.ok'),false));leave(c);}else leave(c,'full');return;}audio.play('chime');
+  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.accepting){if(game.lateArrival(c)==='book'){game.rebook(c);c.rebooked=true;const dk=game.staff.receptionistAt(site).hired?deskFig(site):null;if(dk)say(dk,line('desk.rebook'),true);later(1.2,()=>say(fig,line('rebook.ok'),false));leave(c);}else{if(game.customerSentHome())goesNextDoor(c);leave(c,'full');}return;}audio.play('chime');
+    {const L=deskLoad(site);if(game.deskFull(site,L.ahead,L.chairs)){declineAtDesk(c,site);return;}}
     if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}greetAt(c,site);const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
-    if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
+    if(!seat){if(game.staff.receptionistAt(site).hired){declineAtDesk(c,site);return;}popup(tx('noSeats'),fig.head,'');audio.play('bad');if(game.customerTurnedAway(c))goesNextDoor(c);leave(c,'full');return;}
     seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen&&game.closingPolicy!=='serve'){closingLeave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
       // Drinks and snacks are served as soon as the client sits down.
       const drink=game.dayFx.drinks===0?null:game.hospitality.serve(c);if(drink){fig.setTool(drink==='juice'?'juice':'cup');if(Math.random()<.35)later(.6,()=>say(fig,line('drink.thanks'),false));}});});
@@ -813,7 +816,16 @@ function bestCamK(st){const base=Math.round(camK);let best=base,bd=-2;[0,-1,1,-2
 function finishDay(){game.staff.hired.filter(e=>e.quits).forEach(e=>{e.quits=false;fireStaff(e);popup(tx('staff.quit',nm(e.name)),recep.head,'big');});
   game.closeDay();audio.play('dayEnd');paused=true;openMenu('day','day');}
 /** A waiting client at closing: booked for tomorrow (and told so), or simply sent home. */
-function closingLeave(c){if(c.special){visitNews(c,game.customerGaveUp(c));leave(c);return;}if(game.closingFor(c)==='book'){game.rebook(c);c.rebooked=true;later(.4+Math.random(),()=>say(c.fig,line('rebook.ok'),false));}leave(c);}
+/** How full a salon's day is, for the desk: clients waiting or in a chair, and chairs with someone at them. */
+const deskLoad=site=>({ahead:queue.filter(q=>(q.site||0)===site).length+stations.filter(s=>s.cust&&siteOf(s.item.x)===site).length,chairs:stations.filter(s=>!s.vacant&&siteOf(s.item.x)===site).length});
+const deskClosedOn=[0,0];
+/** The desk turns a walk-in away kindly: a booking for tomorrow, or a polite no (they may go next door). Said once a day: the desk is closed. */
+function declineAtDesk(c,site){const r=game.declineAtDesk(c),dk=deskFig(site);say(dk,line(r==='book'?'desk.fullBook':'desk.full'),true);
+  if(deskClosedOn[site]!==game.clock.day){deskClosedOn[site]=game.clock.day;popup(tx('desk.closed',nm(game.staff.receptionistAt(site).name)),recep.head,'big');}
+  if(r==='book'){c.rebooked=true;later(1.2,()=>say(c.fig,line('rebook.ok'),false));}else if(r==='rival')goesNextDoor(c);leave(c);}
+/** Someone we could not see heads for the rival, and says so. */
+function goesNextDoor(c){later(.6,()=>say(c.fig,line('leave.rival'),false));popup(tx('toRival',game.rival.name),c.fig.head,'',true);}
+function closingLeave(c){if(c.special){visitNews(c,game.customerGaveUp(c));leave(c);return;}if(game.closingFor(c)==='book'){game.rebook(c);c.rebooked=true;later(.4+Math.random(),()=>say(c.fig,line('rebook.ok'),false));}else if(game.customerSentHome())goesNextDoor(c);leave(c);}
 function dayTick(dt){if(game.report||game.dayOff)return;game.tick(dt);departmentStaff.sync();departmentGuests.sync();if(!game.clock.isOpen&&queue.length&&game.closingPolicy!=='serve')queue.slice().forEach(closingLeave);if(!game.clock.isOpen&&!game.departments.busy&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
 game.bus.on('special:finished',r=>popup(tx(r.ok?'dept.idolSuccess':'dept.idolFailed'),recep.head,'big'));
 game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');const n=queue.filter(c=>c.state==='wait').length;if(!n||game.closingPolicy==='serve'){if(n)popup(tx('close.serve',n),recep.head,'');return;}
@@ -908,7 +920,7 @@ function simStep(dt){simT+=dt;
   dayTick(dt);
   // waiting patience
   custs.forEach(c=>{if(c.state==='process'&&c.procSeated){c.procLeft-=dt;c.tint=.3;if(c.procLeft<=0){c.state='ready';c.readyAt=simT;c.tint=0;popup(tx('proc.done'),c.fig.head,'');islandTreat(c);}}});
-  custs.forEach(c=>{if(c.state==='wait'){c.pat-=dt;grumble(c);if(c.pat<=0){popup(tx('tooSlow'),c.fig.head,'');audio.play('bad');visitNews(c,game.customerGaveUp(c));leave(c);}}});
+  custs.forEach(c=>{if(c.state==='wait'){c.pat-=dt;grumble(c);if(c.pat<=0){popup(tx('tooSlow'),c.fig.head,'');audio.play('bad');const r=game.customerGaveUp(c);if(r.rival)goesNextDoor(c);visitNews(c,r);leave(c);}}});
   // stations
   stations.forEach(st=>{
     if(st.vacant)return;st.sty.workSite=siteOf(st.item.x);

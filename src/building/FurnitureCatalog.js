@@ -3,8 +3,8 @@
  * `needs` lists local points that must stay reachable on foot. How each piece looks lives in rendering/furnitureModels.js.
  */
 export const FURNITURE = {
-  makeupVanity: { price: 1800, comfort: 1, w: 3, d: 3, minTier: 1, max: 2, requires: 'seniors', needs: [[0, 1]] },
-  nailDesk: { price: 1400, comfort: 1, w: 3, d: 3, minTier: 1, max: 2, requires: 'seniors', needs: [[0, 1]] },
+  makeupVanity: { price: 1800, comfort: 1, w: 3, d: 3, minTier: 1, max: 2, requires: 'seniors', needs: [[0, 1]], work: { guest: [0, .35, 2], h: .46, staff: [.62, .3, 3] } },
+  nailDesk: { price: 1400, comfort: 1, w: 3, d: 3, minTier: 1, max: 2, requires: 'seniors', needs: [[0, 1]], work: { guest: [0, .5, 2], h: .42, staff: [0, -.5, 0], staffSits: true } },
   // `chairs` lists each styling chair on a piece as [x, z, quarter turns] in its own frame.
   // A styling chair is a free-standing seat with its own mirror and partitions; placed side by side they form a styling island.
   station: { price: 300, comfort: 0, w: 3, d: 3, needs: [[0, 1]], chairs: [[0, 0, 0]], light: { at: [0, 1.9, -.45], power: .45 } },

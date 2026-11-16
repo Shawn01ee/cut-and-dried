@@ -73,7 +73,7 @@ export class Rival {
       this.open = true; this.reopenDay = 0; this.version++; return 'open';
     }
     // Every day we hold most of the street counts; enough in a row and they give up.
-    const share = 1 - this.pull(you);
+    const share = 1 - this.pull(you) - (you.lost || 0);
     this.streak = share >= DOMINANT ? this.streak + 1 : 0;
     if (this.streak >= DOMINANT_DAYS) { this.#close(day); return 'closed'; }
     this.baseRating = clamp(this.baseRating + rand(-.05, .06), this.def.rating - .6, this.def.rating + .5);
