@@ -4,7 +4,7 @@ import { MAX_HEARTS, OCCASION_PAY, OCCASION_NEED } from './tycoon/Regulars.js';
 import { SPECIAL_FAIL_REP } from './tycoon/SpecialClients.js';
 import { TALK_RELIEF } from './employees/Welfare.js';
 import { GRADE_PAY, TREND_PAY } from './hair/StyleMenu.js';
-import { WEATHER } from './tycoon/Weather.js';
+import { WEATHER, SHOVEL_AT, SHOVEL_CLEARS, SLIP_DEPTH, SLIP_CHANCE, SLIP_REP } from './tycoon/Weather.js';
 import { lab2lin, labCss, labMix, hexCss, PAL_LAB, PAL_RGB } from './rendering/color.js';
 import { STR, NS, CAP } from './hair/strands.js';
 import { profile, SHAPES, WAVES, DYES, dyeLab, cloneHair, hasColour, opColour, opWave, opCut, applyPlan, score, aiPlan, blankPlan } from './hair/rules.js';
@@ -224,13 +224,33 @@ const marker=new THREE.Mesh(new THREE.ConeGeometry(.16,.32,4),M(0xffd98a));marke
 
 /* clippings */
 const NC=900,clipMesh=new THREE.InstancedMesh(BOX,HAIRMAT,NC);clipMesh.frustumCulled=false;clipMesh.raycast=noRay;clipMesh.count=0;world.add(clipMesh);
-/* rain: only outdoors, over the street in front and the ground beside the salon */
-const RAIN_N=320,rainMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(.014,.3,.014),new THREE.MeshBasicMaterial({color:0xc8dcf0,transparent:true,opacity:.55}),RAIN_N);rainMesh.frustumCulled=false;rainMesh.count=0;
-const drops=Array.from({length:RAIN_N},()=>({x:0,y:Math.random()*9,z:0}));
-function placeDrop(d){if(Math.random()<.72){d.x=rand(-10,24);d.z=rand(3.5,10);}else{d.x=rand(-11,-4.6);d.z=rand(-10,3.5);}}drops.forEach(placeDrop);
-world.add(rainMesh);
-function updateRain(dt){const w=started&&!game.dayOff?game.weather:null,n=w==='storm'?RAIN_N:w==='rain'?RAIN_N>>1:0;rainMesh.count=n;if(!n)return;const v=w==='storm'?14:9,drift=w==='storm'?2.6:.5;
-  for(let i=0;i<n;i++){const d=drops[i];d.y-=v*dt;d.x-=drift*dt;if(d.y<0){d.y+=9;placeDrop(d);}_m4.makeTranslation(d.x,d.y,d.z);rainMesh.setMatrixAt(i,_m4);}rainMesh.instanceMatrix.needsUpdate=true;}
+/* ================= rain and snow: outdoors only ================= */
+const PRECIP_N=560,precipMat=c=>new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:c===0xffffff?.9:.55});
+const rainMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(.014,.3,.014),precipMat(0xc8dcf0),PRECIP_N),snowMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(.05,.05,.05),precipMat(0xffffff),PRECIP_N);
+[rainMesh,snowMesh].forEach(m=>{m.frustumCulled=false;m.count=0;m.raycast=noRay;});
+const drops=Array.from({length:PRECIP_N},()=>({x:0,y:Math.random()*9,z:0,ph:Math.random()*6}));
+function placeDrop(d){d.x=rand(-15,BRANCH_X+12);d.z=rand(-15,14);}drops.forEach(placeDrop);
+/** Each salon's footprint, walls included: inside them it never rains. */
+function salonRects(){const T=game.layout.tier,bt=game.layout.branchTier,r=[{x0:-4.1,x1:T>=4?12.1:T>=2?8.1:4.1,z0:T>=5?-9.1:T>=3?-7.1:T>=1?-5.1:-3.1,z1:3.1}];
+  if(game.layout.branchOpen)r.push({x0:BRANCH_X-4.1,x1:BRANCH_X+(bt>=2?8.1:4.1),z0:bt>=1?-5.1:-3.1,z1:3.1});return r;}
+/** True when a drop would be seen over a salon: standing in one, or high enough that the view puts it in front of the floor or walls. */
+function overSalon(d,R,vx,vz){const k=1.414*(d.y+.3),qx=d.x+vx*k,qz=d.z+vz*k,ex=vx*3.8,ez=vz*3.8;
+  return R.some(b=>(d.x>b.x0-.3&&d.x<b.x1+.3&&d.z>b.z0-.3&&d.z<b.z1+.3)||(qx>Math.min(b.x0,b.x0+ex)-.4&&qx<Math.max(b.x1,b.x1+ex)+.4&&qz>Math.min(b.z0,b.z0+ez)-.4&&qz<Math.max(b.z1,b.z1+ez)+.4));}
+const _hide=new THREE.Matrix4().makeScale(0,0,0);
+function updatePrecip(dt){const w=started&&!game.dayOff?game.weather:null,snow=w==='snow',n=w==='storm'?PRECIP_N:w==='rain'?PRECIP_N>>1:snow?Math.round(PRECIP_N*.6):0;
+  rainMesh.count=snow?0:n;snowMesh.count=snow?n:0;updateSnowCover();if(!n)return;
+  const mesh=snow?snowMesh:rainMesh,v=snow?1.1:w==='storm'?14:9,drift=snow?.2:w==='storm'?2.6:.5,R=salonRects(),vx=-Math.sin(camAz),vz=-Math.cos(camAz);
+  for(let i=0;i<n;i++){const d=drops[i];d.y-=v*dt;d.x-=drift*dt;if(snow){d.ph+=dt;d.x+=Math.sin(d.ph*1.3)*.3*dt;}if(d.y<0){d.y+=9;placeDrop(d);}
+    if(overSalon(d,R,vx,vz)){mesh.setMatrixAt(i,_hide);continue;}_m4.makeTranslation(d.x,d.y,d.z);mesh.setMatrixAt(i,_m4);}mesh.instanceMatrix.needsUpdate=true;}
+/* snow lying on each salon's pavement */
+const snowTex=canvasTex(32,12,g=>{g.fillStyle='#f6f3ee';g.fillRect(0,0,32,12);for(let i=0;i<40;i++){g.fillStyle=i%3?'#dfe9f4':'#ffffff';g.fillRect((i*13)%32,(i*7)%12,1+(i%2),1);}});
+const snowCover=[0,1].map(()=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),new THREE.MeshLambertMaterial({map:snowTex,transparent:true,opacity:0}));m.visible=false;m.raycast=noRay;return m;});
+function updateSnowCover(){const T=game.layout.tier,bt=game.layout.branchTier;[[-4.5,T>=4?12.5:T>=2?8.5:4.5],[BRANCH_X-4.5,BRANCH_X+(bt>=2?8.5:4.5)]].forEach(([x0,x1],s)=>{const m=snowCover[s],dep=started&&(s===0||game.layout.branchOpen)?game.snow[s]:0;
+  m.visible=dep>.02;if(!m.visible)return;m.material.opacity=Math.min(.95,.2+dep*.8);m.position.set((x0+x1)/2,.03+dep*.02,4.7);m.scale.set(x1-x0,1,3);});}
+/** True when someone stands inside a salon rather than out on the street. */
+const indoors=p=>salonRects().some(b=>p.x>b.x0&&p.x<b.x1&&p.z>b.z0&&p.z<b.z1);
+const UMBRELLAS=[0x1d1a26,0x2a4478,0xd8314a,0xffd98a,0x1fa39a,0xe25c8f,0xf6f3ee,0x8a4fc2];
+world.add(rainMesh,snowMesh,...snowCover);
 const clips=[];let clipHead=0,vacT=0;const _m4=new THREE.Matrix4(),_q=new THREE.Quaternion(),_s=V(),_c=new THREE.Color();
 for(let i=0;i<NC;i++){clipMesh.setColorAt(i,_c.set(0));}
 function spawnClip(p,lab){const [r,g,b]=lab2lin(lab.L,lab.a,lab.b);const o={p:p.clone(),v:V(rand(-.25,.25),rand(0,.3),rand(-.25,.25)),landed:false,alive:true,ry:rand(0,3)};
@@ -271,10 +291,17 @@ class Fig{
     if(k==='brush'){b(.02,.17,.02,0x1d1a26,0,.08,0);b(.04,.05,.03,0x8a4fc2,0,.18,0);}
     if(k==='dryer'){b(.05,.1,.05,0x1d1a26,0,.04,0);b(.08,.08,.22,0xe25c8f,0,.11,.07);}
     if(k==='broom'){b(.03,1.0,.03,0x8a6040,0,.48,0);b(.34,.1,.08,0xe8c27a,0,.98,0);}
+    if(k==='shovel'){b(.03,.95,.03,0x8a6040,0,.46,0);b(.3,.03,.26,0x45404f,0,.95,.06);b(.3,.08,.02,0x45404f,0,.97,.19);}
     if(k==='bowl'){b(.13,.06,.13,0x1d1a26,0,.02,.04);}
     if(k==='cup'){b(.07,.09,.07,0xf6f3ee,0,.05,0);b(.05,.01,.05,0x5e3d24,0,.1,0);}
     if(k==='phone'){b(.05,.1,.012,0x1d1a26,0,.05,0);}
     if(k==='juice'){b(.06,.12,.06,0xffb15a,0,.06,0);b(.012,.06,.012,0xd8314a,.015,.14,0);}}
+  /** An open umbrella over the head, held in the left hand: for walking outside in rain or snow. */
+  setUmbrella(on){if(on===!!this.umbOn)return;this.umbOn=on;
+    if(on&&!this.umbTop){const c=pick(UMBRELLAS),g=new THREE.Group(),b=(w,h,d,col,y)=>{const m=new THREE.Mesh(BOX,M(col));m.scale.set(w,h,d);m.position.y=y;m.castShadow=true;g.add(m);};
+      b(.92,.05,.92,c,0);b(.66,.06,.66,c,.05);b(.36,.06,.36,c,.1);b(.04,.1,.04,0x1d1a26,.17);[[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([x,z])=>{const m=new THREE.Mesh(BOX,M(0x1d1a26));m.scale.set(.05,.04,.05);m.position.set(x*.44,-.03,z*.44);g.add(m);});
+      this.umbTop=g;this.umbPole=new THREE.Mesh(BOX,M(0x1d1a26));this.root.add(g,this.umbPole);}
+    if(this.umbTop){this.umbTop.visible=on;this.umbPole.visible=on;}}
   walkTo(pts,cb){this.path=pts.map(p=>p.clone());this.cb=cb||null;if(this.mode==='sit')this.mode='stand';}
   remove(){world.remove(this.root);figs.splice(figs.indexOf(this),1);}
   update(dt){
@@ -302,10 +329,12 @@ class Fig{
     const chest=hips.clone().addScaledVector(s,.48);
     for(const sd of [-1,1]){const sh=chest.clone().addScaledVector(r,sd*.23);let tg=sd<0?this.handL:this.handR;
       if(this.clapT>0){const k=Math.abs(Math.sin(this.clapT*18));tg=chest.clone().addScaledVector(fz,.3).addScaledVector(s,.02).addScaledVector(r,sd*(.02+.07*k));}
+      else if(!tg&&sd<0&&this.umbOn&&!sit)tg=chest.clone().addScaledVector(fz,.2).addScaledVector(r,-.05).addScaledVector(UP,-.04);
       else if(!tg){if(sit)tg=hips.clone().addScaledVector(f,.3).addScaledVector(r,sd*.15).addScaledVector(UP,.1);
         else{const ph=this.phase+(sd<0?Math.PI:0);tg=sh.clone().addScaledVector(UP,-.53).addScaledVector(f,walk?Math.sin(ph)*.16:.03).addScaledVector(r,sd*.05);}}
       const pole=f.clone().multiplyScalar(-1).addScaledVector(r,sd*.7).addScaledVector(UP,-.6);
       const [el,hd]=ik(sh,tg,.29,.28,pole);bone(sd<0?this.uaL:this.uaR,sh,el,.11);bone(sd<0?this.faL:this.faR,el,hd,.09);
+      if(sd<0&&this.umbOn&&this.umbTop){const top=this.head.position.clone().addScaledVector(UP,.42);bone(this.umbPole,hd,top,.025);this.umbTop.position.copy(top);this.umbTop.quaternion.setFromAxisAngle(UP,this.yaw);}
       if(sd>0){this.tool.position.copy(hd);const dir=this.toolAim?this.toolAim.clone().sub(hd).normalize():hd.clone().sub(el).normalize();this.tool.quaternion.setFromUnitVectors(UP,dir);}}
     if(this.clapT>0)this.clapT-=dt;}
 }
@@ -390,7 +419,8 @@ function spawnCustomer(o={}){
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(D.street);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');arrivalNews(c,o);
-  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
+  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');
+    if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
     seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
       // Drinks and snacks are served as soon as the client sits down.
@@ -535,6 +565,14 @@ const sweepTime=cleaning=>3.2*(1.5-cleaning/100);
 function startSweep(fig,cleaning=50){const S=siteOf(fig.pos.x),landed=landedClips().filter(c=>siteOf(c.p.x)===S);if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
   const at=a.clone().add(V(.5,0,.45));if(S){at.x=clamp(at.x,BRANCH_X-3.6,BRANCH_X+3.6);at.z=clamp(at.z,-2.6,2.6);}else{at.x=clamp(at.x,-3.6,t>=4?11.6:t>=2?7.6:3.6);at.z=clamp(at.z,t>=5?-8.6:t>=3?-6.6:t>=1?-4.6:-2.6,2.6);}
   const job={kind:'sweep',phase:'walk',fig,aim:a,t:sweepTime(cleaning),r:.8+cleaning/250};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
+/** An assistant heads out to shovel the snow off the pavement in front of the door. */
+function startShovel(h,s){const D=SITE_DOORS[s],f=h.fig,spot=D.door.clone().add(V(rand(-1.2,1.6),0,rand(.3,1.1)));f.handL=f.handR=null;f.setTool(null);popup(tx('snow.out',nm(h.e.name)),f.head,'');
+  const job={kind:'shovel',phase:'walk',site:s,t:game.clock.hourLength*Math.max(.25,.7-h.e.cleaning/250),spot};
+  f.walkTo([...route(f.pos,D.inn),D.out,D.door,spot],()=>{job.phase='work';f.setTool('shovel');});return job;}
+/** Shovels for a while, clears the snow, then walks back in; true once back inside. */
+function updateShovel(job,dt,h){const f=h.fig;if(job.phase==='work'){job.t-=dt;f.toolAim=job.spot.clone().add(V(Math.sin(simT*4)*.4,0,.6));
+    if(job.t<=0){game.clearSnow(job.site,SHOVEL_CLEARS);f.toolAim=null;f.setTool(null);job.phase='back';const D=SITE_DOORS[job.site];f.walkTo([D.door,D.out,D.inn],()=>{job.phase='done';});}}
+  return job.phase==='done';}
 /** Advances a sweeping job; true once the patch of floor is clean. */
 function updateSweep(job,dt){if(job.phase!=='work')return false;const f=job.fig,a=job.aim;job.t-=dt;f.toolAim=V(a.x+Math.sin(simT*5)*.35,0,a.z+Math.cos(simT*2.5)*.12);
   f.handR=f.pos.clone().add(V(0,1.02,0)).addScaledVector(fwd(f.yaw),.22).addScaledVector(rgt(f.yaw),.1);f.handL=f.handR.clone().add(V(0,-.22,0)).addScaledVector(fwd(f.yaw),.05);
@@ -543,6 +581,8 @@ function helpersUpdate(dt){const messAt=site=>landedClips().filter(c=>siteOf(c.p
   helpers.forEach(h=>{const f=h.fig,T=h.task;if(!f.root.visible)return;
     if(T&&T.kind==='wash')return;
     if(T&&T.kind==='sweep'){if(updateSweep(T,dt))h.task=null;return;}
+    if(T&&T.kind==='shovel'){if(updateShovel(T,dt,h))h.task=null;return;}
+    {const s=siteOf(h.idle.x);if(game.snow[s]>=SHOVEL_AT&&!helpers.some(o=>o.task&&o.task.kind==='shovel'&&siteOf(o.idle.x)===s)){h.task=startShovel(h,s);return;}}
     // A keen cleaner picks up the broom sooner.
     if(messAt(siteOf(h.idle.x))>40-h.e.cleaning/4&&!helpers.some(o=>o.task&&o.task.kind==='sweep'&&siteOf(o.idle.x)===siteOf(h.idle.x))){h.task=startSweep(f,h.e.cleaning);if(h.task)return;}
     if(!f.path.length&&f.pos.distanceTo(h.idle)>.05){f.handL=f.handR=null;goTo(f,h.idle,h.idleYaw);}});}
@@ -671,7 +711,7 @@ function phaseNow(){if(timeMode!=='auto')return timeMode;const d=new Date(),h=st
 const L={sky:new THREE.Color(0x7ea2d0),sun:new THREE.Color(0xfff1c4),si:2.8,sp:V(6,12,5),hs:new THREE.Color(0xb6d2ec),hg:new THREE.Color(0x5f9e45),hi:1.1,inI:0,spI:0,glow:0};
 const _ca=new THREE.Color(),_cb=new THREE.Color();
 /** How each kind of weather greys the sky and dims the sun. */
-const SKY_WX={sunny:[0,1],cloudy:[.45,.65],rain:[.6,.5],storm:[.8,.3],heat:[0,1.15],cold:[.25,.8]};
+const SKY_WX={sunny:[0,1],cloudy:[.45,.65],rain:[.6,.5],storm:[.8,.3],heat:[0,1.15],cold:[.25,.8],snow:[.5,.7]};
 function updateLights(dt){const P=PRE[phaseNow()],k=Math.min(1,dt*1.5),[grey,sunK]=started&&!game.dayOff?SKY_WX[game.weather]||[0,1]:[0,1];
   _ca.set(P.sky).lerp(_cb.set(0x6e7480),grey);L.sky.lerp(_ca,k);
   L.sun.lerp(_ca.set(P.sun),k);L.si=lerp(L.si,P.si*sunK,k);L.sp.lerp(P.sp,k);L.hs.lerp(_ca.set(P.hs),k);L.hg.lerp(_ca.set(P.hg),k);
@@ -954,7 +994,8 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));
   game.staff.news.splice(0).forEach(n=>news.push(tx(n.key,nm(n.name),n.n)));
-  if(!game.dayOff&&['rain','storm','heat','cold'].includes(game.weather))news.unshift(tx('wx.news.'+game.weather,fxText(WEATHER[game.weather])));
+  if(game.staff.waitingToQuit){news.push(tx('wf.alsoTired',game.staff.waitingToQuit));game.staff.waitingToQuit=0;}
+  if(!game.dayOff&&['rain','storm','heat','cold','snow'].includes(game.weather))news.unshift(tx('wx.news.'+game.weather,fxText(WEATHER[game.weather])));
   // a new month brings new trends
   if((day-1)%30===0){const T=game.trends;news.push(tx('tr.news',tx('cut.'+T.cutF),tx('cut.'+T.cutM),tx('perm.'+T.permF),tx('perm.'+T.permM),wantName(T.colour),Math.round((TREND_PAY-1)*100)));}
   {const s=game.special;if(s)news.push(tx('sp.news',s.hour+':00',tx('sp.'+s.kind),Math.round(s.need*100),s.reward.toLocaleString(),s.followers.toLocaleString(),s.rep));}
@@ -1067,7 +1108,7 @@ function beginDay(){game.nextDay();spawnTimer=1.5;referrals.length=0;paused=fals
 function offdayText(){const o=$('#offday');o.querySelector('.offt').textContent=tx('off.banner');o.querySelector('[data-off="week"]').textContent=tx('off.week');o.querySelector('[data-off="monday"]').textContent=tx('week.monday');}
 function closeMenu(){offdayText();$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
-function startGame(fresh){if(fresh)game.saves.clear();else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();buildBranchShell();renderSites();openDay();alignToWalls();syncRoster();morningSeats();morningNews();game.updateProgress();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
+function startGame(fresh){if(fresh){game.saves.clear();game.startCalendarToday();}else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();buildBranchShell();renderSites();openDay();alignToWalls();syncRoster();morningSeats();morningNews();game.updateProgress();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
@@ -1094,7 +1135,8 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   // Fast speeds run the simulation in small steps so walking and services stay smooth.
   if(started&&!paused){const total=dt*(styling?1:speed),steps=Math.ceil(total/.06);for(let i=0;i<steps;i++)simStep(total/steps);}else figs.forEach(f=>f.pose(0));
   stylingTick(dt);if(started&&!paused)incidents.update(dt);
-  updateLights(dt);updateRain(dt);updateCam(dt);envStep(dt,realT);updatePops(dt);
+  updateLights(dt);updatePrecip(dt);updateCam(dt);
+  {const wet=started&&!game.dayOff&&['rain','storm','snow'].includes(game.weather);custs.forEach(c=>c.fig.setUmbrella(wet&&!indoors(c.fig.pos)));}envStep(dt,realT);updatePops(dt);
   if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
     // Difficult clients darken the music, more with each one; a busy salon livens it up, evenings calm it down.
     audio.setTension(started?custs.filter(c=>c.villain&&c.state!=='gone').length:0);
@@ -1108,4 +1150,4 @@ checkForUpdate({atStart:true});
 setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update');el.querySelector('span').textContent=tx('upd.ready');el.querySelector('button').textContent=tx('upd.reload');el.classList.add('show');el.querySelector('button').onclick=()=>refreshToLatest(b);}},10*60*1000);
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),referrals,surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),referrals,overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};

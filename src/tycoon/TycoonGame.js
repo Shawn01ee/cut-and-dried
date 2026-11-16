@@ -13,10 +13,10 @@ import { Finance } from './Finance.js';
 import { Rival } from './Rival.js';
 import { Missions } from './Missions.js';
 import { MonthlyLedger, MONTH_DAYS, summariseDays } from './MonthlyLedger.js';
-import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS, dateOf } from './Calendar.js';
+import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS, dateOf, setCalendarOrigin, originFor } from './Calendar.js';
 import { SYNERGIES, teamOf } from './Synergies.js';
 import { trendsFor, GRADE_PAY, TREND_PAY, TREND_PERK_SATISFACTION } from '../hair/StyleMenu.js';
-import { WEATHER, SURPRISES, rollWeather, rollSurprise } from './Weather.js';
+import { WEATHER, SURPRISES, rollWeather, rollSurprise, SNOW_RATE, SNOW_MELT } from './Weather.js';
 import { RegularBook, FAVOURITE_SATISFACTION, HEART_LOYAL, LOYAL_PAY, OCCASION_PAY } from './Regulars.js';
 import { rollSpecial, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from './SpecialClients.js';
 import { StaffManager } from '../employees/StaffManager.js';
@@ -73,6 +73,8 @@ export class TycoonGame {
     this.happening = null; this.happeningFx = {}; this.trendUntil = 0;
     // Today's weather and tomorrow's forecast; a surprise in the middle of the day, and what it does until closing.
     this.weather = 'sunny'; this.forecast = null; this.surprise = null; this.surpriseFx = {};
+    // Snow lying on each salon's pavement, 0 to 1; and where the calendar starts (see Calendar.js).
+    this.snow = [0, 0]; this.calendarOrigin = 0;
     this.rival = new Rival();
     this.customers = new CustomerFactory();
     this.evaluator = new ServiceEvaluator();
@@ -371,8 +373,14 @@ export class TycoonGame {
   /** Buys the second salon's next expansion. */
   expandBranch() { const next = this.layout.nextBranchExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.branchTier++; this.updateProgress(); this.save(); return true; }
   expand() { const next = this.layout.nextExpansion; if (!next || !this.isUnlocked(next.requires) || !this.economy.spend('expansion', next.cost)) return false; this.layout.tier++; if (this.layout.tier === 2) this.layout.addAnnexPlants(); return true; }
+  /** A new game starts on today's real date. */
+  startCalendarToday(now = new Date()) { this.calendarOrigin = originFor(now.getMonth() + 1, now.getDate()); setCalendarOrigin(this.calendarOrigin); }
+  /** Assistants clear some of the snow in front of a salon. */
+  clearSnow(site, amount) { this.snow[site] = Math.max(0, this.snow[site] - amount); }
   tick(dt) {
-    this.clock.tick(dt); this.operatingCosts.accrue(this.clock.workedFraction);
+    this.clock.tick(dt);
+    // Snow settles while it falls and melts slowly once it stops (hardly at all in a cold snap).
+    { const h = dt / this.clock.hourLength; this.snow = this.snow.map(v => this.weather === 'snow' ? Math.min(1, v + h * SNOW_RATE) : Math.max(0, v - h * SNOW_MELT * (this.weather === 'cold' ? .3 : 1))); } this.operatingCosts.accrue(this.clock.workedFraction);
     if (this.trollAt != null && this.clock.elapsed >= this.trollAt) { this.trollAt = null; this.#post(this.reviews.troll(this.clock.day)); }
   }
   startDay() {
@@ -382,6 +390,7 @@ export class TycoonGame {
     this.servedToday = 0; this.repAtDayStart = this.reputation.value; this.followersAtDayStart = this.marketing.followers; this.incidents = blankIncidents(); this.report = null; this.special = null;
     if (!this.month.start) this.month.begin(this.#monthSnapshot());
     this.weather = this.forecast || rollWeather(seasonOf(this.clock.day)); this.forecast = null; this.surprise = null; this.surpriseFx = {};
+    this.snow = this.snow.map(v => ['snow', 'cold'].includes(this.weather) ? v * .7 : 0);
     if (this.isSunday) { this.#dayOff(); return; }
     this.dayOff = false; this.marketing.startDay();
     // A neon sign in the window brings in followers every open day.
@@ -456,9 +465,10 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, forecast: this.forecast, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
   }
   restore(d) {
+    this.calendarOrigin = d.calendarOrigin || 0; setCalendarOrigin(this.calendarOrigin);
     this.clock.day = d.day; this.economy.restore(d.economy); this.reputation.value = d.reputation; this.progression.level = d.level;
     this.served = d.served; this.satisfactionSum = d.satisfactionSum; this.priceLevel = d.priceLevel; this.recentRevenue = d.recentRevenue || [];
     // The old self-running branches are gone: pay back what they cost.

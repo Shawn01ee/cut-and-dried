@@ -10,11 +10,16 @@ import { pick } from '../core/math.js';
  */
 export const MONTH_DAYS = 30;
 const FIRST_MONTH = 3;
+/** Days from 1 March to the game's first day: new games start on the real date they were started. */
+let ORIGIN = 0;
+export function setCalendarOrigin(o) { ORIGIN = Math.max(0, Math.round(o) || 0); }
+/** The origin that puts day 1 on this month and date (dates past the 30th fall on the 30th). */
+export const originFor = (month, date) => ((month - FIRST_MONTH + 12) % 12) * MONTH_DAYS + Math.min(date, MONTH_DAYS) - 1;
 
 /** The calendar date of a game day: month 1-12, date 1-30 and the salon's year. */
 export function dateOf(day) {
-  const m = Math.floor((day - 1) / MONTH_DAYS) + FIRST_MONTH - 1;
-  return { month: (m % 12) + 1, date: ((day - 1) % MONTH_DAYS) + 1, year: Math.floor(m / 12) + 1 };
+  const n = day - 1 + ORIGIN, m = Math.floor(n / MONTH_DAYS) + FIRST_MONTH - 1;
+  return { month: (m % 12) + 1, date: (n % MONTH_DAYS) + 1, year: Math.floor(m / 12) + 1 };
 }
 const SEASON_OF = { 12: 'summer', 1: 'summer', 2: 'summer', 3: 'autumn', 4: 'autumn', 5: 'autumn', 6: 'winter', 7: 'winter', 8: 'winter', 9: 'spring', 10: 'spring', 11: 'spring' };
 export const seasonOf = day => SEASON_OF[dateOf(day).month];
