@@ -76,6 +76,11 @@ body.inmenu #playlist{display:none}
 .tag.villain{border-color:#d8314a;box-shadow:0 0 0 1px #d8314a}
 .pop{position:absolute;transform:translate(-50%,-100%);font-family:var(--ft);font-size:12px;width:max-content;max-width:calc(100vw - 16px);box-sizing:border-box;text-align:center;background:rgba(13,11,20,.85);border:2px solid #45404f;padding:2px 5px;color:#f6f3ee}
 .pop.big{font-size:14px;border-color:#ffd98a;color:#ffd98a}
+/* speech bubbles: beside the speaker's head (notices rise above it), clients in white, staff in blush, the tail pointing back at them */
+.bubble{position:absolute;transform:translate(8px,-100%);margin-top:-4px;font-family:var(--ft);font-size:12px;line-height:1.25;width:max-content;max-width:240px;white-space:normal;text-align:center;background:#f6f3ee;color:#1d1a26;border:2px solid #1d1a26;padding:2px 6px;box-shadow:0 2px 0 rgba(13,11,20,.45);pointer-events:none}
+.bubble::after{content:'';position:absolute;left:4px;bottom:-6px;width:6px;height:6px;background:inherit;border-right:2px solid #1d1a26;border-bottom:2px solid #1d1a26;transform:rotate(45deg)}
+.bubble.staff{background:#fff1f6;border-color:#8a2d5a}.bubble.staff::after{border-color:#8a2d5a}
+html[lang=ko] .bubble{font-size:13px}
 .tag{position:absolute;transform:translate(-50%,-100%);width:26px;height:5px;background:#2e2a38;border:1px solid #0d0b14}
 .tag i{display:block;height:100%;background:#8fc25a}
 #help{font-size:15px;color:#9c98a2;margin-top:4px}
