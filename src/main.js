@@ -5,6 +5,7 @@ import { SPECIAL_FAIL_REP } from './tycoon/SpecialClients.js';
 import { TALK_RELIEF } from './employees/Welfare.js';
 import { GRADE_PAY, TREND_PAY } from './hair/StyleMenu.js';
 import { decorThemeOf } from './tycoon/Decor.js';
+import { LINES } from './i18n/dialogue.js';
 import { DECOR_MODELS } from './rendering/decorModels.js';
 import { WEATHER, SHOVEL_AT, SHOVEL_CLEARS, SLIP_DEPTH, SLIP_CHANCE, SLIP_REP } from './tycoon/Weather.js';
 import { lab2lin, labCss, labMix, hexCss, PAL_LAB, PAL_RGB } from './rendering/color.js';
@@ -422,18 +423,16 @@ function spawnCustomer(o={}){
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');arrivalNews(c,o);
   fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');
-    if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
+    if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}greetAt(c,site);const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
     seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
       // Drinks and snacks are served as soon as the client sits down.
-      const drink=game.dayFx.drinks===0?null:game.hospitality.serve(c);if(drink)fig.setTool(drink==='juice'?'juice':'cup');});});
+      const drink=game.dayFx.drinks===0?null:game.hospitality.serve(c);if(drink){fig.setTool(drink==='juice'?'juice':'cup');if(Math.random()<.35)later(.6,()=>say(fig,line('drink.thanks'),false));}});});
 }
 function arrivalNews(c,o){const desk=deskFig(c.site||0).head;
   if(c.special){audio.play('levelUp');popup(tx('sp.arrive',tx('sp.'+c.special),Math.round(c.specialNeed*100)),desk,'big');}
   if(o.friendOf)popup(tx('reg.friendCame',nm(c.name),nm(o.friendOf)),desk,'');
   if(!c.regular)return;popup(tx('reg.arrive',nm(c.name),hearts(c.regular.hearts)),desk,'');
-  // a new chapter of their story, in their own words
-  if(c.chapter!=null)later(2.4,()=>popup('“'+tx('story.'+c.regular.story+'.'+c.chapter)+'”',c.fig.head,'big'));
   if(c.occasion)later(4.6,()=>popup(tx('occ.arrive',nm(c.name),tx('occ.'+c.occasion),OCCASION_PAY,Math.round(OCCASION_NEED*100)),desk,'big'));}
 const hearts=n=>'♥'.repeat(n)+'♡'.repeat(MAX_HEARTS-n);
 /** What came of a visit: a new regular, hearts won or lost, a story's end, a friend on the way, the special booking's verdict. */
@@ -450,6 +449,51 @@ function visitNews(c,r){if(!r)return;const head=c.fig.head,desk=deskFig(c.site||
   renderPanel();}
 /** Friends a regular said they would bring, and when they turn up. */
 const referrals=[];
+/* ================= talk: speech bubbles ================= */
+const bubbles=[],lastLine={};let chatOn=(()=>{try{return localStorage.getItem('cd.chat')!=='0';}catch{return true;}})();
+/** A line for a situation (see i18n/dialogue.js), not the same one twice running; a pair comes back as [first, reply]. */
+function line(key,vars={}){const pool=(LINES[i18n.lang]||LINES.en)[key];if(!pool||!pool.length)return null;let i=Math.floor(Math.random()*pool.length);if(pool.length>1&&lastLine[key]===i)i=(i+1)%pool.length;lastLine[key]=i;
+  const fill=s=>s.replace(/\{(\w)\}/g,(_,k)=>vars[k]??''),l=pool[i];return Array.isArray(l)?l.map(fill):fill(l);}
+const onScreen=fig=>{const [x,y]=screenOf(fig.head.getWorldPosition(V()));return x>20&&x<innerWidth-20&&y>40&&y<innerHeight-20;};
+/** A speech bubble over someone's head, only while they are on screen; one each, a few at a time. */
+function say(fig,text,staff){if(!chatOn||!text||!fig||!fig.root.visible||!onScreen(fig))return;const old=bubbles.findIndex(b=>b.fig===fig);if(old>=0){bubbles[old].el.remove();bubbles.splice(old,1);}
+  if(bubbles.length>=6)bubbles.shift().el.remove();const el=document.createElement('div');el.className='bubble'+(staff?' staff':'');el.textContent=text;$('#pops').appendChild(el);bubbles.push({el,fig,t:0,life:2.4+text.length*.045});}
+function updateBubbles(dt){for(const b of bubbles.slice()){b.t+=dt;if(b.t>=b.life||!b.fig.root.visible){b.el.remove();bubbles.splice(bubbles.indexOf(b),1);continue;}
+  const w=b.fig.head.getWorldPosition(V());w.y+=.2;const [x,y]=screenOf(w),off=x<10||x>innerWidth-10||y<30||y>innerHeight;b.el.style.display=off?'none':'block';b.el.style.left=x+'px';b.el.style.top=y+'px';b.el.style.opacity=b.t>b.life-.35?Math.max(0,(b.life-b.t)/.35):1;}}
+/** An exchange: one speaks, the other answers a moment later. */
+function chat(a,aStaff,pair,b,bStaff=!aStaff){if(!pair)return;say(a,pair[0],aStaff);later(1.5,()=>say(b,pair[1],bStaff));}
+/** Why a client came, in proportion to what is actually bringing clients in. */
+function whyCame(){const A=game.demandParts.add,w=[['walk',A.walk],['rep',A.rep*.6],['reviews',game.reviews.count?A.rep*.4+Math.min(4,game.reviews.count*.05):0],['insta',A.followers],['comfort',A.comfort]].map(([k,v])=>[k,Math.max(0,v)]);
+  let r=Math.random()*w.reduce((n,x)=>n+x[1],0);return (w.find(x=>(r-=x[1])<0)||w[0])[0];}
+/** At the door: the desk says hello and the client says why they came. */
+function greetAt(c,site){if(c.villain||c.special||Math.random()>.6)return;const desk=game.staff.receptionistAt(site).hired?deskFig(site):null;
+  if(desk)say(desk,line(c.regular?'greetRegular':'greet',{n:nm(c.name)}),true);
+  later(desk?1.4:.3,()=>say(c.fig,c.regular?line('regularHello'):line('src.'+(c.influencer?'insta':whyCame())),false));}
+/** The consultation: the client asks in their own words, the stylist answers. A special day is said as it is. */
+function consultTalk(st,c){if(st.cust!==c||c.villain)return;const o=c.order,mean=c.hair.len.reduce((a,b)=>a+b,0)/c.hair.len.length;let ask=null;
+  if(c.occasion&&c.regular&&c.chapter!=null){ask=tx('story.'+c.regular.story+'.'+c.chapter);c.storyTold=true;}
+  else if(o.perm&&Math.random()<.5)ask=line('ask.perm',{x:tx('perm.'+o.perm)});
+  else if(o.col.t==='want'&&Math.random()<.6)ask=line('ask.colour',{x:wantName(o.col.i)});
+  else if(c.trending&&o.cut&&Math.random()<.6)ask=line('ask.trend',{x:tx('cut.'+o.cut)});
+  else if(mean>o.L*1.6)ask=line('ask.short');else if(Math.random()<.35)ask=line('ask.keep');else if(o.cut)ask=line('ask.cut',{x:tx('cut.'+o.cut)});
+  say(c.fig,ask,false);later(1.6,()=>{if(st.cust===c)say(st.sty.fig,line(c.requestedService!=='haircut'&&Math.random()<.5?'consult.long':'consult.reply'),true);});}
+/** While working, now and then: a regular's news (once, when asked), the weather, the season, or just chat. */
+function smallTalk(st,dt){const c=st.cust;if(!c||c.villain)return;st.talkT=(st.talkT??rand(4,8))-dt;if(st.talkT>0)return;st.talkT=rand(14,24);const sf=(st.worker||st.sty).fig;
+  if(c.regular&&c.chapter!=null&&!c.storyTold){c.storyTold=true;chat(sf,true,[line('reg.ask',{n:nm(c.name)}),tx('story.'+c.regular.story+'.'+c.chapter)],c.fig);return;}
+  if(Math.random()<.45)return;const r=Math.random(),wx=line('talk.'+game.weather),ev=line('talk.'+decorThemeOf(game.clock.day));
+  if(r<.3&&wx)chat(sf,true,wx,c.fig);else if(r<.55&&ev)chat(sf,true,ev,c.fig);else if(r<.75)chat(c.fig,false,line('talkc.any'),sf);else chat(sf,true,line('talk.any'),c.fig);}
+/** The client's first words on seeing the result: delight, or what exactly is off (length, colour or curl). */
+function reaction(c,sc){const s=sc.all,tier=s>=.88?'love':s>=.75?'good':s>=.6?'meh':'bad',head=line('react.'+tier);if(tier==='love'||tier==='good')return head;
+  const o=c.order,h=c.hair,wf=1-.12*h.wave,tp=profile(o.shape,o.L),bias=h.len.reduce((a,l,j)=>a+l*wf-tp[j],0)/h.len.length,worst=[['cut',sc.cut],['col',sc.col],['wav',sc.wav]].sort((a,b)=>a[1]-b[1])[0][0];
+  const def=worst==='cut'?(bias<0?'def.short':'def.long'):worst==='col'?(Math.abs(h.lab.L-o.lab.L)>.04?(h.lab.L<o.lab.L?'def.dark':'def.light'):'def.tone'):(h.wave>o.wave?'def.curly':'def.flat');return head+' '+line(def);}
+/** Paying up: the desk thanks them (minding the weather), and they say goodbye as their visit went. */
+function farewell(c,sc){if(c.villain||Math.random()>.7)return;const site=c.site||0,desk=game.staff.receptionistAt(site).hired?deskFig(site):null;
+  if(desk)say(desk,line(['rain','storm','snow'].includes(game.weather)?'desk.byeRain':Math.random()<.4?'pay.desk':'desk.bye'),true);later(desk?1.3:.2,()=>say(c.fig,line(sc.all>=.6?'bye.happy':'bye.sad'),false));}
+/** A long wait: the client asks how long, the desk apologises. Once a visit. */
+function grumble(c){if(c.grumbled||c.villain||c.pat>=c.maxPat*.3)return;c.grumbled=true;if(Math.random()>.6)return;say(c.fig,line('wait.long'),false);const site=c.site||0;if(game.staff.receptionistAt(site).hired)later(1.4,()=>say(deskFig(site),line('wait.sorry'),true));}
+/** Two stylists with no client chat between jobs. */
+let idleT=20;function idleChat(dt){idleT-=dt;if(idleT>0)return;idleT=rand(25,45);if(!game.clock.isOpen)return;const free=stations.filter(s=>!s.vacant&&s.state==='free'&&!s.sweep&&s.sty.restUntil<=simT);
+  for(const site of [0,1]){const here=free.filter(s=>siteOf(s.item.x)===site);if(here.length>=2){const [a,b]=here.sort(()=>Math.random()-.5);chat(a.sty.fig,true,line('staff.idle'),b.sty.fig,true);return;}}}
 /** Which salon a new client walks into: in proportion to the stylists at each salon's chairs. */
 function pickSite(){if(!game.layout.branchOpen)return 0;const w=[0,1].map(s=>stations.filter(st=>!st.vacant&&siteOf(st.item.x)===s).length),t=w[0]+w[1];return t&&Math.random()*t>=w[0]?1:0;}
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
@@ -462,7 +506,7 @@ function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=
   const start=seat?seat.app[0]:f.pos.clone(),lead=seat?[seat.app[0]]:[],toChair=from=>[...route(from,st.approach),st.chair.clone()];
   // Every client has a shampoo first when the salon has somewhere to do it.
   if(booths.some(b=>siteOf(b.item.x)===siteOf(st.item.x))&&!c.washed)shampoo(c,st,lead,start,()=>f.walkTo(toChair(f.pos),arrive));else f.walkTo([...lead,...toChair(start)],arrive);
-  function arrive(){f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);}
+  function arrive(){f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';later(.8,()=>consultTalk(st,c));st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);}
   if(sel===st.i)renderPanel(true);}
 const booths=[],washes=[];
 const freeBooth=site=>booths.find(b=>!b.client&&siteOf(b.item.x)===site&&!pendingMoves.has(b.item)&&!queuedMoves.has(b.item)),freeHelper=site=>helpers.find(h=>h.fig.root.visible&&!h.task&&siteOf(h.idle.x)===site);
@@ -470,7 +514,7 @@ const freeBooth=site=>booths.find(b=>!b.client&&siteOf(b.item.x)===site&&!pendin
 function shampoo(c,st,lead,start,then){const site=siteOf(st.item.x),b=freeBooth(site),h=freeHelper(site),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo',game.speedFor('shampoo',site))*game.clock.hourLength/60};
   b.client=c;c.inWash=true;if(h)h.task={kind:'wash',T};else st.washing=T;washes.push(T);
   washer.handL=washer.handR=null;washer.setTool(null);washer.walkTo(route(washer.pos,b.washAt),()=>{washer.yaw=b.washYaw;T.ready=true;});
-  c.fig.walkTo([...lead,...route(start,b.seatApp),b.seat.clone()],()=>{Object.assign(c.fig,{mode:'sit',yaw:b.seatYaw,seatH:.5,footY:.2,tilt:-.45});c.fig.pos.copy(b.seat);T.seated=true;audio.play('swish');});}
+  c.fig.walkTo([...lead,...route(start,b.seatApp),b.seat.clone()],()=>{Object.assign(c.fig,{mode:'sit',yaw:b.seatYaw,seatH:.5,footY:.2,tilt:-.45});c.fig.pos.copy(b.seat);T.seated=true;audio.play('swish');if(Math.random()<.5)chat(washerOf(T),true,[line('wash.ask'),line('wash.ok')],c.fig);});}
 const washerOf=T=>T.h?T.h.fig:T.st.sty.fig;
 function updateWashes(dt){for(const T of washes.slice()){if(!T.ready||!T.seated)continue;const f=washerOf(T);T.t-=dt;
   const hp=T.c.fig.head.getWorldPosition(V()),k=Math.sin(simT*9)*.06;f.handR=hp.clone().add(V(k,.06,0));f.handL=hp.clone().add(V(-k,.04,.05));if(T.t<=0)endWash(T);}}
@@ -539,13 +583,14 @@ function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.se
   sf.walkTo([st.at(-.55,1.15)],()=>{sf.yaw=st.face-Math.PI*.2;});
   c.fig.walkTo([st.at(.55,1.2)],()=>{c.fig.yaw=st.face;audio.play(sc.all>=.6?'happy':'sad');
     popup(`${Math.round(sc.all*100)}% · ${tx(WORDS.find(w=>sc.all>=w[0])[1])}`,c.fig.head,'big');
+    if(!c.villain)later(.4,()=>{say(c.fig,reaction(c,sc),false);later(1.7,()=>say(sf,line(sc.all>=.6?'reply.thanks':'reply.sorry'),true));});
     later(.6,()=>{c.fig.yaw=st.face-Math.PI*.85;clapAll(sc.all);popup(tx('chairPct',st.i+1,Math.round(sc.all*100)),recep.head,'');});
     later(2.8,()=>{st.state='free';st.cust=null;{const home=s===st.sty?st:ownerStation();goTo(sf,home?home.stand:OWNER_IDLE,home?home.face:Math.PI);}if(sel===st.i)renderPanel(true);
       const dk=deskAt[c.site||0]||deskAt[0];c.fig.walkTo(route(c.fig.pos,dk.pay),()=>{c.fig.yaw=dk.payYaw;later(1.3,()=>checkout(c,sc));});});});
   if(sel===st.i)renderPanel(true);}
 /** Paying at the desk. Difficult clients may haggle, demand a refund or run off without paying. */
 function checkout(c,sc){const pay=sc.payment,head=c.fig.head;
-  const settle=(amount,outcome={})=>{if(amount>0){game.receivePayment(amount);audio.play('cash');popup('+$'+amount,head,'big');}
+  const settle=(amount,outcome={})=>{if(amount>0){game.receivePayment(amount);audio.play('cash');popup('+$'+amount,head,'big');farewell(c,sc);}
     const r=game.finishVisit(c,sc,outcome);visitNews(c,r);const ip=r.influencerPost;if(ip)popup(tx('inf.post.'+ip.tier,ip.followers.toLocaleString(),ip.days,Math.round(ip.demand*100)),head,'big');c.state='paid';leave(c);};
   if(c.influencer){popup(tx('inf.sponsored'),recep.head,'');settle(0);return;}
   if(c.villain==='dasher'){
@@ -771,7 +816,7 @@ function simStep(dt){simT+=dt;
   dayTick(dt);
   // waiting patience
   custs.forEach(c=>{if(c.state==='process'&&c.procSeated){c.procLeft-=dt;c.tint=.3;if(c.procLeft<=0){c.state='ready';c.readyAt=simT;c.tint=0;popup(tx('proc.done'),c.fig.head,'');islandTreat(c);}}});
-  custs.forEach(c=>{if(c.state==='wait'){c.pat-=dt;if(c.pat<=0){popup(tx('tooSlow'),c.fig.head,'');audio.play('bad');visitNews(c,game.customerGaveUp(c));leave(c);}}});
+  custs.forEach(c=>{if(c.state==='wait'){c.pat-=dt;grumble(c);if(c.pat<=0){popup(tx('tooSlow'),c.fig.head,'');audio.play('bad');visitNews(c,game.customerGaveUp(c));leave(c);}}});
   // stations
   stations.forEach(st=>{
     if(st.vacant)return;
@@ -792,11 +837,11 @@ function simStep(dt){simT+=dt;
       if(!vipNow&&!quick&&!specialNow&&!mineReg&&waiting.length){const mine=st.sty.today.served,fewer=stations.filter(s=>s!==st&&s.state==='free'&&!s.vacant&&siteOf(s.item.x)===here&&canTake(s)&&s.sty.today.served<mine).length;if(fewer>=waiting.length)return;}
       const c=specialNow||vipNow||mineReg||quick||waiting.slice(0,3).find(q=>st.sty.handles(q))||waiting[0];if(c)c.vipRoom=vipRoom;if(c)assign(st,c);}
     else if(st.state==='consult'){if(!game.clock.isOpen&&!(styling&&styling.station===st)&&!ownerBusy()){if(st.sty===OWNER)st.plan=aiPlan(st.cust,OWNER);startWork(st);}else if(canAuto(st)){st.timer-=dt;if(st.timer<=0){st.plan=aiPlan(st.cust,st.sty);startWork(st);}}}
-    else if(st.state==='work')runOps(st,dt);
+    else if(st.state==='work'){runOps(st,dt);smallTalk(st,dt);}
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep&&!st.filming){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
       if(!sf.path.length&&sf.pos.distanceTo(st.stand)>.05)goToChair(sf,st);
       if(st.state==='consult'&&st.cust){const hp=st.cust.fig.head.getWorldPosition(V());sf.handR=hp.clone().add(st.rot(V(Math.sin(simT*2)*.08,.05,.22)));}}});
-  updateWashes(dt);helpersUpdate(dt);
+  updateWashes(dt);helpersUpdate(dt);idleChat(dt);
   // a robot vacuum picks up a bit of hair at a time at its salon
   vacT-=dt;if(vacT<=0){vacT=game.clock.hourLength/FURNITURE.robotVacuum.vacuum;[0,1].forEach(s=>{if(!game.layout.countAt('robotVacuum',s))return;const c=landedClips().find(q=>siteOf(q.p.x)===s);if(c)c.alive=false;});}
   // receptionist watches the latest reveal / door
@@ -1116,6 +1161,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
       <div class="hsec"><h3>${tx('month.staffTitle')}</h3>${staff}</div><div class="hsec"><h3>${tx('month.goalTitle')}</h3>${goal}<div class="gold">${tx('month.nextGoal',m.nextGoal.revenue.toLocaleString(),m.nextGoal.reward.toLocaleString())}</div><div class="dim">${tx('month.goalNote')}</div></div><div class="mbtns">${btns}</div>`;}
   else h=`<div class="mhead">${tx('m.opts')}</div>${langRow()}
     <div class="mrow"><label>${tx('m.time')}</label>${mSeg('time',TM.map(v=>[v,tx('m.t.'+v)]),timeMode)}</div>
+    <div class="mrow"><label>${tx('m.chat')}</label>${mSeg('chat',[['1',tx('pol.on')],['0',tx('pol.off')]],chatOn?'1':'0')}</div>
     <div class="mrow"><label>${tx('m.speed')}</label>${mSeg('spd',[[1,'×1'],[3,'×3'],[5,'×5']],speed)}</div>
     <div class="mrow"><label>${tx('m.music')}</label><input type="range" min="0" max="100" value="${Math.round(audio.musicVolume*100)}" data-vol="music"></div>
     <div class="mrow"><label>${tx('m.track')}</label><span>♪ ${tx('mu.'+audio.trackId)}</span><button data-act="track">${tx('m.nextTrack')}</button></div>
@@ -1140,7 +1186,7 @@ mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)r
   else if(a==='back'){if(menuFrom==='game'){paused=false;closeMenu();}else openMenu('main','main');}
   else if(a==='lang')setLang(v);
   else if(a==='hrs'){game.shiftHours(v[0]==='o'?0:1,v[1]==='+'?1:-1);renderMenu();}
-  else{if(a==='mode')setAuto(v==='auto');if(a==='time')timeMode=v;if(a==='spd')speed=+v;syncCtrl();renderMenu();}});
+  else{if(a==='mode')setAuto(v==='auto');if(a==='time')timeMode=v;if(a==='spd')speed=+v;if(a==='chat'){chatOn=v==='1';try{localStorage.setItem('cd.chat',v);}catch{/* private mode */}if(!chatOn)bubbles.splice(0).forEach(b=>b.el.remove());}syncCtrl();renderMenu();}});
 mbox.addEventListener('input',e=>{const k=e.target.dataset.vol;if(k)audio.setVolume(k,+e.target.value/100);});
 addEventListener('click',e=>{if(e.target.closest('button'))audio.play('click');});
 function boot(){const fonts=document.fonts?Promise.all([document.fonts.load('16px VT323'),document.fonts.load('14px Silkscreen'),document.fonts.load('13px Galmuri11','가')]):Promise.resolve();
@@ -1156,7 +1202,7 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   if(started&&!paused){const total=dt*(styling?1:speed),steps=Math.ceil(total/.06);for(let i=0;i<steps;i++)simStep(total/steps);}else figs.forEach(f=>f.pose(0));
   stylingTick(dt);if(started&&!paused)incidents.update(dt);
   updateLights(dt);updatePrecip(dt);decorate();updateCam(dt);
-  {const wet=started&&!game.dayOff&&['rain','storm','snow'].includes(game.weather);custs.forEach(c=>c.fig.setUmbrella(wet&&!indoors(c.fig.pos)));}envStep(dt,realT);updatePops(dt);
+  {const wet=started&&!game.dayOff&&['rain','storm','snow'].includes(game.weather);custs.forEach(c=>c.fig.setUmbrella(wet&&!indoors(c.fig.pos)));}envStep(dt,realT);updatePops(dt);updateBubbles(dt);
   if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
     // Difficult clients darken the music, more with each one; a busy salon livens it up, evenings calm it down.
     audio.setTension(started?custs.filter(c=>c.villain&&c.state!=='gone').length:0);
