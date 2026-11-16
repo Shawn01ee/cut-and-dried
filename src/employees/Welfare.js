@@ -1,3 +1,4 @@
+import { promotionStatus } from './Career.js';
 /**
  * Staff welfare: programmes the salon chooses to run for its stylists. Each states its cost and its one effect.
  * `perHead` is charged for every stylist at work that day; one-off costs are charged when they happen.
@@ -28,10 +29,13 @@ export function birthdayOf(e) {
   return { month: 1 + (h % 12), date: 1 + ((h >>> 4) % 30) };
 }
 
-/** What weighs on a stylist most, from yesterday's stress and their situation. */
-export function concernOf(e) {
+/** What weighs on a stylist most, from yesterday's stress and their situation (`staff` adds colleagues and welfare). */
+export function concernOf(e, staff = null) {
   if (e.grudge > 0) return 'grudge';
+  if (promotionStatus(e)?.ready) return 'promotion';
+  if (staff) { const { rival } = staff.friendsOf(e); if (rival && rival[1] <= -40) return 'rival'; }
   if (e.stress < 30) return 'fine';
+  if (staff && !staff.welfare.size && e.stress >= 55) return 'welfare';
   if (e.daysEmployed >= 60 && !e.raises && e.stress >= 50) return 'pay';
   const s = e.lastStress; if (!s) return 'fine';
   return [['busy', s.work], ['tired', s.fatigue], ['overtime', s.overtime]].sort((a, b) => b[1] - a[1])[0][0];

@@ -93,7 +93,7 @@ export class Employee {
     if (key) this.skills[key] = Math.min(100, this.skills[key] + 2);
   }
   recordService(satisfaction, payment) { this.stats.served++; this.stats.sum += satisfaction; this.stats.earn += payment; this.today.served++; this.today.earn += payment; }
-  toJSON() { return { id: this.id, site: this.site, rank: this.rank, role: this.role, promotions: this.promotions, certs: this.certs, bonusDays: this.bonusDays || [], loyalty: this.loyalty, talkDay: this.talkDay, lastStress: this.lastStress, grudge: this.grudge, persuaded: this.persuaded, raises: this.raises, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
+  toJSON() { return { id: this.id, site: this.site, wishes: this.wishes || 0, easyUntil: this.easyUntil || 0, rank: this.rank, role: this.role, promotions: this.promotions, certs: this.certs, bonusDays: this.bonusDays || [], loyalty: this.loyalty, talkDay: this.talkDay, lastStress: this.lastStress, grudge: this.grudge, persuaded: this.persuaded, raises: this.raises, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
   restore(data) {
     // Someone who has never worked here keeps today's skills, so balance changes reach older saves too.
     const worked = data.hired || data.level > 1 || data.experience > 0 || (data.stats && data.stats.served > 0);
@@ -101,6 +101,7 @@ export class Employee {
     // Fields added later default to a settled, rested stylist.
     if (data.site !== undefined) this.site = data.site;
     if (data.rank) Object.assign(this, { rank: data.rank, role: data.role || this.role }); this.promotions = data.promotions || 0; this.certs = data.certs || []; this.baseSalary = Math.round(this.defSalary * PROMO_PAY ** this.promotions);
+    this.wishes = data.wishes || 0; this.easyUntil = data.easyUntil || 0;
     this.bonusDays = data.bonusDays || []; this.loyalty = data.loyalty || 0; this.talkDay = data.talkDay ?? -99; this.lastStress = data.lastStress || null;
     this.grudge = data.grudge || 0; this.persuaded = data.persuaded || 0; this.raises = data.raises || 0; this.salary = Math.round(this.baseSalary * RAISE ** this.raises);
     Object.assign(this, { stress: data.stress || 0, leaveFrom: data.leaveFrom || 0, leaveTo: data.leaveTo || 0, daysEmployed: data.daysEmployed ?? 99 });
