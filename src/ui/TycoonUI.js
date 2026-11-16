@@ -20,6 +20,7 @@ import { ReviewRewards, milestoneBase, ratingMultiplier, streakPay } from '../ty
 import { INVESTMENTS, LOANS, MISSION, MAX_SHARE } from '../tycoon/Finance.js';
 import { missionWho } from '../tycoon/Missions.js';
 import { SYNERGIES } from '../tycoon/Synergies.js';
+import { shows, featuresAt } from '../tycoon/Features.js';
 import { CUTS, PERMS, TREND_COLOURS, GRADE_PAY, TREND_PAY, TREND_PERK_SATISFACTION, COLOUR_PRICE, TREND_COLOUR_PRICE, BLEACH_PRICE, isHot } from '../hair/StyleMenu.js';
 import { WANT } from '../customers/catalog.js';
 import { WANT_KO } from '../i18n/strings.js';
@@ -157,9 +158,11 @@ export class TycoonUI {
    * People are grouped by rank, and the specialty and talent filters narrow the team and hiring pages.
    */
   #staff() {
+    const lvl = this.game.progression.level, open = k => k === 'team' || k === 'hire' || shows('staff.' + k, lvl);
+    if (!open(this.staffPage)) this.staffPage = 'team';
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff, page = this.staffPage, onTeam = page === 'team';
     const counts = { team: 1 + st.hired.length + st.support.filter(e => e.hired).length, hire: st.candidates.filter(e => !e.hired).length + st.support.filter(e => !e.hired).length };
-    const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['policy', t('st.policy')], ['welfare', t('st.welfare', st.welfare.size)], ['career', t('st.career', st.hired.filter(e => promotionStatus(e)?.ready).length || '')], ['rel', t('st.rel')]].map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['policy', t('st.policy')], ['welfare', t('st.welfare', st.welfare.size)], ['career', t('st.career', st.hired.filter(e => promotionStatus(e)?.ready).length || '')], ['rel', t('st.rel')]].filter(([k]) => open(k)).map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
     if (page === 'welfare') return tabs + this.#welfare();
     if (page === 'career') return tabs + this.#careers();
     if (page === 'rel') return tabs + this.#relations();
@@ -206,8 +209,8 @@ export class TycoonUI {
       return `${tabs}${sub}<div class="bsec">${shown.length ? shown.map(([it, i]) => ownedRow(it, i)).join('') : `<div class="dim">${t('build.none')}</div>`}</div>`;
     }
     return `${tabs}<div class="bsec"><h4>${t('build.chairs')}</h4><div class="brow"><span>${l.branchOpen ? t('build.chairLine2', l.chairsAt(0), l.maxChairsAt(0), l.chairsAt(1), l.maxChairsAt(1)) : t('build.chairLine', l.chairsAt(0), l.maxChairsAt(0))}</span><span class="sp"></span><button class="go" data-do="buy:station" ${!g.isUnlocked('chairs') || !l.chairRoom || !g.economy.canAfford(CHAIR_PRICE) ? 'disabled' : ''}>${g.isUnlocked('chairs') ? t('build.chairBuy', CHAIR_PRICE) : t('build.lockedAt')}</button></div><div class="dim">${t('build.chairHint')}</div></div>
-    <div class="bsec"><h4>${t('build.expand')}</h4><div class="brow"><span>${t('build.expandLine', l.tier + 1, EXPANSIONS.length + 1)}</span><span class="sp"></span>${expand}</div>${next ? `<div class="dim">${t('build.next.' + l.tier)}</div>` : ''}</div>
-    ${this.#branch()}`;
+    ${shows('build.expand', g.progression.level) ? `<div class="bsec"><h4>${t('build.expand')}</h4><div class="brow"><span>${t('build.expandLine', l.tier + 1, EXPANSIONS.length + 1)}</span><span class="sp"></span>${expand}</div>${next ? `<div class="dim">${t('build.next.' + l.tier)}</div>` : ''}</div>` : ''}
+    ${shows('build.branch', g.progression.level) || l.branchOpen ? this.#branch() : ''}`;
   }
   /** The second salon: what it takes to open, then that it is open. */
   #branch() {
@@ -236,10 +239,12 @@ export class TycoonUI {
     const BY = { earn: s => s.stats.earn, today: s => s.today.earn, sat: avg, rating, served: s => s.stats.served };
     const rows = [g.staff.owner, ...g.staff.hired].sort((a, b) => (BY[this.ladderSort](b) - BY[this.ladderSort](a)) || (b.stats.earn - a.stats.earn)), rated = s => { const r = g.reviews.ratingFor(s.name); return r.count ? `★${r.average.toFixed(1)} (${r.count})` : '–'; };
     const hs = g.hospitality, treats = Object.entries(AMENITIES).map(([id, a]) => `<div class="brow"><span>${t('hs.' + id)}</span><span class="dim">${t('hs.cost', a.cost)}</span><span class="sp"></span>${hs.available(id) ? `<span class="seg"><button data-do="amen:${id}" class="${hs.isOffered(id) ? 'sel' : ''}">${t('hs.on')}</button><button data-do="amen:${id}" class="${hs.isOffered(id) ? '' : 'sel'}">${t('hs.off')}</button></span>` : `<span class="dim">${t('hs.needs', t('f.' + a.needs))}</span>`}</div>`).join('');
-    const page = this.bizPage, tabs = `<div class="seg stabs">${[['money', t('bz.money')], ['fund', t('bz.fund')], ['ops', t('bz.ops')], ['rank', t('bz.rank')]].map(([k, l]) => `<button data-do="bzp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    const lvl = g.progression.level, opsKeys = ['demand', 'menu', 'hours', 'price', 'treats'].filter(k => shows('ops.' + k, lvl));
+    if (!shows('biz.' + this.bizPage, lvl)) this.bizPage = 'money'; if (!opsKeys.includes(this.bizSub.ops)) this.bizSub.ops = 'demand';
+    const page = this.bizPage, tabs = `<div class="seg stabs">${[['money', t('bz.money')], ['fund', t('bz.fund')], ['ops', t('bz.ops')], ['rank', t('bz.rank')]].filter(([k]) => shows('biz.' + k, lvl)).map(([k, l]) => `<button data-do="bzp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
     const sub = keys => `<div class="seg ssub">${keys.map(k => `<button data-do="bzs:${page}.${k}" class="${this.bizSub[page] === k ? 'sel' : ''}">${t('bzs.' + k)}</button>`).join('')}</div>`;
     if (page === 'fund') return tabs + sub(['value', 'invest', 'loan']) + this.#funding(this.bizSub.fund);
-    if (page === 'ops') return tabs + sub(['demand', 'menu', 'hours', 'price', 'treats']) + { demand: () => this.#calendar() + this.#demand(), menu: () => this.#menu(), hours: () => `<div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>`, price: () => `<div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}`, treats: () => `<div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>` }[this.bizSub.ops]();
+    if (page === 'ops') return tabs + (opsKeys.length > 1 ? sub(opsKeys) : '') + { demand: () => this.#calendar() + this.#demand(), menu: () => this.#menu(), hours: () => `<div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>`, price: () => `<div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}`, treats: () => `<div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>` }[this.bizSub.ops]();
     const by = this.ladderSort, th = (k, label) => `<th class="${by === k ? 'on' : ''}">${t(label)}</th>`;
     const sorts = `<div class="seg ssub">${['earn', 'today', 'sat', 'rating', 'served'].map(k => `<button data-do="lsort:${k}" class="${by === k ? 'sel' : ''}">${t('lsort.' + k)}</button>`).join('')}</div>`;
     if (page === 'rank') return `${tabs}${sorts}<div class="bsec"><h4>${t('biz.ladder')}</h4><table class="lad"><tr><th>#</th><th>${t('lad.stylist')}</th>${th('served', 'lad.done')}${th('sat', 'lad.avg')}${th('rating', 'lad.rating')}${th('today', 'lad.today')}${th('earn', 'lad.earn')}</tr>${rows.map((s, i) => `<tr class="${i < 3 ? 'top' + (i + 1) : ''}"><td>${i + 1}</td><td style="color:${nameColour(s)}">${rankMark(s)}${this.i18n.name(s.name)}</td><td>${s.stats.served}</td><td>${s.stats.served ? Math.round(s.stats.sum / s.stats.served * 100) + '%' : '–'}</td><td>${rated(s)}</td><td>$${s.today.earn.toLocaleString()}</td><td>$${s.stats.earn.toLocaleString()}</td></tr>`).join('')}</table></div>`;
@@ -347,8 +352,10 @@ export class TycoonUI {
   }
   /** The clients tab in three pages: the reviews, the regulars' book and the special bookings. */
   #clients() {
-    const t = (k, ...a) => this.#t(k, ...a), g = this.game, page = this.clientPage;
-    const tabs = `<div class="seg stabs">${[['reviews', t('cl.reviews')], ['regulars', t('cl.regulars', g.regulars)], ['special', t('cl.special')]].map(([k, l]) => `<button data-do="clp:${k}" class="${page === k ? 'sel' : ''}">${l}${k === 'special' && g.special && (g.special.state === 'due' || g.special.state === 'arrived') ? ' ✦' : ''}</button>`).join('')}</div>`;
+    const lvl = this.game.progression.level, open = k => k === 'reviews' || shows('clients.' + k, lvl);
+    if (!open(this.clientPage)) this.clientPage = 'reviews';
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, page = this.clientPage, keys = [['reviews', t('cl.reviews')], ['regulars', t('cl.regulars', g.regulars)], ['special', t('cl.special')]].filter(([k]) => open(k));
+    const tabs = keys.length < 2 ? '' : `<div class="seg stabs">${keys.map(([k, l]) => `<button data-do="clp:${k}" class="${page === k ? 'sel' : ''}">${l}${k === 'special' && g.special && (g.special.state === 'due' || g.special.state === 'arrived') ? ' ✦' : ''}</button>`).join('')}</div>`;
     return tabs + (page === 'regulars' ? this.#regulars() : page === 'special' ? this.#specials() : this.#reviews());
   }
   /** The regulars' book: how hearts work, then each named regular with their stylist, visits and story so far. */
@@ -409,7 +416,7 @@ export class TycoonUI {
   }
   #growth() {
     const t = (k, ...a) => this.#t(k, ...a), p = this.game.progression, next = p.next, ctx = this.game.context;
-    return this.#missions() + `<div class="bsec"><h4>${t('prog.current', p.level, t('lv.' + p.level))}</h4><div>${next ? t('prog.next', t('goal.' + next.level, ...next.goal(ctx))) : t('prog.max')}</div></div><div class="bsec"><h4>${t('prog.unlocks')}</h4>${p.all.map(l => `<div class="brow"><span class="${l.level <= p.level ? 'good' : 'dim'}">${l.level <= p.level ? '✓' : '·'} ${l.level}. ${t('lv.' + l.level)}</span><span class="sp"></span><span class="dim">${l.unlocks.map(u => t('u.' + u)).join(', ')}</span></div>`).join('')}</div>`;
+    return this.#missions() + `<div class="bsec"><h4>${t('prog.current', p.level, t('lv.' + p.level))}</h4><div>${next ? t('prog.next', t('goal.' + next.level, ...next.goal(ctx))) : t('prog.max')}</div></div><div class="bsec"><h4>${t('prog.unlocks')}</h4>${p.all.map(l => `<div class="brow"><span class="${l.level <= p.level ? 'good' : 'dim'}">${l.level <= p.level ? '✓' : '·'} ${l.level}. ${t('lv.' + l.level)}</span><span class="sp"></span><span class="dim">${[...l.unlocks.map(u => t('u.' + u)), ...featuresAt(l.level).map(k => t('feat.' + k))].join(', ')}</span></div>`).join('')}</div>`;
   }
 
   handle(action, value) {
