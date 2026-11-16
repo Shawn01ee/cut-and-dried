@@ -3,6 +3,7 @@
  * the money and the reviews; the rest opens as the salon levels up, and the level-up says what opened.
  */
 export const FEATURE_LEVEL = {
+  'biz.network': 2, 'staff.parts': 3,
   // level 2: hiring, regulars, prices
   'tab.staff': 2, 'clients.regulars': 2, 'ops.price': 2,
   // level 3: marketing and the rival, the menu and hours, a bigger salon

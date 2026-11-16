@@ -29,14 +29,17 @@ button{font-family:var(--f);font-size:17px;line-height:1;background:#2e2a38;colo
 button:active{transform:translateY(1px)}
 button.on{background:#8a2d3b;border-color:#ff7a3d}
 button.go{background:#24552e;border-color:#8fc25a}
-#panel{position:fixed;left:8px;right:8px;bottom:8px;max-height:47vh;display:flex;flex-direction:column}
-#tabs{display:flex;gap:2px;padding:3px 3px 0}
+#panel{position:fixed;left:8px;right:8px;bottom:8px;height:47vh;max-height:47vh;display:flex;flex-direction:column}
+#tabs{display:flex;flex-shrink:0;gap:2px;padding:3px 3px 0}
 #tabs button{flex:1 1 auto;font-size:16px;padding:4px 2px;white-space:nowrap}
 @media (max-width:480px){#tabs{gap:2px!important;padding:4px 2px 0!important}#tabs button,html[lang=ko] #tabs button{padding:4px 0;font-size:11px;letter-spacing:-.5px}#tabs .tog{flex:0 0 24px}}
 #tabs button.sel{background:#45404f;border-color:#ffd98a;color:#ffd98a}
 #tabs .tog{flex:0 0 32px}
-#pbody{overflow:auto;padding:5px 8px 8px;font-size:17px;touch-action:pan-y;-webkit-overflow-scrolling:touch}
-#panel.min #pbody{display:none}
+#pbody{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable;padding:5px 8px 8px;font-size:17px;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+#pnav{flex-shrink:0;padding:5px 8px 0}
+#pnav[hidden]{display:none}
+#panel.min{height:auto}
+#panel.min #pbody,#panel.min #pnav{display:none}
 .ph{margin-bottom:3px}
 .ord{margin:2px 0 4px}
 .otext{color:#ffd98a}
@@ -143,7 +146,7 @@ html[lang=ko] .mbtns button{font-size:15px}
 html[lang=ko] .mbtns button.big{font-size:18px}
 html[lang=ko] .hsec h3,html[lang=ko] .mhead{font-size:15px}
 html[lang=ko] .hsec li,html[lang=ko] .hsec p{font-size:13px}
-@media (min-width:880px){#panel{left:auto;width:470px;max-height:72vh}#hud{font-size:14px;max-width:330px}#hud h1{font-size:14px}}
+@media (min-width:880px){#panel{left:auto;width:470px;height:55vh;max-height:72vh}#hud{font-size:14px;max-width:330px}#hud h1{font-size:14px}}
 @media (min-width:880px){html[lang=ko] #hud{font-size:13px}html[lang=ko] #hud h1{font-size:13px}}
 @media (max-width:420px){#hud{font-size:14px;min-width:0;max-width:calc(100vw - 172px);box-sizing:border-box}#hud h1{font-size:12px;flex-wrap:wrap;gap:0 8px}#ctrl{max-width:150px}#ctrl button{font-size:15px;padding:3px 5px}}
 body.closeup #hud,body.closeup #ctrl{display:none}
@@ -300,7 +303,7 @@ button.on:hover:not(:disabled){background:#a3384a}
 #tabs .badge{animation:blink 1.2s steps(2) infinite}
 .bar .fl{transition:width .3s steps(5)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-  #hud .obrow{margin-top:6px;padding:5px 8px;border:1px solid #ffd98a;border-radius:3px;color:#ffd98a;cursor:pointer;line-height:1.35;display:flex;flex-direction:column;gap:2px}
+  #hud .obrow{margin-top:6px;padding:5px 8px;border:1px solid #ffd98a;border-radius:3px;color:#ffd98a;cursor:pointer;pointer-events:auto;line-height:1.35;display:flex;flex-direction:column;gap:2px}
   #hud .obrow .obl{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
   #hud .obrow .obl>:first-child{min-width:0}
   #hud .obrow .obl>:last-child{flex:none;text-align:right}
@@ -359,7 +362,7 @@ button.on:hover:not(:disabled){background:#a3384a}
   <button id="bZo">−</button><button id="bZi">+</button><button id="bCenter" title="">⌖</button><button id="bTrack">♪</button><button id="bSound"></button><button id="bLang"></button><button id="bHelp">?</button>
 </div>
 <div id="sites" class="card"></div><div id="branchCard" class="card"></div><div id="incident" class="card"></div>
-<div id="panel" class="card"><div id="tabs"></div><div id="pbody"></div></div>
+<div id="panel" class="card"><div id="tabs"></div><div id="pnav" hidden></div><div id="pbody"></div></div>
 
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
 <script type="module" src="src/main.js" onerror="LOADER.fail()"></script>

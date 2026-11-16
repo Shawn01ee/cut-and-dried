@@ -56,7 +56,7 @@ const DEFINITIONS = [
 /** Stand-ins for an empty front desk, so callers can simply ask whether its receptionist is hired. */
 const NO_DESK = [0, 1].map(site => Object.freeze({ id: null, name: '', effect: 'reception', site, hired: false, away: false, skills: Object.freeze({ speed: 0, customerService: 0, marketing: 0 }) }));
 const SUPPORT = [
-  { id: 'ruby', name: 'Ruby', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', site: 0, skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, hair: 0x2e1d14, hairdo: 'bun', skin: 0xc98e66, startsHired: true },
+  { id: 'ruby', name: 'Ruby', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', site: 0, skills: { cutting: 0, colouring: 0, perming: 0, speed: 50, customerService: 85, marketing: 35 }, salary: 220, hireCost: 300, apron: 0x8a4fc2, hair: 0x2e1d14, hairdo: 'bun', skin: 0xc98e66, startsHired: false },
   // The second salon's front desk: greets its clients and brings in its passers-by. Hired once it opens.
   { id: 'juno', name: 'Juno', gender: 'f', role: 'Receptionist', style: 'Reception', effect: 'reception', site: 1, skills: { cutting: 0, colouring: 0, perming: 0, speed: 58, customerService: 80, marketing: 45 }, salary: 230, hireCost: 400, apron: 0x1fa39a, hair: 0x6e4428, hairdo: 'bob', skin: 0xe7b892 },
   // More receptionists to choose from: a marketer, a host and a newcomer. Each is posted to a free desk when hired.
@@ -96,7 +96,7 @@ export class StaffManager {
     this.owner = new Employee({ id: 'owner', name: 'Lia', gender: 'f', role: 'Director', style: 'Owner', specialty: 'colour', perk: 'manage', skills: { cutting: 70, colouring: 70, perming: 64, speed: 58, customerService: 78 }, salary: 0, apron: 0xffd98a, hair: 0x2e1d14, hairdo: 'bob' });
     this.owner.hired = true; this.owner.daysEmployed = Infinity;
     this.candidates = DEFINITIONS.map(d => new Employee(d));
-    // Front desk and floor help, never at a styling chair. Only the receptionist is there on day one.
+    // Front desk and floor help, never at a styling chair. New careers begin with Lia alone; saved hires are restored.
     this.support = SUPPORT.map(d => Object.assign(new Employee(d), { effect: d.effect, site: d.site ?? null, hired: !!d.startsHired }));
     this.commission = 0; this.dinnerDay = 0; this.seatShuffle = false; this.version = 0;
     // Welfare programmes the salon runs, and news of them for the morning.
