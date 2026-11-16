@@ -15,7 +15,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0b14;font-family:va
 #c{position:fixed;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:grab}
 .card{background:rgba(13,11,20,.86);border:2px solid #45404f;box-shadow:0 0 0 2px #0d0b14}
 #hud{position:fixed;left:8px;top:8px;font-size:16px;line-height:1.05;padding:5px 7px;min-width:220px;max-width:calc(100vw - 30px);pointer-events:none}
-#hud h1{font-family:var(--ft);font-size:14px;font-weight:400;margin:0 0 3px;color:#ffd98a;display:flex;justify-content:space-between;gap:12px;letter-spacing:.5px}
+#hud h1{font-family:var(--ft);font-size:14px;font-weight:400;margin:0 0 3px;color:#ffd98a;display:flex;flex-direction:column;gap:1px;letter-spacing:.5px}
+#hud h1 span+span{font-size:.82em;color:#dcd9dc;letter-spacing:0}
+#hud .foot td{max-width:6.5em;overflow:hidden;text-overflow:ellipsis}
 #hud table{border-collapse:collapse;width:100%}
 #hud td{padding:0 5px 0 0;white-space:nowrap}
 #hud tr.hd td{color:#9c98a2;border-bottom:1px solid #45404f}
@@ -61,6 +63,12 @@ table.lad td,table.lad th{padding:2px 6px;text-align:left;font-weight:400}
 table.lad th{color:#9c98a2;border-bottom:1px solid #45404f}
 table.lad th.on{color:#ffd98a}table.lad tr.top1 td:first-child{color:#ffd98a}table.lad tr.top2 td:first-child{color:#dcd9dc}table.lad tr.top3 td:first-child{color:#c8964a}table.lad tr.top1{background:rgba(255,217,138,.07)}
 #pops{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:4}
+.chairs{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin-bottom:2px}
+.chairs .cs{font-size:11px;color:#9c98a2;padding:0 2px 0 4px}.chairs .cs:first-child{padding-left:0}.chairs .sp{flex:1}
+.chairs .ch{min-width:26px;height:24px;padding:0 4px;font-size:13px;line-height:20px;text-align:center;background:#1d1928;border:2px solid #45404f;color:#9c98a2}
+.chairs .ch.work{background:#24552e;border-color:#3f6a3a;color:#f6f3ee}.chairs .ch.busy{background:#3a2f1d;border-color:#8a6040;color:#ffd98a}.chairs .ch.vac{background:#15121d;border-style:dashed;color:#5f5a68}
+.chairs .ch.sel{border-color:#ffd98a;box-shadow:inset 0 0 0 1px #ffd98a;color:#fff}.chairs .ch.nav{color:#dcd9dc}
+.chkey{font-size:11px;margin-bottom:4px}
 #hud,#panel,#ctrl,#sites{z-index:5}
 #c.grabbing{cursor:grabbing}
 #nowPlaying{position:fixed;right:8px;top:80px;z-index:3;padding:3px 8px;font-size:12px;color:#ffd98a;background:rgba(13,11,20,.85);border:1px solid #45404f;opacity:0;transition:opacity .4s;pointer-events:none}#nowPlaying.show{opacity:1}
@@ -133,7 +141,7 @@ html[lang=ko] .mbtns button{font-size:15px}
 html[lang=ko] .mbtns button.big{font-size:18px}
 html[lang=ko] .hsec h3,html[lang=ko] .mhead{font-size:15px}
 html[lang=ko] .hsec li,html[lang=ko] .hsec p{font-size:13px}
-@media (min-width:880px){#panel{left:auto;width:470px;max-height:72vh}#hud{font-size:18px}#hud h1{font-size:16px}}
+@media (min-width:880px){#panel{left:auto;width:470px;max-height:72vh}#hud{font-size:14px;max-width:330px}#hud h1{font-size:14px}}
 @media (min-width:880px){html[lang=ko] #hud{font-size:13px}html[lang=ko] #hud h1{font-size:13px}}
 @media (max-width:420px){#hud{font-size:14px;min-width:0;max-width:calc(100vw - 172px);box-sizing:border-box}#hud h1{font-size:12px;flex-wrap:wrap;gap:0 8px}#ctrl{max-width:150px}#ctrl button{font-size:15px;padding:3px 5px}}
 body.closeup #hud,body.closeup #ctrl{display:none}
