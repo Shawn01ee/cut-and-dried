@@ -10,6 +10,12 @@ export const LINES = {
     // a regular who has not been in for three weeks or more
     'greetRegular.long': ['{n} 님 오랜만이에요~', '어머, {n} 님! 정말 오랜만이에요.'],
     regularHello: ['또 왔어요~', '안녕하세요!', '오늘도 잘 부탁드려요.'],
+    greetRebook: ['{n} 님, 어제 예약하셨죠? 어서 오세요!', '{n} 님! 기다리고 있었어요.'],
+    // Lia looking after a waiting client when she has no chair of her own
+    'owner.care': ['{n} 님, 조금만 기다려 주세요. 금방 모실게요!', '오래 기다리셨죠? 곧 순서예요.', '음료 한 잔 더 드릴까요? 금방이에요!'],
+    'owner.careOk': ['네, 괜찮아요!', '감사해요~', '천천히 하세요.'],
+    'desk.rebook': ['오늘은 마감이라, 내일 첫 타임으로 잡아 드릴게요!', '죄송해요, 내일 아침 첫 예약으로 모실게요.'],
+    'rebook.ok': ['네, 내일 올게요!', '그럼 내일 아침에 봬요.'],
     'regularHello.long': ['오랜만이에요!', '그동안 바빠서 못 왔어요.'],
     'src.walk': ['지나가다 들렀어요.', '지금 바로 되나요?', '예약 안 했는데 괜찮을까요?'],
     'src.rep': ['여기 잘한다고 해서요.', '동네에서 평이 좋더라고요.'],
@@ -85,6 +91,11 @@ export const LINES = {
   en: {
     greet: ['Hi there, welcome!', 'Hello! Do you have a booking?', 'Welcome in, take a seat!', 'Hi! We\'ll be with you in a sec.'],
     greetRegular: ['{n}! Good to see you!', 'Hey {n}, how are you going?', 'Oh, {n}! Welcome back.'],
+    greetRebook: ['{n}, you booked yesterday! Come on in.', 'There you are, {n}!'],
+    'owner.care': ['{n}, not long now, I promise!', 'Thanks for waiting, you\'re next soon.', 'Another drink while you wait?'],
+    'owner.careOk': ['No worries!', 'Thank you~', 'Take your time.'],
+    'desk.rebook': ['We are closing, but I can book you first thing tomorrow!', 'Sorry! First appointment tomorrow morning?'],
+    'rebook.ok': ['Sure, see you tomorrow!', 'Tomorrow morning it is.'],
     'greetRegular.long': ['{n}! Long time no see!', 'Oh, {n}! It\'s been ages.'],
     'regularHello.long': ['It\'s been a while!', 'Sorry, I\'ve been so busy!'],
     regularHello: ['Back again!', 'Hi! The usual place, the usual chair?', 'Hello hello!'],

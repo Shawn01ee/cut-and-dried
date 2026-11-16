@@ -63,6 +63,11 @@ export const HOURS_RANGE = { open: [7, 12], close: [15, 23], length: [6, 12] };
 const blankIncidents = () => ({ refunds: 0, discounts: 0, dashed: 0 });
 
 /** Composition root of the business simulation. Knows nothing about Three.js. */
+/**
+ * What happens to clients still waiting when the salon closes: booked for first thing tomorrow, served to the end
+ * (overtime), or sent home. With bookings, most walk-ins who arrive after last call book for tomorrow too.
+ */
+export const CLOSING = ['book', 'serve', 'send'], REBOOK_ACCEPT = .7, REBOOK_MAX = 8;
 export class TycoonGame {
   constructor() {
     this.bus = new EventBus();
@@ -103,7 +108,7 @@ export class TycoonGame {
     this.priceLevel = 1; this.served = 0; this.servedToday = 0; this.satisfactionSum = 0; this.lastSatisfaction = 0;
     this.repAtDayStart = 0; this.followersAtDayStart = 0; this.incidents = blankIncidents(); this.trollAt = null; this.report = null;
     // Regular clients come back on their own; stylists who want to quit and rival news wait for the morning.
-    this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null; this.lastCall = 30;
+    this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null; this.lastCall = 30; this.closingPolicy = 'book'; this.rebooked = []; this.rebookToday = [];
     // The regulars with names and stories, and today's special booking with a log of past ones.
     this.regularBook = new RegularBook(); this.special = null; this.specialLog = [];
   }
@@ -309,6 +314,12 @@ export class TycoonGame {
   setHours(open, close) { this.nextHours = open === this.clock.openHour && close === this.clock.closeHour ? null : [open, close]; }
   /** Tomorrow's hours as [open, close]. */
   /** New clients are taken until `lastCall` minutes before closing. */
+  /** A client who could not be seen today books for first thing tomorrow (one per name, a few at most). */
+  rebook(c) { if (this.rebooked.length < REBOOK_MAX && !this.rebooked.some(r => r.name === c.name)) this.rebooked.push({ name: c.name, gender: c.gender, site: c.site || 0 }); }
+  /** A client still waiting at closing: seen to the end, booked for first thing tomorrow, or sent home. */
+  closingFor(c) { return this.closingPolicy === 'serve' ? 'serve' : this.closingPolicy === 'book' && !c.villain && !c.special ? 'book' : 'send'; }
+  /** A walk-in after last call: books for tomorrow, or turns back. */
+  lateArrival(c) { return this.closingPolicy === 'book' && !c.villain && Math.random() < REBOOK_ACCEPT ? 'book' : 'away'; }
   get accepting() { return this.clock.isOpen && this.clock.hour < this.clock.closeHour - this.lastCall / 60; }
   setLastCall(min) { if (LAST_CALLS.includes(min)) this.lastCall = min; }
   get plannedHours() { return this.nextHours || [this.clock.openHour, this.clock.closeHour]; }
@@ -321,7 +332,7 @@ export class TycoonGame {
   shiftHours(which, step) { if (!this.canShiftHours(which, step)) return false; const h = [...this.plannedHours]; h[which] += step; this.setHours(...h); return true; }
   /** A client for the main salon. Branch clients (`walkIn` false) are never influencers or difficult clients. */
   /** A client for salon `site`. Branch clients (`walkIn` false) are never influencers or difficult clients. */
-  newCustomer(usedNames, walkIn = true, site = 0) {
+  newCustomer(usedNames, walkIn = true, site = 0, as = null) {
     const booked = walkIn && this.isUnlocked('booking') && Math.random() < BOOKED_SHARE, fx = this.dayFx;
     // Sometimes the walk-in is a regular from the book, coming back.
     const visit = walkIn ? this.regularBook.visitor(site, this.clock.day, usedNames) : null, reg = visit && visit.entry;
@@ -330,9 +341,9 @@ export class TycoonGame {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
       vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel] * (this.matching ? MATCH_PRICE : 1) * (this.promoOn ? ORDERS.promo.price : 1), patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1) * (this.layout.countAt('kiosk', site) ? FURNITURE.kiosk.patience : 1) * (this.layout.countAt('chargingStation', site) ? FURNITURE.chargingStation.patience : 1) * (fx.patience ?? 1),
       villain: walkIn && !influencer && !reg ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor(this.matching) * (fx.budget ?? 1),
-      colourBias: (fx.colour ?? 1) / (fx.cut ?? 1), permBias: (fx.perm ?? 1) / (fx.cut ?? 1), as: reg, trends: this.trends,
+      colourBias: (fx.colour ?? 1) / (fx.cut ?? 1), permBias: (fx.perm ?? 1) / (fx.cut ?? 1), as: reg || as, trends: this.trends,
     });
-    c.site = site; c.booked = booked;
+    c.site = site; c.booked = booked || !!as;
     if (reg) {
       Object.assign(c, { regular: reg, preferredStylist: reg.stylist, chapter: visit.chapter, occasion: visit.occasion, sendsFriend: visit.friend });
       if (c.occasion) { c.price = Math.round(c.price * OCCASION_PAY); c.budget = Math.round(c.budget * OCCASION_PAY); }
@@ -535,7 +546,7 @@ export class TycoonGame {
     // A surprise later in the day, but never on top of a morning happening.
     if (!this.happening && this.progression.level >= 2) this.surprise = rollSurprise(this.weather, this.clock.openHour, this.clock.closeHour);
     this.brand.startDay(this.clock.day).forEach(k => this.news.push('brand:' + k)); this.brand.rollOffer(this.clock.day);
-    this.#hqMorning(); this.#agencyMorning();
+    this.#hqMorning(); this.rebookToday = this.rebooked.splice(0); this.#agencyMorning();
     const move = shows('mkt.rival', this.progression.level) ? this.rival.startDay(this.clock.day, this.standing) : null;
     if (move) this.news.push(move);
     if (move === 'closed' && this.rival.freed?.ids.length) this.news.push('freed:' + this.rival.freed.ids.join(','));
@@ -612,7 +623,7 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, performance: this.explainer, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, onboarding: this.onboarding, hq: this.hq, hqFx: this.hqFx, storyBoost: this.storyBoost, storyPerks: this.storyPerks, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, closingPolicy: this.closingPolicy, rebooked: this.rebooked, performance: this.explainer, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, onboarding: this.onboarding, hq: this.hq, hqFx: this.hqFx, storyBoost: this.storyBoost, storyPerks: this.storyPerks, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.explainer.restore(d.performance || (d.weekLog || []).slice(-1)[0]);
@@ -631,6 +642,6 @@ export class TycoonGame {
     this.regularBook.restore(d.regularBook); this.regularBook.trim(this.regulars); this.specialLog = d.specialLog || [];
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
-    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.onboarding.restore(d.onboarding, this); this.hq.restore(d.hq); this.hqFx = d.hqFx || {}; this.storyBoost = d.storyBoost || null; this.storyPerks = { hospitality: 0, contest: 0, ...d.storyPerks }; this.hospitality.extra = this.storyPerks.hospitality; this.lastCall = d.lastCall || 0; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
+    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.onboarding.restore(d.onboarding, this); this.hq.restore(d.hq); this.hqFx = d.hqFx || {}; this.storyBoost = d.storyBoost || null; this.storyPerks = { hospitality: 0, contest: 0, ...d.storyPerks }; this.hospitality.extra = this.storyPerks.hospitality; this.lastCall = d.lastCall || 0; this.closingPolicy = CLOSING.includes(d.closingPolicy) ? d.closingPolicy : 'book'; this.rebooked = d.rebooked || []; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
   }
 }
