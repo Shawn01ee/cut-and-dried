@@ -457,16 +457,20 @@ function line(key,vars={}){const pool=(LINES[i18n.lang]||LINES.en)[key];if(!pool
 const onScreen=fig=>{const [x,y]=screenOf(fig.head.getWorldPosition(V()));return x>20&&x<innerWidth-20&&y>40&&y<innerHeight-20;};
 /** A speech bubble over someone's head, only while they are on screen; one each, a few at a time. */
 function say(fig,text,staff){if(!chatOn||!text||!fig||!fig.root.visible||!onScreen(fig))return;const old=bubbles.findIndex(b=>b.fig===fig);if(old>=0){bubbles[old].el.remove();bubbles.splice(old,1);}
-  if(bubbles.length>=6)bubbles.shift().el.remove();const el=document.createElement('div');el.className='bubble'+(staff?' staff':'');el.textContent=text;$('#pops').appendChild(el);bubbles.push({el,fig,t:0,life:2.4+text.length*.045});}
-function updateBubbles(dt){for(const b of bubbles.slice()){b.t+=dt;if(b.t>=b.life||!b.fig.root.visible){b.el.remove();bubbles.splice(bubbles.indexOf(b),1);continue;}
-  const w=b.fig.head.getWorldPosition(V());w.y+=.2;const [x,y]=screenOf(w),off=x<10||x>innerWidth-10||y<30||y>innerHeight;b.el.style.display=off?'none':'block';b.el.style.left=x+'px';b.el.style.top=y+'px';b.el.style.opacity=b.t>b.life-.35?Math.max(0,(b.life-b.t)/.35):1;}}
+  if(bubbles.length>=4)bubbles.shift().el.remove();const el=document.createElement('div');el.className='bubble'+(staff?' staff':'');el.textContent=text;$('#pops').appendChild(el);bubbles.push({el,fig,t:0,life:2.4+text.length*.045});}
+function updateBubbles(dt){const taken=[...popRects],box=el=>{const r=el.getBoundingClientRect();return r.width?{L:r.left,R:r.right,T:r.top,B:r.bottom}:null;},ui=[box($('#hud')),box($('#panel'))].filter(Boolean);
+  for(const b of bubbles.slice()){b.t+=dt;if(b.t>=b.life||!b.fig.root.visible){b.el.remove();bubbles.splice(bubbles.indexOf(b),1);continue;}
+    if(b.w==null){b.w=b.el.offsetWidth;b.h=b.el.offsetHeight;}const w=b.fig.head.getWorldPosition(V());w.y+=.2;let [x,y]=screenOf(w),ok=x>10&&x<innerWidth-10&&y>30&&y<innerHeight;
+    // step up past notes, other bubbles and the HUD or panel; give up (hide this frame) if there is no room
+    for(let n=0;ok&&n<5;n++){const r={L:x+8,R:x+8+b.w,T:y-4-b.h,B:y-4},hit=[...taken,...ui].find(q=>r.L<q.R+3&&r.R>q.L-3&&r.T<q.B+3&&r.B>q.T-3);if(!hit)break;if(ui.includes(hit)||n===4){ok=false;break;}y=hit.T-6;}
+    if(ok)taken.push({L:x+8,R:x+8+b.w,T:y-4-b.h,B:y-4});b.el.style.display=ok?'block':'none';b.el.style.left=x+'px';b.el.style.top=y+'px';b.el.style.opacity=b.t>b.life-.35?Math.max(0,(b.life-b.t)/.35):1;}}
 /** An exchange: one speaks, the other answers a moment later. */
 function chat(a,aStaff,pair,b,bStaff=!aStaff){if(!pair)return;say(a,pair[0],aStaff);later(1.5,()=>say(b,pair[1],bStaff));}
 /** Why a client came, in proportion to what is actually bringing clients in. */
 function whyCame(){const A=game.demandParts.add,w=[['walk',A.walk],['rep',A.rep*.6],['reviews',game.reviews.count?A.rep*.4+Math.min(4,game.reviews.count*.05):0],['insta',A.followers],['comfort',A.comfort]].map(([k,v])=>[k,Math.max(0,v)]);
   let r=Math.random()*w.reduce((n,x)=>n+x[1],0);return (w.find(x=>(r-=x[1])<0)||w[0])[0];}
 /** At the door: the desk says hello and the client says why they came. */
-function greetAt(c,site){if(c.villain||c.special||Math.random()>.6)return;const desk=game.staff.receptionistAt(site).hired?deskFig(site):null;
+function greetAt(c,site){if(c.villain||c.special||bubbles.length>=3||Math.random()>.6)return;const desk=game.staff.receptionistAt(site).hired?deskFig(site):null;
   if(desk)say(desk,line(c.regular?'greetRegular':'greet',{n:nm(c.name)}),true);
   later(desk?1.4:.3,()=>say(c.fig,c.regular?line('regularHello'):line('src.'+(c.influencer?'insta':whyCame())),false));}
 /** The consultation: the client asks in their own words, the stylist answers. A special day is said as it is. */
@@ -480,7 +484,7 @@ function consultTalk(st,c){if(st.cust!==c||c.villain)return;const o=c.order,mean
 /** While working, now and then: a regular's news (once, when asked), the weather, the season, or just chat. */
 function smallTalk(st,dt){const c=st.cust;if(!c||c.villain)return;st.talkT=(st.talkT??rand(4,8))-dt;if(st.talkT>0)return;st.talkT=rand(14,24);const sf=(st.worker||st.sty).fig;
   if(c.regular&&c.chapter!=null&&!c.storyTold){c.storyTold=true;chat(sf,true,[line('reg.ask',{n:nm(c.name)}),tx('story.'+c.regular.story+'.'+c.chapter)],c.fig);return;}
-  if(Math.random()<.45)return;const r=Math.random(),wx=line('talk.'+game.weather),ev=line('talk.'+decorThemeOf(game.clock.day));
+  if(Math.random()<.45||bubbles.length>=3)return;const r=Math.random(),wx=line('talk.'+game.weather),ev=line('talk.'+decorThemeOf(game.clock.day));
   if(r<.3&&wx)chat(sf,true,wx,c.fig);else if(r<.55&&ev)chat(sf,true,ev,c.fig);else if(r<.75)chat(c.fig,false,line('talkc.any'),sf);else chat(sf,true,line('talk.any'),c.fig);}
 /** The client's first words on seeing the result: delight, or what exactly is off (length, colour or curl). */
 function reaction(c,sc){const s=sc.all,tier=s>=.88?'love':s>=.75?'good':s>=.6?'meh':'bad',head=line('react.'+tier);if(tier==='love'||tier==='good')return head;
@@ -492,7 +496,7 @@ function farewell(c,sc){if(c.villain||Math.random()>.7)return;const site=c.site|
 /** A long wait: the client asks how long, the desk apologises. Once a visit. */
 function grumble(c){if(c.grumbled||c.villain||c.pat>=c.maxPat*.3)return;c.grumbled=true;if(Math.random()>.6)return;say(c.fig,line('wait.long'),false);const site=c.site||0;if(game.staff.receptionistAt(site).hired)later(1.4,()=>say(deskFig(site),line('wait.sorry'),true));}
 /** Two stylists with no client chat between jobs. */
-let idleT=20;function idleChat(dt){idleT-=dt;if(idleT>0)return;idleT=rand(25,45);if(!game.clock.isOpen)return;const free=stations.filter(s=>!s.vacant&&s.state==='free'&&!s.sweep&&s.sty.restUntil<=simT);
+let idleT=20;function idleChat(dt){idleT-=dt;if(idleT>0)return;idleT=rand(25,45);if(!game.clock.isOpen||bubbles.length>=2)return;const free=stations.filter(s=>!s.vacant&&s.state==='free'&&!s.sweep&&s.sty.restUntil<=simT);
   for(const site of [0,1]){const here=free.filter(s=>siteOf(s.item.x)===site);if(here.length>=2){const [a,b]=here.sort(()=>Math.random()-.5),cold=a.sty.trait&&b.sty.trait&&game.staff.relation(a.sty,b.sty)<=-25;chat(a.sty.fig,true,line(cold?'staff.cold':'staff.idle'),b.sty.fig,true);if(!cold)game.staff.bond(a.sty,b.sty,1);return;}}}
 /** Which salon a new client walks into: in proportion to the stylists at each salon's chairs. */
 function pickSite(){if(!game.layout.branchOpen)return 0;const w=[0,1].map(s=>stations.filter(st=>!st.vacant&&siteOf(st.item.x)===s).length),t=w[0]+w[1];return t&&Math.random()*t>=w[0]?1:0;}
@@ -582,15 +586,15 @@ function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.se
   last={name:c.name,sty:s.name,all:sc.all,mins:(simT-c.tStart)/60};
   sf.walkTo([st.at(-.55,1.15)],()=>{sf.yaw=st.face-Math.PI*.2;});
   c.fig.walkTo([st.at(.55,1.2)],()=>{c.fig.yaw=st.face;audio.play(sc.all>=.6?'happy':'sad');
-    popup(`${Math.round(sc.all*100)}% · ${tx(WORDS.find(w=>sc.all>=w[0])[1])}`,c.fig.head,'big');
+    popup(chatOn&&!c.villain?`${Math.round(sc.all*100)}%`:`${Math.round(sc.all*100)}% · ${tx(WORDS.find(w=>sc.all>=w[0])[1])}`,c.fig.head,'big',true);
     if(!c.villain)later(.4,()=>{say(c.fig,reaction(c,sc),false);later(1.7,()=>say(sf,line(sc.all>=.6?'reply.thanks':'reply.sorry'),true));});
-    later(.6,()=>{c.fig.yaw=st.face-Math.PI*.85;clapAll(sc.all);popup(tx('chairPct',st.i+1,Math.round(sc.all*100)),recep.head,'');});
+    later(.6,()=>{c.fig.yaw=st.face-Math.PI*.85;clapAll(sc.all);});
     later(2.8,()=>{st.state='free';st.cust=null;{const home=s===st.sty?st:ownerStation();goTo(sf,home?home.stand:OWNER_IDLE,home?home.face:Math.PI);}if(sel===st.i)renderPanel(true);
       const dk=deskAt[c.site||0]||deskAt[0];c.fig.walkTo(route(c.fig.pos,dk.pay),()=>{c.fig.yaw=dk.payYaw;later(1.3,()=>checkout(c,sc));});});});
   if(sel===st.i)renderPanel(true);}
 /** Paying at the desk. Difficult clients may haggle, demand a refund or run off without paying. */
 function checkout(c,sc){const pay=sc.payment,head=c.fig.head;
-  const settle=(amount,outcome={})=>{if(amount>0){game.receivePayment(amount);audio.play('cash');popup('+$'+amount,head,'big');farewell(c,sc);}
+  const settle=(amount,outcome={})=>{if(amount>0){game.receivePayment(amount);audio.play('cash');popup('+$'+amount,head,'big',true);farewell(c,sc);}
     const r=game.finishVisit(c,sc,outcome);visitNews(c,r);const ip=r.influencerPost;if(ip)popup(tx('inf.post.'+ip.tier,ip.followers.toLocaleString(),ip.days,Math.round(ip.demand*100)),head,'big');c.state='paid';leave(c);};
   if(c.influencer){popup(tx('inf.sponsored'),recep.head,'');settle(0);return;}
   if(c.villain==='dasher'){
@@ -785,11 +789,17 @@ function decorate(){const th=decorThemeOf(game.clock.day),key=th+'|'+walls.lengt
 
 /* ================= popups ================= */
 const pops=[];
-function popup(text,obj,cls){const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:cls==='big'?4.2:2.6,w:null,h:null});}
+/** A floating note. Routine ones (`quiet`, or no class) are skipped while five are already up or when their subject is out of sight. */
+function popup(text,obj,cls,quiet){if((quiet||!cls)&&(pops.length>=5||!inView(obj)))return;const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:cls==='big'?4.2:2.6,w:null,h:null});}
 const _p=V();
 function screenOf(v){_p.copy(v).project(cam);return [(_p.x+1)/2*W*PIX+camOff.x*PIX,(1-_p.y)/2*H*PIX-camOff.y*PIX];}
+/** True when a point is on screen and not under the HUD or the panel. */
+function inView(obj){if(!obj||!obj.getWorldPosition)return true;const [x,y]=screenOf(obj.getWorldPosition(V()));if(x<16||x>innerWidth-16||y<24||y>innerHeight-16)return false;
+  return ![$('#hud'),$('#panel')].some(el=>{const r=el.getBoundingClientRect();return r.width&&x>r.left&&x<r.right&&y>r.top&&y<r.bottom;});}
+/** Where this frame's notes were drawn, so speech bubbles can keep clear of them. */
+let popRects=[];
 /** Floating notes rise from whoever they are about. Notes about the same person stack by their real height, and the stack stays clear of the HUD, the panel and the screen edges. */
-function updatePops(dt){if(!pops.length)return;const hud=$('#hud').getBoundingClientRect(),pan=$('#panel').getBoundingClientRect(),groups=new Map();
+function updatePops(dt){if(!pops.length){popRects=[];return;}const hud=$('#hud').getBoundingClientRect(),pan=$('#panel').getBoundingClientRect(),groups=new Map();
   for(const p of pops){p.t+=dt;if(p.w==null){p.w=p.el.offsetWidth;p.h=p.el.offsetHeight;}if(!groups.has(p.obj))groups.set(p.obj,[]);groups.get(p.obj).push(p);}
   const placed=[];
   for(const [obj,g] of groups){const w=obj.getWorldPosition(V()),k=Math.min(1,g[0].t/g[0].life);w.y+=.35+(1-(1-k)*(1-k))*.6;let [x,y]=screenOf(w);
@@ -800,6 +810,7 @@ function updatePops(dt){if(!pops.length)return;const hud=$('#hud').getBoundingCl
     for(let n=0;n<12;n++){const hit=placed.find(r=>x-W/2<r.R+4&&x+W/2>r.L-4&&y-total<r.B+4&&y>r.T-4);if(!hit)break;y=hit.T-4>=lo?hit.T-4:hit.B+4+total;}
     placed.push({L:x-W/2,R:x+W/2,T:y-total,B:y});
     for(const p of g){p.el.style.left=x+'px';p.el.style.top=y+'px';p.el.style.opacity=clamp((p.life-p.t)*2);y-=p.h+4;}}
+  popRects=placed;
   for(let i=pops.length-1;i>=0;i--)if(pops[i].t>pops[i].life){pops[i].el.remove();pops.splice(i,1);}
   custs.forEach(c=>{if(c.state==='wait'){const w=c.fig.head.getWorldPosition(V());w.y+=.3;const [x,y]=screenOf(w);c.tag.style.display='block';c.tag.style.left=x+'px';c.tag.style.top=y+'px';const k=clamp(c.pat/c.maxPat);const i=c.tag.firstChild;i.style.width=(k*100)+'%';i.style.background=k>.5?'#8fc25a':k>.25?'#ffb15a':'#d8314a';}
     else if(c.state==='process'&&c.procSeated){const w=c.fig.head.getWorldPosition(V());w.y+=.55;const [x,y]=screenOf(w);c.tag.style.display='block';c.tag.style.left=x+'px';c.tag.style.top=y+'px';const i=c.tag.firstChild;i.style.width=(clamp(1-c.procLeft/c.procTotal)*100)+'%';i.style.background='#7fb6f0';}
@@ -948,9 +959,12 @@ function drawPV(cv,h,skin,tint=0){if(!cv)return;const g=cv.getContext('2d');g.im
   [7,8,9,10,11,12].forEach(j=>strand(j,3,.86));}
 /** The chair list in the HUD: up to ten chairs show in full; more fold into one line the player can open. */
 let hudOpen=null;try{hudOpen=JSON.parse(localStorage.getItem('cd.hudOpen'));}catch{hudOpen=null;}
+const HUD_ROWS=8;
 function hudChairs(list,row){const busy=list.filter(s=>s.cust).length,open=hudOpen??list.length<=10;
   const head=`<div class="hsum"><span>${tx('hud.chairs',list.length,busy)}</span><button class="htog" data-hud="toggle">${tx(open?'hud.fold':'hud.unfold')}</button></div>`;
-  return head+(open?`<table class="foot">${list.map(row).join('')}</table>`:'');}
+  if(!open)return head;if(list.length<=10)return head+`<table class="foot">${list.map(row).join('')}</table>`;
+  const shown=[...list.filter(s=>s.cust&&s.state==='work'),...list.filter(s=>s.cust&&s.state!=='work'),...list.filter(s=>!s.cust)].slice(0,HUD_ROWS).sort((a,b)=>a.i-b.i);
+  return head+`<table class="foot">${shown.map(row).join('')}</table><div class="dim">${tx('hud.more',list.length-shown.length,list.filter(s=>!s.cust&&!shown.includes(s)).length)}</div>`;}
 $('#hud').addEventListener('pointerdown',e=>{if(!e.target.closest('[data-hud]'))return;e.preventDefault();hudOpen=!(hudOpen??stations.filter(st=>siteOf(st.item.x)===site).length<=10);try{localStorage.setItem('cd.hudOpen',JSON.stringify(hudOpen));}catch{/* the choice just isn't remembered */}updateHud();});
 function updateHud(){game.syncMissions();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));

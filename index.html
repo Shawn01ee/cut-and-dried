@@ -61,6 +61,7 @@ table.lad td,table.lad th{padding:2px 6px;text-align:left;font-weight:400}
 table.lad th{color:#9c98a2;border-bottom:1px solid #45404f}
 table.lad th.on{color:#ffd98a}table.lad tr.top1 td:first-child{color:#ffd98a}table.lad tr.top2 td:first-child{color:#dcd9dc}table.lad tr.top3 td:first-child{color:#c8964a}table.lad tr.top1{background:rgba(255,217,138,.07)}
 #pops{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:4}
+#hud,#panel,#ctrl,#sites{z-index:5}
 #c.grabbing{cursor:grabbing}
 #nowPlaying{position:fixed;right:8px;top:80px;z-index:3;padding:3px 8px;font-size:12px;color:#ffd98a;background:rgba(13,11,20,.85);border:1px solid #45404f;opacity:0;transition:opacity .4s;pointer-events:none}#nowPlaying.show{opacity:1}
 body.inmenu #nowPlaying{display:none}
@@ -305,7 +306,7 @@ button.on:hover:not(:disabled){background:#a3384a}
 (function(){
   var l=null;try{l=localStorage.getItem('cd-lang');}catch(e){}
   var q=new URLSearchParams(location.search).get('lang');if(q==='ko'||q==='en')l=q;
-  if(l!=='ko'&&l!=='en')l=(navigator.language||'').toLowerCase().indexOf('ko')===0?'ko':'en';
+  if(l!=='ko'&&l!=='en')l='ko';
   window.__lang=l;document.documentElement.lang=l;
   var X={en:{msgs:['Sharpening the scissors…','Mixing the dyes…','Sweeping the floor…','Opening the salon…'],
     tips:['Tip: dye can barely lighten hair. Bleach first for pale colours.','Tip: curls make hair look shorter, so leave extra length.','Tip: a cut only removes hair. You can never add it back.','Tip: mix two tubes to land on an in-between shade.'],
