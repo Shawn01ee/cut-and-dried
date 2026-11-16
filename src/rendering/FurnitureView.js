@@ -19,7 +19,9 @@ export class FurnitureView {
   }
   #build(id, pickable) {
     const group = new THREE.Group(), builder = new this.Builder();
-    const fx = { glow: (sx, sy, sz, x, y, z) => { const m = new THREE.Mesh(box, this.glow); m.scale.set(sx, sy, sz); m.position.set(x, y, z); group.add(m); } };
+    const glowIn = parent => (sx, sy, sz, x, y, z) => { const m = new THREE.Mesh(box, this.glow); m.scale.set(sx, sy, sz); m.position.set(x, y, z); parent.add(m); };
+    // `part` draws a named piece in its own group, so it can move on its own (the robot vacuum's robot)
+    const fx = { glow: glowIn(group), part: (name, x, z, draw) => { const sub = new THREE.Group(), b = new this.Builder(); sub.name = name; sub.position.set(x, 0, z); sub.userData.home = sub.position.clone(); draw(b, glowIn(sub)); b.build(sub); group.add(sub); } };
     FURNITURE_MODELS[id](builder, fx); builder.build(group);
     if (!pickable) group.traverse(o => { o.raycast = noRay; });
     return group;
@@ -42,6 +44,8 @@ export class FurnitureView {
     this.world.remove(entry.group); entry.seats.forEach(s => { const list = s.processing ? this.procSeats : this.seats; list.splice(list.indexOf(s), 1); }); this.#entries.delete(item);
   }
   has(item) { return this.#entries.has(item); }
+  /** The drawing of a placed piece, or null. */
+  groupOf(item) { return this.#entries.get(item)?.group || null; }
   /** Removes drawings of pieces no longer in the layout. */
   prune(items) { [...this.#entries.keys()].filter(it => !items.includes(it)).forEach(it => this.despawn(it)); }
   clear() { this.prune([]); }

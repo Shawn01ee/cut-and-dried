@@ -129,7 +129,8 @@ export const FURNITURE_MODELS = {
   // an aroma diffuser on a little stand
   aromaDiffuser: (g, fx) => { g.box(.3, .6, .3, 0xb88a5a, 0, .3, 0).box(.32, .03, .32, 0x3a2618, 0, .61, 0).box(.14, .16, .14, 0xf6f3ee, 0, .71, 0).box(.06, .04, .06, 0xdcd9dc, 0, .81, 0).box(.04, .14, .04, 0x8a4fc2, .1, .7, .08); fx.glow(.08, .12, .08, 0, .9, 0); },
   // a robot vacuum on its dock
-  robotVacuum: (g, fx) => { g.box(.34, .2, .1, 0xdcd9dc, 0, .1, -.16).box(.3, .06, .3, 0x1d1a26, 0, .03, .06).box(.22, .02, .22, 0x45404f, 0, .07, .06); g.box(.04, .02, .02, 0x8fc25a, 0, .08, .2); fx.glow(.04, .02, .02, 0, .085, .21); },
+  // a dock, and the robot itself as a part of its own so it can drive off and come back
+  robotVacuum: (g, fx) => { g.box(.34, .2, .1, 0xdcd9dc, 0, .1, -.16); fx.part('bot', 0, .06, (b, glow) => { b.box(.3, .06, .3, 0x1d1a26, 0, .03, 0).box(.22, .02, .22, 0x45404f, 0, .07, 0).box(.04, .02, .02, 0x8fc25a, 0, .08, .14); glow(.04, .02, .02, 0, .085, .15); }); },
   // a self check-in kiosk: a slim stand with a glowing touch screen
   kiosk: (g, fx) => { g.box(.32, .04, .26, 0x1d1a26, 0, .02, 0).box(.1, 1.0, .1, 0xbdb9c0, 0, .52, 0).box(.44, .58, .1, 0x1d1a26, 0, 1.22, 0).box(.38, .5, .02, 0x7fb6f0, 0, 1.22, .06); fx.glow(.36, .46, .02, 0, 1.22, .07); },
   // the towel laundry: a washer under the counter and stacks of fresh towels

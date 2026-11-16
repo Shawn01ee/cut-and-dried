@@ -12,6 +12,10 @@ import { Hospitality } from './Hospitality.js';
 import { Finance } from './Finance.js';
 import { Rival, MATCH_PRICE, POACH_CHANCE, SCOUT_COST, SCOUT_LEVEL } from './Rival.js';
 import { contestFor, runContest, CONTESTS, BOOST_DAYS } from './Contests.js';
+import { Brand, ONLINE } from './Brand.js';
+/** Minutes before closing that new clients stop being taken; overtime pays time and a half. */
+export const LAST_CALLS = [0, 30, 60];
+const OVERTIME_RATE = 1.5;
 import { Missions } from './Missions.js';
 import { MonthlyLedger, MONTH_DAYS, summariseDays } from './MonthlyLedger.js';
 import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS, dateOf, setCalendarOrigin, originFor } from './Calendar.js';
@@ -81,6 +85,7 @@ export class TycoonGame {
     this.snow = [0, 0]; this.calendarOrigin = 0;
     this.rival = new Rival();
     // Matching a price war until this day, a poaching attempt waiting for the morning, this month's contest, past results and a podium's lift in demand.
+    this.brand = new Brand();
     this.matchUntil = 0; this.poach = null; this.contest = null; this.contestLog = []; this.contestBoost = null; this.contestResult = null;
     this.customers = new CustomerFactory();
     this.evaluator = new ServiceEvaluator();
@@ -88,7 +93,7 @@ export class TycoonGame {
     this.priceLevel = 1; this.served = 0; this.servedToday = 0; this.satisfactionSum = 0; this.lastSatisfaction = 0;
     this.repAtDayStart = 0; this.followersAtDayStart = 0; this.incidents = blankIncidents(); this.trollAt = null; this.report = null;
     // Regular clients come back on their own; stylists who want to quit and rival news wait for the morning.
-    this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null;
+    this.regulars = 0; this.resignations = []; this.news = []; this.dirt = 0; this.nextHours = null; this.lastCall = 0;
     // The regulars with names and stories, and today's special booking with a log of past ones.
     this.regularBook = new RegularBook(); this.special = null; this.specialLog = [];
   }
@@ -191,6 +196,12 @@ export class TycoonGame {
   get matching() { return this.clock.day <= this.matchUntil; }
   /** Our share of the street's would-be clients today. */
   get marketShare() { return 1 - this.rival.pull(this.standing); }
+  /** Researches a product for the brand: the quality is set by today's team and Lia. */
+  startResearch(type, line) { return this.brand.startResearch(type, line, this.economy, this.brand.expectedQuality(type, [this.staff.owner, ...this.staff.hired], this.staff.management), this.clock.day); }
+  /** Displays at both salons, which make clients likelier to buy at the desk. */
+  get displays() { return this.layout.items.filter(it => it.id === 'displayTable' || it.id === 'shelf').length; }
+  /** A paying client may buy one of the brand's products at the desk. */
+  brandSale(satisfaction) { const s = this.brand.deskSale(satisfaction, this.displays); if (s) this.economy.earn('brand', s.price); return s; }
   /** Matches the rival's discount for as long as it runs. */
   matchPriceWar() { if (!this.rival.open || !this.rival.discount) return false; this.matchUntil = this.clock.day + Math.max(0, this.rival.daysLeft - 1); this.rival.version++; return true; }
   /** The cost of scouting one of the rival's stylists, or null when it cannot be done. */
@@ -239,6 +250,9 @@ export class TycoonGame {
   nextArrival() { return rand(.8, 1.2) * this.clock.hourLength * 8 / this.dailyDemand; }
   setHours(open, close) { this.nextHours = open === this.clock.openHour && close === this.clock.closeHour ? null : [open, close]; }
   /** Tomorrow's hours as [open, close]. */
+  /** New clients are taken until `lastCall` minutes before closing. */
+  get accepting() { return this.clock.isOpen && this.clock.hour < this.clock.closeHour - this.lastCall / 60; }
+  setLastCall(min) { if (LAST_CALLS.includes(min)) this.lastCall = min; }
   get plannedHours() { return this.nextHours || [this.clock.openHour, this.clock.closeHour]; }
   /** Whether the opening (`which` 0) or closing (1) hour can move by `step`. */
   canShiftHours(which, step) {
@@ -444,6 +458,7 @@ export class TycoonGame {
     this.special = rollSpecial(this.progression.level, this.clock.openHour, this.clock.closeHour);
     // A surprise later in the day, but never on top of a morning happening.
     if (!this.happening) this.surprise = rollSurprise(this.weather, this.clock.openHour, this.clock.closeHour);
+    this.brand.startDay(this.clock.day).forEach(k => this.news.push('brand:' + k));
     const move = this.rival.startDay(this.clock.day, this.standing);
     if (move) this.news.push(move);
     if (this.rival.open && !this.poach && this.staff.hired.length >= 2 && Math.random() < POACH_CHANCE) { const t = this.staff.hired.filter(e => e.level >= 3).sort((a, b) => b.stress - a.stress)[0]; if (t) this.poach = { id: t.id }; }
@@ -486,12 +501,16 @@ export class TycoonGame {
     return { goal: this.month.goal, revenue: this.month.revenueSoFar + today, day: (this.clock.day - 1) % MONTH_DAYS + 1, month: MonthlyLedger.monthOf(this.clock.day) };
   }
   closeDay() {
+    // Online orders for the brand, and the shipping they cost.
+    { const orders = this.brand.onlineOrders(this.marketing.followers), units = orders.reduce((n, o) => n + o.units, 0); if (units) { this.economy.earn('online', orders.reduce((n, o) => n + o.revenue, 0)); this.economy.charge('shipping', units * ONLINE.shipping); } this.brandOrders = orders; }
     const e = this.economy, sales = this.layout.dailySales * (this.isUnlocked('brandLine') ? 2 : 1);
     if (sales) e.earn('products', sales);
     if (this.isUnlocked('membership') && this.regulars) e.earn('membership', this.regulars * MEMBERSHIP_FEE);
     if (this.isUnlocked('sponsor')) e.earn('sponsor', Math.min(SPONSOR_MAX, Math.round(this.marketing.followers / 200)));
     this.operatingCosts.accrue(1); this.#autoReply();
-    this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours);
+    // Overtime: everyone on the payroll stays until the last client leaves, at time and a half, and it wears on the team.
+    const ot = Math.round(this.clock.overtimeHours * 10) / 10, otPay = Math.round(this.staff.payroll * OVERTIME_RATE * ot / 8); if (otPay) e.charge('overtime', otPay);
+    this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours + ot);
     const money = this.finance.closeDay(e.dailyProfit, e.dailyRevenue, this.clock.day);
     if (money.news) this.news.push('fin:' + money.news);
     // An academy gives everyone a daily lesson.
@@ -501,7 +520,7 @@ export class TycoonGame {
     this.report = {
       day: this.clock.day, ...e.closeDay(), reputation: this.reputation.value - this.repAtDayStart,
       reviews: { count: reviews.length, average: reviews.length ? reviews.reduce((sum, r) => sum + r.stars, 0) / reviews.length : 0 },
-      followers: { now: this.marketing.followers, change: this.marketing.followers - this.followersAtDayStart }, incidents: { ...this.incidents }, served: this.servedToday,
+      followers: { now: this.marketing.followers, change: this.marketing.followers - this.followersAtDayStart }, incidents: { ...this.incidents }, served: this.servedToday, overtime: ot, overtimePay: otPay,
     };
     this.weekLog.push(this.report);
     this.month.log(this.report); if (MonthlyLedger.isMonthEnd(this.clock.day)) this.#settleMonth(this.report);
@@ -511,7 +530,7 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.calendarOrigin = d.calendarOrigin || 0; setCalendarOrigin(this.calendarOrigin);
@@ -529,6 +548,6 @@ export class TycoonGame {
     this.regularBook.restore(d.regularBook); this.regularBook.trim(this.regulars); this.specialLog = d.specialLog || [];
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
-    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
+    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.lastCall = d.lastCall || 0; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
   }
 }
