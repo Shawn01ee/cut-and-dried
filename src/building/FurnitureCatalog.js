@@ -7,7 +7,7 @@ export const FURNITURE = {
   nailDesk: { price: 1400, comfort: 1, w: 3, d: 3, minTier: 1, max: 2, requires: 'seniors', needs: [[0, 1]] },
   // `chairs` lists each styling chair on a piece as [x, z, quarter turns] in its own frame.
   // A styling chair is a free-standing seat with its own mirror and partitions; placed side by side they form a styling island.
-  station: { price: 300, comfort: 0, w: 3, d: 3, needs: [[0, 1]], chairs: [[0, 0, 0]] },
+  station: { price: 300, comfort: 0, w: 3, d: 3, needs: [[0, 1]], chairs: [[0, 0, 0]], light: { at: [0, 1.9, -.45], power: .45 } },
   // The styling island: a glass table where colour and perm clients sit under processors while the product works.
   processIsland: { price: 1200, comfort: 2, w: 6, d: 4, processing: true, seatH: .5, max: [1, 1, 2, 2, 3, 3], seats: [[-.75, .55, 0], [.75, .55, 0], [-.75, -.55, 2], [.75, -.55, 2]] },
   // A ready-made three-seat chair set, from saves made before chairs could be lined up into one. No longer sold.
@@ -28,7 +28,7 @@ export const FURNITURE = {
   // A small table between the waiting benches, with magazines and flowers.
   sideTable: { price: 120, comfort: 1, legacy: true },
   mirror: { price: 150, comfort: 2, legacy: true },
-  lamp: { price: 200, comfort: 2 },
+  lamp: { price: 200, comfort: 2, light: { at: [0, 1.25, 0], power: 1 } },
   bookcase: { price: 180, comfort: 1, w: 2, d: 1, legacy: true },
   shelf: { price: 250, comfort: 1, dailySales: 30 },
   dryer: { price: 300, comfort: 1, w: 2, d: 2, legacy: true },
@@ -57,9 +57,9 @@ export const FURNITURE = {
   // Pieces that open as the salon grows (`minTier` is the salon size).
   spaBooth: { price: 1600, comfort: 2, w: 3, d: 3, minTier: 1, max: [0, 1, 1, 2, 2, 3], needs: [[0, 1]] },
   vipRoom: { price: 2200, comfort: 2, w: 4, d: 3, minTier: 2, max: [0, 0, 1, 1, 2, 2], needs: [[0, 1]], chairs: [[0, 0, 0]] },
-  photoZone: { price: 900, comfort: 1, w: 2, d: 2, minTier: 2, max: 1, needs: [[0, .75]] },
+  photoZone: { price: 900, comfort: 1, w: 2, d: 2, minTier: 2, max: 1, needs: [[0, .75]], light: { at: [.38, 1.4, .33], power: .7, color: 0xfff6e8 } },
   academy: { price: 2500, comfort: 0, w: 3, d: 2, minTier: 3, max: 1, needs: [[0, .75]] },
-  cafeBar: { price: 3000, comfort: 2, w: 3, d: 1, minTier: 4, max: 1, dailySales: 80, needs: [[0, .6]] },
+  cafeBar: { price: 3000, comfort: 2, w: 3, d: 1, minTier: 4, max: 1, dailySales: 80, needs: [[0, .6]], light: { at: [0, 1.1, .3], power: .4 } },
   // Older pieces, kept so earlier saves still load; no longer sold.
   basin: { price: 600, comfort: 1, w: 2, d: 2, needs: [[.25, .75], [-.45, .75]], legacy: true },
   shampoo: { price: 800, comfort: 1, speedBonus: .1, speedFor: 'shampoo', legacy: true },

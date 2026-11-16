@@ -44,6 +44,10 @@ export class FurnitureView {
     this.world.remove(entry.group); entry.seats.forEach(s => { const list = s.processing ? this.procSeats : this.seats; list.splice(list.indexOf(s), 1); }); this.#entries.delete(item);
   }
   has(item) { return this.#entries.has(item); }
+  /** The light-giving pieces placed now, in world space: [{ x, y, z, power, color }] (see FURNITURE `light`). */
+  lightSources() {
+    return [...this.#entries.keys()].filter(it => FURNITURE[it.id].light).map(it => { const L = FURNITURE[it.id].light, p = this.layout.toWorld(it, L.at[0], L.at[2]); return { x: p.x, y: L.at[1], z: p.z, power: L.power, color: L.color ?? 0xffd98a }; });
+  }
   /** The drawing of a placed piece, or null. */
   groupOf(item) { return this.#entries.get(item)?.group || null; }
   /** Removes drawings of pieces no longer in the layout. */
