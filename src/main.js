@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { $, V, UP, rand, pick, clamp, lerp, smooth, angLerp, fwd, rgt } from './core/math.js';
 import { SUPPLY_PENALTY } from './tycoon/Brand.js';
 import { STEPS } from './tycoon/Onboarding.js';
+import { SPY } from './tycoon/RivalSpy.js';
 import { OwnerRoutine } from './scene/OwnerRoutine.js';
 import { Toasts } from './ui/Toasts.js';
 import { NotifySettings } from './ui/NotifySettings.js';
@@ -461,7 +462,7 @@ function spawnCustomer(o={}){
     {const L=deskLoad(site);if(game.deskFull(site,L.ahead,L.chairs)){declineAtDesk(c,site);return;}}
     if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}greetAt(c,site);const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
     if(!seat){if(game.staff.receptionistAt(site).hired){declineAtDesk(c,site);return;}popup(tx('noSeats'),fig.head,'');audio.play('bad');if(game.customerTurnedAway(c))goesNextDoor(c);leave(c,'full');return;}
-    seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen&&game.closingPolicy!=='serve'){closingLeave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
+    seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen&&game.closingPolicy!=='serve'){closingLeave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);if(game.spotSpy(c))spyCard(c);
       // Drinks and snacks are served as soon as the client sits down.
       const drink=game.dayFx.drinks===0?null:game.hospitality.serve(c);if(drink){fig.setTool(drink==='juice'?'juice':'cup');if(Math.random()<.35)later(.6,()=>say(fig,line('drink.thanks'),false));}});});
 }
@@ -823,6 +824,11 @@ const deskClosedOn=[0,0];
 function declineAtDesk(c,site){const r=game.declineAtDesk(c),dk=deskFig(site);say(dk,line(r==='book'?'desk.fullBook':'desk.full'),true);
   if(deskClosedOn[site]!==game.clock.day){deskClosedOn[site]=game.clock.day;popup(tx('desk.closed',nm(game.staff.receptionistAt(site).name)),recep.head,'big');}
   if(r==='book'){c.rebooked=true;later(1.2,()=>say(c.fig,line('rebook.ok'),false));}else if(r==='rival')goesNextDoor(c);leave(c);}
+/** A spy seen through at the desk: show them the door, feed them false information, or let them be. */
+function spyCard(c){const S=c.spy,R=game.rival.name;audio.play('bad');later(.8,()=>incidents.show({title:tx('spy.t',nm(c.name)),text:tx('spy.text',R,tx('spy.aim.'+S.aim)),fallback:2,options:[
+  {label:tx('spy.out'),note:tx('spy.outN',Math.round(SPY.spite*100)),run:()=>{game.answerSpy(c,'out');popup(tx('spy.gone',nm(c.name)),recep.head,'big');if(c.state==='wait')leave(c);renderPanel(true);}},
+  {label:tx('spy.feed'),note:tx('spy.feedN',R,SPY.feed),run:()=>{game.answerSpy(c,'feed');popup(tx('spy.fed',R),recep.head,'big');renderPanel(true);}},
+  {label:tx('spy.ignore'),note:tx('spy.ignoreN'),run:()=>{game.answerSpy(c,'ignore');}}]}));}
 /** Someone we could not see heads for the rival, and says so. */
 function goesNextDoor(c){later(.6,()=>say(c.fig,line('leave.rival'),false));popup(tx('toRival',game.rival.name),c.fig.head,'',true);}
 function closingLeave(c){if(c.special){visitNews(c,game.customerGaveUp(c));leave(c);return;}if(game.closingFor(c)==='book'){game.rebook(c);c.rebooked=true;later(.4+Math.random(),()=>say(c.fig,line('rebook.ok'),false));}else if(game.customerSentHome())goesNextDoor(c);leave(c);}
@@ -1176,7 +1182,7 @@ function postOn(channel){const who=filmer();if(!who){popup(tx('mk.busy'),OWNER.f
     popup(r.viral?tx('mk.viralPop',name,r.views.toLocaleString()):tx('mk.postPop',name,r.views.toLocaleString(),r.gained.toLocaleString()),f.head,'big');audio.play(r.viral?'levelUp':'happy');renderPanel(true);});
   renderPanel(true);}
 /** Morning news: what the rival did overnight, and stylists who have had enough. */
-function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):k.startsWith('hq:')?tx('hq.news.'+k.split(':')[1],tx('hq.o.'+(k.split(':')[2]||''))):k.startsWith('freed:')?tx('rival.news.freed',game.rival.freed?.from||'',k.slice(6).split(',').map(id=>nm(game.staff.find(id)?.name||id)).join(', ')):k.startsWith('brand:')?(([,kind,arg])=>tx('brand.news.'+kind,tx((kind==='done'||kind==='viral'?'pt.':'deal.')+arg)))(k.split(':')):k.startsWith('contest:')?tx('contest.news.'+k.slice(8),tx('contest.kind.'+game.contest.kind),tx('contest.cat.'+game.contest.category)):tx('rival.news.'+k,game.rival.name));
+function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):k.startsWith('hq:')?tx('hq.news.'+k.split(':')[1],tx('hq.o.'+(k.split(':')[2]||''))):k.startsWith('spy:')?tx('spy.news.'+k.slice(4),game.rival.name):k.startsWith('freed:')?tx('rival.news.freed',game.rival.freed?.from||'',k.slice(6).split(',').map(id=>nm(game.staff.find(id)?.name||id)).join(', ')):k.startsWith('brand:')?(([,kind,arg])=>tx('brand.news.'+kind,tx((kind==='done'||kind==='viral'?'pt.':'deal.')+arg)))(k.split(':')):k.startsWith('contest:')?tx('contest.news.'+k.slice(8),tx('contest.kind.'+game.contest.kind),tx('contest.cat.'+game.contest.category)):tx('rival.news.'+k,game.rival.name));
   // a new season, and calendar events on their first day
   if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));

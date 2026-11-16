@@ -109,6 +109,8 @@ export class Rival {
   }
   /** Clients compare prices with next door, so a cheap rival shrinks what they are willing to pay. */
   budgetFactor(matching = false) { return this.open ? 1 - this.discount * (matching ? 1 - MATCH_BLUNTS : 1) * .5 - (this.priceLevel === 0 ? .05 : 0) : 1; }
+  /** Starts a move now (a spy's report, or false information that backfires), unless one is running. */
+  startMove(id, day, days = null) { if (!this.open || this.move || !MOVES[id]) return false; this.move = id; this.daysLeft = days ?? Math.round(rand(...MOVES[id].days)); this.history.unshift({ id, day }); this.history.length = Math.min(this.history.length, 6); this.version++; return true; }
   /** One of their stylists came over to us: they are weaker for it. */
   lose(id) { if (!this.lost.includes(id)) this.lost.push(id); this.baseRating = Math.max(1, this.baseRating - .2); this.version++; }
   /** One of ours went to them. */
