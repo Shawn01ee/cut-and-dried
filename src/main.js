@@ -25,7 +25,7 @@ import { nameColour, rankMark } from './ui/nameStyle.js';
 import { NavGrid } from './building/NavGrid.js';
 import { paintSign } from './rendering/pixelFont.js';
 import { BRANCH_X, siteOf } from './building/SalonLayout.js';
-import { RESIGN_LEAVE } from './employees/StaffManager.js';
+import { RESIGN_LEAVE , RAISE_RELIEF, RAISE_LOYALTY, RAISE_CALM, RAISE_MAX_EFFECT} from './employees/StaffManager.js';
 import { FURNITURE } from './building/FurnitureCatalog.js';
 import { CHANNELS } from './tycoon/Marketing.js';
 import { AudioManager } from './audio/AudioManager.js';
@@ -493,7 +493,7 @@ function farewell(c,sc){if(c.villain||Math.random()>.7)return;const site=c.site|
 function grumble(c){if(c.grumbled||c.villain||c.pat>=c.maxPat*.3)return;c.grumbled=true;if(Math.random()>.6)return;say(c.fig,line('wait.long'),false);const site=c.site||0;if(game.staff.receptionistAt(site).hired)later(1.4,()=>say(deskFig(site),line('wait.sorry'),true));}
 /** Two stylists with no client chat between jobs. */
 let idleT=20;function idleChat(dt){idleT-=dt;if(idleT>0)return;idleT=rand(25,45);if(!game.clock.isOpen)return;const free=stations.filter(s=>!s.vacant&&s.state==='free'&&!s.sweep&&s.sty.restUntil<=simT);
-  for(const site of [0,1]){const here=free.filter(s=>siteOf(s.item.x)===site);if(here.length>=2){const [a,b]=here.sort(()=>Math.random()-.5);chat(a.sty.fig,true,line('staff.idle'),b.sty.fig,true);return;}}}
+  for(const site of [0,1]){const here=free.filter(s=>siteOf(s.item.x)===site);if(here.length>=2){const [a,b]=here.sort(()=>Math.random()-.5),cold=a.sty.trait&&b.sty.trait&&game.staff.relation(a.sty,b.sty)<=-25;chat(a.sty.fig,true,line(cold?'staff.cold':'staff.idle'),b.sty.fig,true);if(!cold)game.staff.bond(a.sty,b.sty,1);return;}}}
 /** Which salon a new client walks into: in proportion to the stylists at each salon's chairs. */
 function pickSite(){if(!game.layout.branchOpen)return 0;const w=[0,1].map(s=>stations.filter(st=>!st.vacant&&siteOf(st.item.x)===s).length),t=w[0]+w[1];return t&&Math.random()*t>=w[0]?1:0;}
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
@@ -819,7 +819,7 @@ function simStep(dt){simT+=dt;
   custs.forEach(c=>{if(c.state==='wait'){c.pat-=dt;grumble(c);if(c.pat<=0){popup(tx('tooSlow'),c.fig.head,'');audio.play('bad');visitNews(c,game.customerGaveUp(c));leave(c);}}});
   // stations
   stations.forEach(st=>{
-    if(st.vacant)return;
+    if(st.vacant)return;st.sty.workSite=siteOf(st.item.x);
     if(st.sweep){if(updateSweep(st.sweep,dt))st.sweep=null;}
     else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
     if(st.state==='free'){if(st.sty.restUntil>simT||st.sweep||st.filming||pendingMoves.has(st.item)||queuedMoves.has(st.item))return;
@@ -1059,6 +1059,9 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));
   game.staff.news.splice(0).forEach(n=>news.push(tx(n.key,nm(n.name),n.n)));
   {const th=decorThemeOf(day);if(th!==decorThemeOf(day-1))news.push(tx('decor.news',tx('decor.'+th)));}
+  // a quarrel between two stylists, from yesterday
+  {const cl=game.staff.clash;game.staff.clash=null;const a=cl&&game.staff.find(cl.a),b=cl&&game.staff.find(cl.b);if(a&&b&&a.hired&&b.hired){const res=how=>()=>{game.staff.resolveClash(a,b,how,day);renderPanel(true);};
+    later(1.5,()=>{audio.play('bad');incidents.show({title:tx('rel.clashT',nm(a.name),nm(b.name)),text:tx('rel.clash.'+cl.why),fallback:2,options:[{label:tx('rel.mediate'),note:tx('rel.mediateN'),run:res('mediate')},{label:tx('rel.rest'),note:tx('rel.restN'),run:res('rest')},{label:tx('rel.ignore'),note:tx('rel.ignoreN'),run:res('ignore')}]});});}}
   if(game.staff.waitingToQuit){news.push(tx('wf.alsoTired',game.staff.waitingToQuit));game.staff.waitingToQuit=0;}
   if(!game.dayOff&&['rain','storm','heat','cold','snow'].includes(game.weather))news.unshift(tx('wx.news.'+game.weather,fxText(WEATHER[game.weather])));
   // a new month brings new trends
@@ -1069,8 +1072,8 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   game.resignations.splice(0).forEach(e=>{if(!e.hired)return;audio.play('bad');const day=game.clock.day,answer=how=>()=>{const stays=game.staff.answerResignation(e,how,day);
       if(how==='talk'){audio.play(stays?'cash':'bad');incidents.show({title:tx(stays?'inc.talkOkT':'inc.talkNoT',nm(e.name)),text:tx(stays?'inc.talkOk':'inc.talkNo',nm(e.name),GRUDGE_DAYS,GRUDGE_PENALTY),options:[{label:tx('inc.ok'),run:()=>{}}]});}renderPanel(true);};
     incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:4,options:[
-      {label:tx('inc.keep',e.salary*2),note:tx('inc.keepN'),run:answer('bonus')},{label:tx('inc.talk'),note:tx('inc.talkN',GRUDGE_DAYS,GRUDGE_PENALTY),run:answer('talk')},
-      {label:tx('inc.raise'),note:tx('inc.raiseN',Math.round(e.salary*(RAISE-1))),run:answer('raise')},{label:tx('inc.leave'),note:tx('inc.leaveN',RESIGN_LEAVE),run:answer('leave')},{label:tx('inc.letGo'),note:tx('inc.letGoN'),run:answer('go')}]});});}
+      {label:tx('inc.keep',e.salary*2),note:tx('inc.keepN',game.staff.bonusRelief(e,day)),run:answer('bonus')},{label:tx('inc.talk'),note:tx('inc.talkN',GRUDGE_DAYS,GRUDGE_PENALTY),run:answer('talk')},
+      {label:tx('inc.raise'),note:tx('inc.raiseN',Math.round(e.salary*(RAISE-1)),RAISE_RELIEF,RAISE_LOYALTY,Math.round(RAISE_CALM*100),e.raises>=RAISE_MAX_EFFECT?tx('inc.raiseMax'):''),run:answer('raise')},{label:tx('inc.leave'),note:tx('inc.leaveN',RESIGN_LEAVE),run:answer('leave')},{label:tx('inc.letGo'),note:tx('inc.letGoN'),run:answer('go')}]});});}
 /** A set of calendar effects in words: "clients ×1.25 · payments ×1.15". */
 function fxText(fx){return Object.entries(fx).filter(([k,v])=>typeof v==='number'&&tx('fx.'+k)!=='fx.'+k&&!['month','from','to'].includes(k)).map(([k,v])=>tx('fx.'+k)+' ×'+(Math.round(v*100)/100)).join(' · ');}
 /** A surprise in the middle of the day: good news, a few extra clients, or something broken to fix now or live with. */
@@ -1089,7 +1092,7 @@ function happeningCard(){const h=game.happening;if(!h)return;const t=tx('hap.'+h
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
 const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},branchExpanded:()=>{syncFurniture();syncChairs();focusSite(1);},syncSupport,openBranch,hairShow:n=>{audio.play('levelUp');popup(tx('show.done',n.toLocaleString()),recep.head,'big');},openMonth:()=>{monthFrom='panel';openMenu('month','game');paused=true;},viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
-  talked:(e,concern)=>{audio.play('happy');incidents.show({title:tx('wf.talkT',nm(e.name)),text:'“'+tx('wf.say.'+concern)+'”',options:[{label:tx('wf.talkOk',-TALK_RELIEF),run:()=>{}}]});},post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e),seats:()=>{const n=[0,0];return stations.map(s=>{const site=siteOf(s.item.x);return {vip:s.item.id==='vipRoom',site,num:++n[site]};});},seatOf:e=>stations.findIndex(s=>s.sty===e),moveSeat:(e,i)=>moveToSeat(e,i)});
+  promoted:e=>{audio.play('levelUp');popup(tx('car.done',nm(e.name),tx('grade.'+e.rank)),e.fig?e.fig.head:recep.head,'big');},certified:(e,c)=>{audio.play('cash');popup(tx('cert.done',nm(e.name),tx('cert.'+c)),e.fig?e.fig.head:recep.head,'big');},talked:(e,concern)=>{audio.play('happy');incidents.show({title:tx('wf.talkT',nm(e.name)),text:'“'+tx('wf.say.'+concern)+'”',options:[{label:tx('wf.talkOk',-TALK_RELIEF),run:()=>{}}]});},post:postOn,canFilm:()=>!!filmer(),filming:()=>!!filming,reply:replyToReview,spent:()=>audio.play('cash'),hasChair:e=>stations.some(s=>s.sty===e),seats:()=>{const n=[0,0];return stations.map(s=>{const site=siteOf(s.item.x);return {vip:s.item.id==='vipRoom',site,num:++n[site]};});},seatOf:e=>stations.findIndex(s=>s.sty===e),moveSeat:(e,i)=>moveToSeat(e,i)});
 pbody.addEventListener('click',e=>{const b=e.target.closest('[data-do]');if(!b||b.disabled)return;const [a,v]=b.dataset.do.split(':');
   if(a==='chair-tab'){sel=lastChair=+v;}else if(a==='style')openStyling(stations[sel]);else if(a==='style-close')closeStyling(false);else if(a==='turn'){styling.turn(+v);return;}else if(a==='compare'){styling.toggleCompare();refreshDynamic();return;}else ui.handle(a,v);
   renderPanel(true);});

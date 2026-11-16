@@ -65,6 +65,8 @@ export const LINES = {
     'bye.sad': ['...수고하세요.', '네, 안녕히 계세요.'],
     'desk.bye': ['감사합니다, 안녕히 가세요!', '또 오세요~'],
     'desk.byeRain': ['우산 꼭 챙기세요!', '비 조심히 가세요!'],
+    // two stylists who do not get on
+    'staff.cold': [['...그 가위 제 거예요.', '알아요.'], ['오늘은 제가 먼저 받을게요.', '...그러세요.'], ['정리 좀 하면서 쓰세요.', '네네.']],
     // two stylists between clients
     'staff.idle': [['오늘 좀 한가하네요.', '이따 몰려올 거예요.'], ['점심 뭐 먹을래요?', '쌀국수 어때요?'], ['아까 그 컬러 진짜 예쁘게 나왔어요.', '고마워요! 레시피 알려줄게요.'], ['가위 새로 샀어요?', '응, 손에 딱 맞아요.'], ['요즘 펌 손님 많죠?', '계절 타나 봐요.']],
   },
@@ -126,6 +128,7 @@ export const LINES = {
     'bye.sad': ['...Thanks.', 'Okay, bye.'],
     'desk.bye': ['Thanks, have a great day!', 'See you again!'],
     'desk.byeRain': ['Don\'t forget your umbrella!', 'Stay dry out there!'],
+    'staff.cold': [['...those are my scissors.', 'I know.'], ['I\'ll take the next one.', '...Fine.'], ['Tidy up after yourself, yeah?', 'Yep.']],
     'staff.idle': [['Quiet one today.', 'It\'ll pick up later.'], ['What are we doing for lunch?', 'Pho?'], ['That colour earlier came out beautiful.', 'Thanks! I\'ll show you the formula.'], ['New scissors?', 'Yeah, they feel amazing.'], ['Lots of perms lately, hey?', 'Must be the season.']],
   },
 };

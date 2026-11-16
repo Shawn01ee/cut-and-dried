@@ -20,6 +20,8 @@ import { WEATHER, SURPRISES, rollWeather, rollSurprise, SNOW_RATE, SNOW_MELT } f
 import { RegularBook, FAVOURITE_SATISFACTION, HEART_LOYAL, LOYAL_PAY, OCCASION_PAY } from './Regulars.js';
 import { rollSpecial, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from './SpecialClients.js';
 import { StaffManager } from '../employees/StaffManager.js';
+import { TRAITS } from '../employees/Traits.js';
+import { CERTS, hasCert, certSatisfaction } from '../employees/Career.js';
 import { CustomerFactory } from '../customers/CustomerFactory.js';
 import { ServiceEvaluator } from '../customers/ServiceEvaluator.js';
 import { rollVillain } from '../customers/Villains.js';
@@ -250,7 +252,8 @@ export class TycoonGame {
   completeService(customer, worker, byOwner) {
     const comfort = this.comfortAt(customer.site || 0), syn = this.synergies, result = this.evaluator.evaluate(customer, worker, comfort, {
       satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0) + (this.layout.countAt('sterilizer', customer.site || 0) ? FURNITURE.sterilizer.satisfaction : 0)
-        + (customer.regular && customer.regular.stylist === worker.name ? FAVOURITE_SATISFACTION : 0) + (customer.trending && worker.perk === 'trend' ? TREND_PERK_SATISFACTION : 0), calm: syn.some(s => s.calm),
+        + (customer.regular && customer.regular.stylist === worker.name ? FAVOURITE_SATISFACTION : 0) + (customer.trending && worker.perk === 'trend' ? TREND_PERK_SATISFACTION : 0)
+        + (TRAITS[worker.trait]?.satisfaction || 0) + (customer.requestedService === 'colour' ? TRAITS[worker.trait]?.colourSatisfaction || 0 : 0) + certSatisfaction(worker, customer), calm: syn.some(s => s.calm),
     });
     // Priced by the grade of whoever did it, and a month's trend pays more.
     result.payment = Math.round(result.payment * GRADE_PAY[this.gradeOf(worker)] * (customer.trending ? TREND_PAY : 1));
@@ -264,15 +267,15 @@ export class TycoonGame {
     { const fx = this.dayFx, k = (fx.pay ?? 1) * (customer.requestedService === 'haircut' ? fx.cutPay ?? 1 : 1); if (k !== 1 && !customer.influencer) result.payment = Math.round(result.payment * k); }
     if (customer.spa && !customer.influencer) result.payment += SPA_FEE;
     // A clinic treatment after colour or perm: paid on top, and the hair feels better for it.
-    if (this.isUnlocked('treatment') && !customer.influencer && ['colour', 'perm'].includes(customer.requestedService) && Math.random() < TREATMENT_SHARE + (this.layout.countAt('scalpScanner', customer.site || 0) ? FURNITURE.scalpScanner.treatment : 0)) {
+    if (this.isUnlocked('treatment') && !customer.influencer && ['colour', 'perm'].includes(customer.requestedService) && Math.random() < TREATMENT_SHARE + (this.layout.countAt('scalpScanner', customer.site || 0) ? FURNITURE.scalpScanner.treatment : 0) + (hasCert(worker, 'scalp') ? CERTS.scalp.treatment : 0)) {
       customer.treatment = true; this.economy.earn('treatment', TREATMENT_FEE); result.satisfaction = Math.min(1, result.satisfaction + .04);
     }
     const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + comfort * .03 : 1);
     this.reputation.add(gain); worker.recordService(result.satisfaction, result.payment);
-    if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate * (this.layout.countAt('massageChair', customer.site || 0) ? FURNITURE.massageChair.staffTire : 1));
+    if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate * (this.layout.countAt('massageChair', customer.site || 0) ? FURNITURE.massageChair.staffTire : 1) * (TRAITS[worker.trait]?.tire || 1));
     // A mentor on the team helps everyone else learn faster.
     const learning = this.staff.hasPerk('mentor') && worker.perk !== 'mentor' ? 1.5 : 1;
-    if (worker.gainExperience(Math.round((result.specialist ? 15 : 10) * learning * this.staff.learning))) this.bus.emit('staff:levelup', worker);
+    if (worker.gainExperience(Math.round((result.specialist ? 15 : 10) * learning * this.staff.learning * (TRAITS[worker.trait]?.learning || 1)))) this.bus.emit('staff:levelup', worker);
     this.served++; this.servedToday++; this.satisfactionSum += result.satisfaction; this.lastSatisfaction = result.satisfaction;
     const M = this.missions; M.record('serve'); if (result.satisfaction >= .85) M.record('happy'); if (customer.vip) M.record('vip');
     if (customer.requestedService === 'colour') M.record('colour'); else if (customer.requestedService === 'perm') M.record('perm');
@@ -292,12 +295,12 @@ export class TycoonGame {
     if (outcome.dashed) this.incidents.dashed += result.payment;
     // A difficult visit wears on the stylist who did it.
     const worker = this.staff.all.find(e => e.name === result.stylist);
-    if (customer.villain && worker && worker !== this.staff.owner) worker.addStress((outcome.refusedRefund || outcome.refunded || outcome.haggleRefused || outcome.discount ? 7 : 4) * (this.layout.countAt('aromaDiffuser', customer.site || 0) ? FURNITURE.aromaDiffuser.calmStress : 1));
+    if (customer.villain && worker && worker !== this.staff.owner) worker.addStress((outcome.refusedRefund || outcome.refunded || outcome.haggleRefused || outcome.discount ? 7 : 4) * (this.layout.countAt('aromaDiffuser', customer.site || 0) ? FURNITURE.aromaDiffuser.calmStress : 1) * (TRAITS[worker.trait]?.villainStress || 1));
     // A regular's hearts move with the visit; other happy clients may become regulars, and a bad visit can lose one.
     let regular = null, newRegular = false;
     if (customer.regular) regular = this.#regularVisited(customer, outcome.refunded ? 0 : result.satisfaction, result.stylist);
     else if (!customer.villain && !customer.influencer && !customer.special) {
-      if (result.satisfaction >= .8 && Math.random() < (this.isUnlocked('stamp') ? .5 : .35)) { this.regulars++; newRegular = !!this.regularBook.add(customer, result.stylist, customer.site || 0, this.clock.day); }
+      if (result.satisfaction >= .8 && Math.random() < (this.isUnlocked('stamp') ? .5 : .35) + (worker && TRAITS[worker.trait]?.regular || 0)) { this.regulars++; newRegular = !!this.regularBook.add(customer, result.stylist, customer.site || 0, this.clock.day); }
       else if (result.satisfaction < .5 && this.regulars && Math.random() < .5) { this.regulars--; this.regularBook.trim(this.regulars); }
     }
     const special = customer.special ? this.#settleSpecial(outcome.refunded ? 0 : result.satisfaction) : null;

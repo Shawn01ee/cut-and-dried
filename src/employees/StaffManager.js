@@ -1,5 +1,7 @@
 import { Employee, RAISE, GRUDGE_DAYS } from './Employee.js';
 import { PROGRAMMES, TALK_EVERY, TALK_RELIEF, birthdayOf, concernOf } from './Welfare.js';
+import { TRAITS, compatibility } from './Traits.js';
+import { promotionStatus, PROMO_PAY, PROMO_RELIEF, PROMO_LOYALTY, ROLE_OF, CERTS, hasCert } from './Career.js';
 
 /**
  * The stylists who can be hired. Skills run 0 to 100; the specialty adds +10 on top.
@@ -70,6 +72,10 @@ const COMMISSION_BOOST = [0, 2, 4, 6], COMMISSION_CALM = [1, .85, .7, .55];
 const RANK_PERSUASION = { master: -.25, senior: -.15, designer: 0, junior: .1 };
 export const BONUS = 200, LEAVE_DAYS = 2, RESIGN_LEAVE = 3, DINNER_PER_HEAD = 45, MARKETING_COURSE = 400;
 export const RESIGN_STRESS = 85;
+/** A bonus to keep someone soothes a lot at once, but less each time within a month. */
+export const BONUS_RELIEF = 45, BONUS_FADE = 15, BONUS_RELIEF_MIN = 15, BONUS_MEMORY = 30;
+/** A pay rise lasts: each one raises the quitting limit and takes the edge off the daily work (up to three rises). */
+export const RAISE_RELIEF = 30, RAISE_LOYALTY = 6, RAISE_CALM = .05, RAISE_MAX_EFFECT = 3;
 
 /** Owns the roster: who can be hired, who works here, what they cost and how they are holding up. */
 export class StaffManager {
@@ -84,6 +90,35 @@ export class StaffManager {
     this.commission = 0; this.dinnerDay = 0; this.seatShuffle = false; this.version = 0;
     // Welfare programmes the salon runs, and news of them for the morning.
     this.welfare = new Set(); this.news = [];
+    // How each pair of stylists gets on, -100 to 100 (keyed by both ids), and a quarrel waiting for the morning.
+    this.relations = {}; this.clash = null; this.owner.trait = null;
+  }
+  #key(a, b) { return [a.id, b.id].sort().join('|'); }
+  /** How two stylists get on: it starts from their personalities and moves with working together. */
+  relation(a, b) {
+    const k = this.#key(a, b); if (this.relations[k] == null) { let h = 11; for (const ch of k) h = (h * 31 + ch.charCodeAt(0)) >>> 0; this.relations[k] = Math.round(compatibility(a.trait, b.trait) * 35 + (h % 31) - 15); }
+    return this.relations[k];
+  }
+  bond(a, b, by) { if (!a || !b || a === b || !a.trait || !b.trait) return; this.relations[this.#key(a, b)] = Math.round(Math.max(-100, Math.min(100, this.relation(a, b) + by)) * 10) / 10; this.version++; }
+  /** A stylist's closest friend and worst rival on the team, if any. */
+  friendsOf(e) { const others = this.hired.filter(o => o !== e).map(o => [o, this.relation(e, o)]).sort((x, y) => y[1] - x[1]); const f = others[0], r = others[others.length - 1]; return { friend: f && f[1] >= 25 ? f : null, rival: r && r[1] <= -25 ? r : null }; }
+  /** Promotes a stylist who has earned it: a grade up, base pay up, relief, and more reason to stay. */
+  promote(e) {
+    const s = e.hired && promotionStatus(e); if (!s || !s.ready) return false;
+    e.rank = s.to; e.role = ROLE_OF[s.to]; e.promotions++; e.baseSalary = Math.round(e.defSalary * PROMO_PAY ** e.promotions); e.salary = Math.round(e.baseSalary * RAISE ** e.raises); e.addStress(-PROMO_RELIEF);
+    this.version++; return true;
+  }
+  /** A certificate course: paid now, away tomorrow, and the skill or ability it gives from now on. */
+  takeCert(e, id, day) {
+    const c = CERTS[id]; if (!c || !e.hired || hasCert(e, id) || !this.economy.spend('training', c.cost)) return false;
+    e.certs.push(id); if (c.skill) e.skills[c.skill] = Math.min(100, e.skills[c.skill] + c.plus); this.sendOnLeave(e, day, 1); this.version++; return true;
+  }
+  /** The player's answer to a quarrel between two stylists. */
+  resolveClash(a, b, how, day) {
+    if (how === 'mediate') { this.bond(a, b, 25); a.addStress(-5); b.addStress(-5); }
+    else if (how === 'rest') { const t = a.stress >= b.stress ? a : b; this.sendOnLeave(t, day, 1); this.bond(a, b, 10); }
+    else { this.bond(a, b, -5); a.addStress(8); b.addStress(8); }
+    this.version++;
   }
   get all() { return [this.owner, ...this.candidates]; }
   get hired() { return this.candidates.filter(e => e.hired); }
@@ -105,7 +140,9 @@ export class StaffManager {
   /** What the programmes cost per working day, with this many stylists at work. */
   welfareCostFor(heads) { return [...this.welfare].reduce((n, id) => n + (PROGRAMMES[id].perHead || 0) * heads, 0); }
   /** The stress at which a stylist wants to quit: higher with health cover and long service. */
-  resignAt(e) { return Math.min(100, RESIGN_STRESS + (this.has('health') ? PROGRAMMES.health.resignAt : 0) + (e.loyalty || 0)); }
+  resignAt(e) { return Math.min(100, RESIGN_STRESS + (this.has('health') ? PROGRAMMES.health.resignAt : 0) + (e.loyalty || 0) + Math.min(RAISE_MAX_EFFECT, e.raises || 0) * RAISE_LOYALTY + (e.promotions || 0) * PROMO_LOYALTY); }
+  /** How much a keep-them bonus soothes now: less for each bonus they had in the last month. */
+  bonusRelief(e, day) { const recent = (e.bonusDays || []).filter(d => day - d < BONUS_MEMORY).length; return Math.max(BONUS_RELIEF_MIN, BONUS_RELIEF - recent * BONUS_FADE); }
   /** How much experience a service gives under the education allowance. */
   get learning() { return this.has('education') ? PROGRAMMES.education.learning : 1; }
   /** Services take a touch longer with guaranteed breaks. */
@@ -143,8 +180,8 @@ export class StaffManager {
    */
   answerResignation(e, how, day) {
     if (!e.hired) return false;
-    if (how === 'bonus') { this.economy.charge('bonus', e.salary * 2); e.addStress(-45); }
-    else if (how === 'raise') { e.raises++; e.salary = Math.round(e.baseSalary * RAISE ** e.raises); e.addStress(-30); }
+    if (how === 'bonus') { this.economy.charge('bonus', e.salary * 2); e.addStress(-this.bonusRelief(e, day)); e.bonusDays = [...(e.bonusDays || []).filter(d => day - d < BONUS_MEMORY), day]; }
+    else if (how === 'raise') { e.raises++; e.salary = Math.round(e.baseSalary * RAISE ** e.raises); e.addStress(-RAISE_RELIEF); }
     else if (how === 'leave') { if (!this.sendOnLeave(e, day, RESIGN_LEAVE)) return this.answerResignation(e, 'go', day); e.addStress(-35); }
     else if (how === 'talk') {
       const stays = Math.random() < this.persuadeChance(e); e.persuaded++;
@@ -155,7 +192,7 @@ export class StaffManager {
   }
   dinnerCost() { return DINNER_PER_HEAD * (1 + this.hired.length + this.support.filter(e => e.hired).length); }
   /** A team dinner once a day: everyone unwinds a little. */
-  teamDinner(day) { if (this.dinnerDay === day || !this.hired.length || !this.economy.spend('bonus', this.dinnerCost())) return false; this.dinnerDay = day; this.hired.forEach(e => e.addStress(-12)); this.version++; return true; }
+  teamDinner(day) { if (this.dinnerDay === day || !this.hired.length || !this.economy.spend('bonus', this.dinnerCost())) return false; this.dinnerDay = day; this.hired.forEach(e => e.addStress(-12)); this.hired.forEach((a, i) => this.hired.slice(i + 1).forEach(b => this.bond(a, b, 6))); this.version++; return true; }
   setCommission(i) { if (COMMISSION[i] != null) { this.commission = i; this.version++; } }
 
   startDay(day) {
@@ -179,10 +216,12 @@ export class StaffManager {
     for (const e of at) {
       // Every hour past eight adds stress and leaves some tiredness for tomorrow. Yesterday's stress is kept by cause.
       const overtime = Math.max(0, hours - 8);
-      const k = calm * (e.perk === 'calm' ? .6 : 1) / restRate * (this.has('breaks') ? W.breaks.load : 1);
-      const parts = { work: (Math.max(0, e.today.served - 4) * 3 + 2) * k, fatigue: e.fatigue * .2 * k, overtime: overtime * 4 * k, relief: -(restRate > 1 ? 4 : 0) + (this.has('meals') ? W.meals.stress : 0) };
+      const k = calm * (e.perk === 'calm' ? .6 : 1) / restRate * (this.has('breaks') ? W.breaks.load : 1) * (1 - Math.min(RAISE_MAX_EFFECT, e.raises || 0) * RAISE_CALM) * (TRAITS[e.trait]?.stress || 1);
+      // The people around them: friends steady them, rivals wear on them, a cheerful colleague lifts them; an earned promotion held back frets the ambitious.
+      const team = at.filter(o => o !== e && (o.workSite ?? 0) === (e.workSite ?? 0)).reduce((n, o) => { const r = this.relation(e, o); return n + (r >= 60 ? -2 : r >= 25 ? -1 : r <= -60 ? 3 : r <= -25 ? 1 : 0) + (TRAITS[o.trait]?.teamStress || 0); }, 0) + (promotionStatus(e)?.ready ? TRAITS[e.trait]?.waitingStress || 0 : 0);
+      const parts = { work: (Math.max(0, e.today.served - 4) * 3 + 2) * k, fatigue: e.fatigue * .2 * k, overtime: overtime * 4 * k, team, relief: -(restRate > 1 ? 4 : 0) + (this.has('meals') ? W.meals.stress : 0) };
       e.carry = Math.round(e.fatigue * overtime * .08);
-      const before = e.stress; e.addStress(parts.work + parts.fatigue + parts.overtime + parts.relief);
+      const before = e.stress; e.addStress(parts.work + parts.fatigue + parts.overtime + parts.team + parts.relief);
       e.lastStress = { ...Object.fromEntries(Object.entries(parts).map(([n, v]) => [n, Math.round(v * 10) / 10])), total: Math.round((e.stress - before) * 10) / 10 };
       e.daysEmployed++; if (e.grudge > 0) e.grudge--;
       // Long-service awards on every round number of days.
@@ -197,6 +236,9 @@ export class StaffManager {
       const tired = at.filter(e => e.stress >= W.leave.at && !quitting.includes(e) && !e.leaveBooked(day + 1)).sort((a, b) => b.stress - a.stress)[0];
       if (tired && this.sendOnLeave(tired, day, 1)) this.news.push({ key: 'wf.news.leave', name: tired.name, n: Math.round(tired.stress) });
     }
+    // Working side by side, people drift together or apart; two who cannot stand each other may quarrel.
+    at.forEach((a, i) => at.slice(i + 1).forEach(b => { if ((a.workSite ?? 0) !== (b.workSite ?? 0)) return; this.bond(a, b, compatibility(a.trait, b.trait) * 2 + (a.trait === 'cheerful' || b.trait === 'cheerful' ? .5 : 0));
+      if (!this.clash && this.relation(a, b) <= -60 && Math.random() < .12) this.clash = { a: a.id, b: b.id, why: Math.floor(Math.random() * 3) }; }));
     // Only one stylist asks to leave on any day: whoever is furthest past their limit. Others wait, and are counted.
     quitting.sort((a, b) => (b.stress - this.resignAt(b)) - (a.stress - this.resignAt(a)));
     this.waitingToQuit = Math.max(0, quitting.length - 1);
@@ -207,8 +249,8 @@ export class StaffManager {
   get baseBoost() { return COMMISSION_BOOST[this.commission]; }
   /** Whether stylists get a random chair each morning. */
   setSeatShuffle(on) { this.seatShuffle = !!on; this.version++; }
-  toJSON() { return { commission: this.commission, seatShuffle: this.seatShuffle, welfare: [...this.welfare] }; }
-  restore(d) { this.commission = d?.commission || 0; this.seatShuffle = !!d?.seatShuffle; this.welfare = new Set((d?.welfare || []).filter(id => PROGRAMMES[id])); this.version++; }
+  toJSON() { return { commission: this.commission, seatShuffle: this.seatShuffle, welfare: [...this.welfare], relations: this.relations }; }
+  restore(d) { this.commission = d?.commission || 0; this.seatShuffle = !!d?.seatShuffle; this.welfare = new Set((d?.welfare || []).filter(id => PROGRAMMES[id])); this.relations = d?.relations || {}; this.version++; }
   /** A stylist's birthday, for their card. */
   birthdayOf(e) { return birthdayOf(e); }
 }

@@ -9,6 +9,8 @@ import { clamp } from '../core/math.js';
 const SPECIAL_SKILL = { cut: 'cutting', colour: 'colouring', perm: 'perming' };
 import { COMMISSION, BONUS, LEAVE_DAYS, DINNER_PER_HEAD, RESIGN_STRESS } from '../employees/StaffManager.js';
 import { PROGRAMMES, WELFARE_IDS, TALK_EVERY, TALK_RELIEF } from '../employees/Welfare.js';
+import { TRAITS } from '../employees/Traits.js';
+import { PROMOTION, PROMO_PAY, PROMO_RELIEF, PROMO_LOYALTY, CERTS, promotionStatus, hasCert } from '../employees/Career.js';
 import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS, HAIR_SHOW } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
@@ -65,14 +67,39 @@ export class TycoonUI {
     const r = g.reviews.ratingFor(e.name), perf = e.hired ? `${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
     const special = SPECIAL_SKILL[e.specialty], stats = [['cut', s.cutting, 'cutting'], ['colour', s.colouring, 'colouring'], ['perm', s.perming, 'perming'], ['speed', s.speed, 'speed'], ['service', s.customerService, 'customerService']];
     const rows = [[e.specialty ? 'special' : null, `<span class="gold">${e.specialty ? t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100)) : ''}</span>`],
-      [owner ? 'scope' : null, t('staff.allround')], [e.perk ? 'perk' : null, `<span class="good">${e.perk ? t('perk.' + e.perk) : ''}</span>`], ['times', times], [e.hired ? 'state' : 'pay', info], [e.hired && !owner ? 'risk' : null, e.hired && !owner ? this.#risk(e) : ''], [perf ? 'perf' : null, perf], [this.hooks.seatOf(e) >= 0 ? 'seat' : null, this.#seatChips(e)]];
+      [owner ? 'scope' : null, t('staff.allround')], [e.perk ? 'perk' : null, `<span class="good">${e.perk ? t('perk.' + e.perk) : ''}</span>`], ['times', times], [e.hired ? 'state' : 'pay', info], [e.hired && !owner ? 'risk' : null, e.hired && !owner ? this.#risk(e) : ''], [e.hired && !owner ? 'rel' : null, e.hired && !owner ? this.#bonds(e) : ''], [perf ? 'perf' : null, perf], [this.hooks.seatOf(e) >= 0 ? 'seat' : null, this.#seatChips(e)]];
     return `<div class="scard r-${this.#kind(e)}">${this.#cardHead(e, actions)}${this.#statBars(stats.map(([k, v, key]) => [k, v, key === special]))}${this.#rows(rows)}</div>`;
+  }
+  /** A stylist's closest friend and worst rival on the team. */
+  #bonds(e) { const t = (k, ...a) => this.#t(k, ...a), { friend, rival } = this.game.staff.friendsOf(e), n = x => this.i18n.name(x[0].name); return [friend ? `<span class="good">♥ ${n(friend)} ${Math.round(friend[1])}</span>` : '', rival ? `<span class="bad">⚡ ${n(rival)} ${Math.round(rival[1])}</span>` : ''].filter(Boolean).join(' · ') || `<span class="dim">${t('rel.none')}</span>`; }
+  /** Careers: each stylist's way to the next grade, the promotion when it is earned, and the certificate courses. */
+  #careers() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff, pct = v => Math.round(v * 100);
+    const certInfo = id => { const c = CERTS[id]; return c.skill ? t('certd.skill', t('sk.' + { cutting: 'cut', colouring: 'colour', perming: 'perm', customerService: 'service' }[c.skill]), c.plus) + (c.satisfaction ? ' · ' + t('certd.sat', t('svc2.' + c.service), pct(c.satisfaction)) : '') : t('certd.' + id, pct(c.treatment || c.occasion || 0)); };
+    const legend = `<div class="dim">${t('car.note', Math.round((PROMO_PAY - 1) * 100), PROMO_RELIEF, PROMO_LOYALTY)}</div><div class="dim">${Object.entries(PROMOTION).map(([r, p]) => t('car.req', t('grade.' + r), p.level, p.served, pct(p.satisfaction))).join(' · ')}</div><div class="dim">${t('car.certNote')}</div>`;
+    const card = e => {
+      const s = promotionStatus(e), fmt = (k, [h, n]) => `<span class="${h >= n ? 'good' : 'dim'}">${t('car.' + k, k === 'satisfaction' ? pct(h) : h, k === 'satisfaction' ? pct(n) : n)}</span>`;
+      const promo = !s ? `<div class="dim">${t('car.top')}</div>` : `<div class="brow"><span>${t('car.next', t('grade.' + s.to))}</span><span class="sp"></span><button class="go" data-do="promote:${e.id}" ${s.ready ? '' : 'disabled'}>${s.ready ? t('car.promote', Math.round(e.defSalary * PROMO_PAY ** (e.promotions + 1) * (1.15 ** e.raises)) - e.salary) : t('car.notYet')}</button></div><div class="brow">${Object.entries(s.parts).map(([k, v]) => fmt(k, v)).join(' · ')}</div>${s.ready && e.trait === 'ambitious' ? `<div class="gold">${t('car.waiting')}</div>` : ''}`;
+      const certs = Object.keys(CERTS).map(id => hasCert(e, id) ? `<span class="chip cert">✓ ${t('cert.' + id)}</span>` : `<button data-do="cert:${e.id}.${id}" ${g.economy.canAfford(CERTS[id].cost) && g.isUnlocked('training') ? '' : 'disabled'} title="${certInfo(id)}">${t('cert.' + id)} $${CERTS[id].cost}</button>`).join('');
+      return `<div class="rcard"><div class="brow"><b style="color:${nameColour(e)}">${rankMark(e)}${this.i18n.name(e.name)}</b><span class="dim">${t('role.' + e.role)} · Lv${e.level}</span><span class="sp"></span><span class="chip trait">${t('trait.' + e.trait)}</span></div>${promo}<div class="chips">${certs}</div></div>`;
+    };
+    const certList = Object.keys(CERTS).map(id => `<div class="brow"><b>${t('cert.' + id)}</b><span class="sp"></span><span class="dim">${certInfo(id)}</span></div>`).join('');
+    return `<div class="bsec"><h4>${t('car.title')}</h4>${legend}${g.isUnlocked('training') ? '' : `<div class="bad">${t('car.lock')}</div>`}</div><div class="bsec">${st.hired.length ? st.hired.map(card).join('') : `<div class="dim">${t('wf.noStaff')}</div>`}</div><div class="bsec"><h4>${t('car.certs')}</h4>${certList}</div>`;
+  }
+  /** Relationships: every pair on the team and how they get on, with what personalities and bonds do. */
+  #relations() {
+    const t = (k, ...a) => this.#t(k, ...a), st = this.game.staff, H = st.hired, name = n => this.i18n.name(n);
+    const label = v => v >= 60 ? 'best' : v >= 25 ? 'friend' : v > -25 ? 'ok' : v > -60 ? 'cold' : 'enemy', cls = { best: 'good', friend: 'good', ok: 'dim', cold: 'gold', enemy: 'bad' };
+    const pairs = []; H.forEach((a, i) => H.slice(i + 1).forEach(b => pairs.push([a, b, st.relation(a, b)]))); pairs.sort((x, y) => y[2] - x[2]);
+    const rows = pairs.map(([a, b, v]) => `<div class="brow"><span>${name(a.name)} <span class="dim">(${t('trait.' + a.trait)})</span> · ${name(b.name)} <span class="dim">(${t('trait.' + b.trait)})</span></span><span class="sp"></span><div class="meter" style="width:90px"><i style="width:${Math.round((v + 100) / 2)}%;background:${v >= 25 ? '#8fc25a' : v <= -25 ? '#d8314a' : '#9c98a2'}"></i></div><span class="${cls[label(v)]}">${t('rel.' + label(v))} ${Math.round(v)}</span></div>`).join('');
+    const traits = Object.keys(TRAITS).map(k => `<div class="brow"><span class="chip trait">${t('trait.' + k)}</span><span class="sp"></span><span class="dim">${t('trd.' + k)}</span></div>`).join('');
+    return `<div class="bsec"><h4>${t('rel.title')}</h4><div class="dim">${t('rel.note')}</div>${rows || `<div class="dim">${t('rel.few')}</div>`}</div><div class="bsec"><h4>${t('rel.traits')}</h4>${traits}</div>`;
   }
   /** How close a stylist is to quitting, and what moved their stress yesterday. */
   #risk(e) {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, at = g.staff.resignAt(e), s = e.lastStress, b = g.staff.birthdayOf(e), sg = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v);
     const cls = e.stress >= at - 10 ? 'bad' : e.stress >= at - 30 ? 'gold' : 'good';
-    const why = s ? ` · ${t('wf.yesterday', sg(s.total), sg(s.work), sg(s.fatigue), sg(s.overtime), sg(s.relief))}` : '';
+    const why = s ? ` · ${t('wf.yesterday', sg(s.total), sg(s.work), sg(s.fatigue), sg(s.overtime), sg(s.relief), sg(s.team || 0))}` : '';
     return `<span class="${cls}">${t('wf.risk', Math.round(e.stress), at)}</span>${why} · <span class="dim">${t('wf.bday', b.month, b.date)}${e.loyalty ? ' · ' + t('wf.loyal', e.loyalty) : ''}${g.staff.canTalk(e, g.clock.day) ? '' : ' · ' + t('wf.talkIn', TALK_EVERY - (g.clock.day - e.talkDay))}</span>`;
   }
   /** Welfare: each programme with what it does and costs, today's bill, and who is closest to quitting. */
@@ -99,7 +126,7 @@ export class TycoonUI {
   /** A card's head: the pixel portrait, name, role and gender, specialty and talent chips, and the actions. */
   #cardHead(e, actions) {
     const t = (k, ...a) => this.#t(k, ...a), role = RANK_COLOURS[e.rank] ? `<span style="color:${RANK_COLOURS[e.rank]}">${t('role.' + e.role)}</span>` : `<span class="dim">${t('role.' + e.role)}</span>`;
-    const chips = [e.specialty ? `<span class="chip spec">${t('style.' + SPEC_STYLE[e.specialty])}</span>` : e.style === 'AllRounder' ? `<span class="chip">${t('style.AllRounder')}</span>` : '', e.perk ? `<span class="chip perk">${t('perk.' + e.perk).split(' · ')[0]}</span>` : ''].join('');
+    const chips = [e.specialty ? `<span class="chip spec">${t('style.' + SPEC_STYLE[e.specialty])}</span>` : e.style === 'AllRounder' ? `<span class="chip">${t('style.AllRounder')}</span>` : '', e.perk ? `<span class="chip perk">${t('perk.' + e.perk).split(' · ')[0]}</span>` : '', e.trait ? `<span class="chip trait" title="${t('trd.' + e.trait)}">${t('trait.' + e.trait)}</span>` : '', ...(e.certs || []).map(c => `<span class="chip cert">${t('cert.' + c)}</span>`)].join('');
     const kind = this.#kind(e), crown = kind === 'owner' ? `<img class="crown" src="${crownURL()}" alt="">` : '';
     return `<div class="shead"><img class="face r-${kind}" src="${portraitURL(e, kind)}" alt=""><div class="who"><div class="brow"><b style="color:${nameColour(e)}">${crown}${rankMark(e)}${this.i18n.name(e.name)}</b>${kind === 'owner' ? `<span class="chip boss">${t('st.ownerTag')}</span>` : role}${e.gender ? `<span class="dim">${t('gender.' + e.gender)}</span>` : ''}</div>${chips ? `<div class="chips">${chips}</div>` : ''}</div><div class="act">${actions}</div></div>`;
   }
@@ -132,8 +159,10 @@ export class TycoonUI {
   #staff() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff, page = this.staffPage, onTeam = page === 'team';
     const counts = { team: 1 + st.hired.length + st.support.filter(e => e.hired).length, hire: st.candidates.filter(e => !e.hired).length + st.support.filter(e => !e.hired).length };
-    const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['policy', t('st.policy')], ['welfare', t('st.welfare', st.welfare.size)]].map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['policy', t('st.policy')], ['welfare', t('st.welfare', st.welfare.size)], ['career', t('st.career', st.hired.filter(e => promotionStatus(e)?.ready).length || '')], ['rel', t('st.rel')]].map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
     if (page === 'welfare') return tabs + this.#welfare();
+    if (page === 'career') return tabs + this.#careers();
+    if (page === 'rel') return tabs + this.#relations();
     if (page === 'policy') {
       const commission = COMMISSION.map((r, i) => `<button data-do="commission:${i}" class="${st.commission === i ? 'sel' : ''}">${Math.round(r * 100)}%</button>`).join('');
       return `${tabs}<div class="bsec"><h4>${t('staff.policy')}</h4><div class="brow"><span>${t('staff.commission')}</span><span class="sp"></span><span class="seg">${commission}</span></div>
@@ -394,7 +423,7 @@ export class TycoonUI {
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
       post: () => this.hooks.post(value), campaign: () => { if (g.runCampaign(value)) this.hooks.spent(); }, influencer: () => { if (g.staff.receptionist.hired) g.marketing.bookInfluencer(g.clock.day); },
-      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, clp: () => { this.clientPage = value; }, welfare: () => { const [id, on] = value.split('.'); g.staff.setWelfare(id, on === '1'); }, talk: () => { const c = g.staff.talk(e, g.clock.day); if (c) this.hooks.talked(e, c); }, bdp: () => { this.buildPage = value; }, bdc: () => { this.shopCat = value; }, bdo: () => { this.ownedCat = value; }, stp: () => { this.staffPage = value; }, sfr: () => { this.staffRole = value; if (value !== 'all' && value !== 'designer') { this.staffSpec = 'all'; this.staffPerk = 'all'; } }, rhire: () => { const [id, site] = value.split('.'), who = g.staff.find(id); if (who && g.staff.hireAt(who, +site)) this.hooks.syncSupport(); }, bzp: () => { this.bizPage = value; }, bzs: () => { const [p, k] = value.split('.'); this.bizSub[p] = k; }, lsort: () => { this.ladderSort = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
+      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, clp: () => { this.clientPage = value; }, welfare: () => { const [id, on] = value.split('.'); g.staff.setWelfare(id, on === '1'); }, talk: () => { const c = g.staff.talk(e, g.clock.day); if (c) this.hooks.talked(e, c); }, promote: () => { if (g.staff.promote(e)) this.hooks.promoted(e); }, cert: () => { const [id, c] = value.split('.'); const who = g.staff.find(id); if (g.staff.takeCert(who, c, g.clock.day)) this.hooks.certified(who, c); }, bdp: () => { this.buildPage = value; }, bdc: () => { this.shopCat = value; }, bdo: () => { this.ownedCat = value; }, stp: () => { this.staffPage = value; }, sfr: () => { this.staffRole = value; if (value !== 'all' && value !== 'designer') { this.staffSpec = 'all'; this.staffPerk = 'all'; } }, rhire: () => { const [id, site] = value.split('.'), who = g.staff.find(id); if (who && g.staff.hireAt(who, +site)) this.hooks.syncSupport(); }, bzp: () => { this.bizPage = value; }, bzs: () => { const [p, k] = value.split('.'); this.bizSub[p] = k; }, lsort: () => { this.ladderSort = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
       amen: () => g.hospitality.toggle(value), autoreply: () => { g.reviews.autoReply = !g.reviews.autoReply; g.reviews.version++; }, hrs: () => g.shiftHours(value[0] === 'o' ? 0 : 1, value[1] === '+' ? 1 : -1),
       commission: () => g.staff.setCommission(+value), shuffle: () => g.staff.setSeatShuffle(value === '1'),
       seat: () => { const [id, i] = value.split('.'), who = id === 'owner' ? g.staff.owner : g.staff.find(id); if (who) this.hooks.moveSeat(who, +i); }, dinner: () => { if (g.staff.teamDinner(g.clock.day)) this.hooks.spent(); },
