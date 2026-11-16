@@ -22,8 +22,8 @@ const SETTLING_DAYS = 3, SETTLING_PENALTY = 6;
 export const GRUDGE_PENALTY = 12, GRUDGE_DAYS = 5, RAISE = 1.15;
 
 export class Employee {
-  constructor({ id, name, gender = null, hairdo = null, shades = false, beard = false, skin = null, role, style, rank = 'designer', unlock = null, specialty = null, perk = null, skills, salary, hireCost = 0, bias = 0, fine = false, single = false, apron, hair, long = false }) {
-    Object.assign(this, { id, name, role, style, rank, unlock, specialty, perk, skills: { ...skills }, salary, hireCost, bias, fine, single, apron, hair, long });
+  constructor({ id, name, gender = null, hairdo = null, shades = false, beard = false, skin = null, role, style, rank = 'designer', rival = null, unlock = null, specialty = null, perk = null, skills, salary, hireCost = 0, bias = 0, fine = false, single = false, apron, hair, long = false }) {
+    Object.assign(this, { id, name, role, style, rank, rival, unlock, specialty, perk, skills: { ...skills }, salary, hireCost, bias, fine, single, apron, hair, long });
     // How they look: `hairdo` is short, long, bob, bun, curly or buzz.
     Object.assign(this, { gender, hairdo: hairdo || (long ? 'long' : 'short'), shades, beard, skin });
     this.stamina = 100; this.experience = 0; this.level = 1; this.status = 'idle'; this.assignedCustomer = null;
