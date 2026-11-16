@@ -1,11 +1,11 @@
 import { hexCss } from '../rendering/color.js';
 
 /** Name colours by grade, so the top stylists stand out: masters in gold, seniors in sky blue. */
-export const RANK_COLOURS = { master: '#ffd98a', senior: '#8fd0ff' };
+export const RANK_COLOURS = { deputy: '#d4b5ff', master: '#ffd98a', senior: '#8fd0ff' };
 const STYLIST = '#ece8f0', OWNER = '#ff9fc4';
 
 /** A mark written before the name of a master or senior designer. */
-export const rankMark = e => e.rank === 'master' ? '★' : e.rank === 'senior' ? '◆' : '';
+export const rankMark = e => e.rank === 'deputy' ? '✦' : e.rank === 'master' ? '★' : e.rank === 'senior' ? '◆' : '';
 
 /**
  * The colour a person's name is written in on the dark panels. Lia is pink and other designers soft white;

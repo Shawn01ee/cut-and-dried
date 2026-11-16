@@ -1,3 +1,5 @@
+import { REFERENCE_MENU } from './ReferenceCuts.js';
+
 /**
  * The salon menu, in the manner of a premium Korean salon in 2026: named cuts, perms and colours, each with its
  * price. A named style is a target the hair rules already know: a cut shape and length range, a wave, a colour.
@@ -22,6 +24,7 @@ export const CUTS = {
   menLong: { g: 'm', shape: 'Layered', L: [16, 26], price: 70, w: .7 },
   twoBlock: { g: 'm', shape: 'Undercut', L: [8, 14], price: 65, advanced: true },
   ivy: { g: 'm', shape: 'Ivy', L: [6, 10], price: 65, advanced: true, w: .7 },
+  ...REFERENCE_MENU,
 };
 /** Perms by the wave they leave; `straighten` ones calm wavy hair down, and `L` is the length they suit. */
 export const PERMS = {
@@ -45,7 +48,7 @@ export const COLOUR_PRICE = 130, TREND_COLOUR_PRICE = 150, BLEACH_PRICE = 50, LI
 export const colourPriceFor = (i, target, natural) => (TREND_COLOURS.includes(i) ? TREND_COLOUR_PRICE : COLOUR_PRICE) + (target.L - natural.L > LIFT ? BLEACH_PRICE : 0);
 
 /** What a service costs by who does it: Korean salons price by the designer's grade, the director at the top with the masters. */
-export const GRADE_PAY = { junior: .9, designer: 1, senior: 1.1, master: 1.2, owner: 1.2 };
+export const GRADE_PAY = { junior: .9, designer: 1, senior: 1.1, master: 1.2, deputy: 1.2, owner: 1.2 };
 /** This month's trends: asked for more often and paid more; a trendsetter makes them look better. */
 export const TREND_WEIGHT = 1.8, TREND_PAY = 1.1, TREND_PERK_SATISFACTION = .04;
 

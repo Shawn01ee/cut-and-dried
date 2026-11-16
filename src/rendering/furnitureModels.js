@@ -1,5 +1,16 @@
 /** Each model draws with the same box builder and palette as the original salon. */
 export const FURNITURE_MODELS = {
+  makeupVanity: (g, fx) => {
+    g.box(1.2,.7,.45,0xb7a99a,0,.35,-.35).box(1.25,.05,.5,0xf6f3ee,0,.73,-.35).box(.85,.9,.06,0xb88a5a,0,1.2,-.55).box(.75,.8,.03,0xb6d2ec,0,1.2,-.51);
+    for (const x of [-.47,.47]) fx.glow(.05,.85,.04,x,1.2,-.5);
+    for (const x of [-.35,-.15,.15,.35]) g.box(.09,.12,.09,0xe25c8f,x,.82,-.25);
+    g.box(.45,.45,.4,0x45404f,0,.225,.35).box(.45,.3,.08,0x45404f,0,.6,.55);
+  },
+  nailDesk: g => {
+    g.box(1.1,.06,.55,0xf6f3ee,0,.72,0).box(.08,.7,.45,0xb88a5a,-.45,.35,0).box(.08,.7,.45,0xb88a5a,.45,.35,0).box(.3,.15,.25,0xdcd9dc,.22,.82,0);
+    for (const [i,c] of [0xe25c8f,0x8a4fc2,0xd8314a,0xffd98a].entries()) g.box(.07,.13,.07,c,-.35+i*.1,.81,-.15);
+    for (const z of [-.5,.5]) g.box(.38,.4,.35,0x7a5d6e,0,.2,z);
+  },
   plant: g => g.box(.32, .38, .32, 0xb88a5a, 0, .19, 0).box(.36, .5, .36, 0x3a7a3a, 0, .62, 0).box(.24, .3, .24, 0x5f9e45, 0, .98, 0),
   rug: g => g.box(.46, .02, .46, 0x1fa39a, 0, .04, 0).box(.3, .02, .3, 0xffb15a, 0, .05, 0),
   // a globe floor lamp with a warm glow

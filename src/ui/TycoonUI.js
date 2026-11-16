@@ -3,7 +3,7 @@ import { siteOf } from '../building/SalonLayout.js';
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
 import { portraitURL, crownURL } from './Portrait.js';
 import { REVIEW_REP, PRICE_MULTIPLIER, LAST_CALLS } from '../tycoon/TycoonGame.js';
-import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION, GRUDGE_PENALTY } from '../employees/Employee.js';
+import { SPECIALTY_BONUS, SPECIALTY_SATISFACTION, GRUDGE_PENALTY, TALENT_LEVELS } from '../employees/Employee.js';
 import { clamp } from '../core/math.js';
 // Which skill each specialty raises, to highlight it on the card.
 const SPECIAL_SKILL = { cut: 'cutting', colour: 'colouring', perm: 'perming' };
@@ -12,7 +12,7 @@ import { PROGRAMMES, WELFARE_IDS, TALK_EVERY, TALK_RELIEF } from '../employees/W
 import { MGMT } from '../employees/Management.js';
 import { TRAITS } from '../employees/Traits.js';
 import { PROMOTION, PROMO_PAY, PROMO_RELIEF, PROMO_LOYALTY, CERTS, promotionStatus, hasCert } from '../employees/Career.js';
-import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS, HAIR_SHOW } from '../tycoon/Marketing.js';
+import { CAMPAIGNS, CHANNELS, INFLUENCER_FEE, INFLUENCER_POSTS, HAIR_SHOW, AGENCY } from '../tycoon/Marketing.js';
 import { AMENITIES } from '../tycoon/Hospitality.js';
 import { starsFor } from '../tycoon/ReviewBoard.js';
 import { dateOf, seasonOf, eventsOn, nextEvent, SEASONS } from '../tycoon/Calendar.js';
@@ -23,12 +23,13 @@ import { missionWho } from '../tycoon/Missions.js';
 import { SYNERGIES } from '../tycoon/Synergies.js';
 import { shows, featuresAt } from '../tycoon/Features.js';
 import { CONTESTS, CONCEPTS, baseScore } from '../tycoon/Contests.js';
-import { PRODUCT_TYPES, LINES, QUALITY, DESK, ONLINE, BATCHES } from '../tycoon/Brand.js';
-import { DOMINANT, DOMINANT_DAYS, MATCH_PRICE, MATCH_BLUNTS, SCOUT_LEVEL } from '../tycoon/Rival.js';
+import { ORDERS, TRUST, HQ_GAP, HQ_GAP_INVESTED } from '../tycoon/Headquarters.js';
+import { PRODUCT_TYPES, LINES, QUALITY, DESK, ONLINE, BATCHES, DEALS } from '../tycoon/Brand.js';
+import { DOMINANT, DOMINANT_DAYS, MATCH_PRICE, MATCH_BLUNTS, SCOUT_LEVEL, REOPEN_DAYS } from '../tycoon/Rival.js';
 import { CUTS, PERMS, TREND_COLOURS, GRADE_PAY, TREND_PAY, TREND_PERK_SATISFACTION, COLOUR_PRICE, TREND_COLOUR_PRICE, BLEACH_PRICE, isHot } from '../hair/StyleMenu.js';
 import { WANT } from '../customers/catalog.js';
 import { WANT_KO } from '../i18n/strings.js';
-import { STORIES, MAX_HEARTS, BOOK_SIZE, HEART_UP, HEART_DOWN, HEART_FRIEND, FRIEND_CHANCE, HEART_LOYAL, LOYAL_PAY, FAVOURITE_SATISFACTION, OCCASION_PAY, OCCASION_NEED, OCCASION_HEARTS, CHAPTER_VISITS, STORY_GIFT } from '../tycoon/Regulars.js';
+import { STORIES, MAX_HEARTS, BOOK_SIZE, HEART_UP, HEART_DOWN, HEART_FRIEND, FRIEND_CHANCE, HEART_LOYAL, LOYAL_PAY, FAVOURITE_SATISFACTION, OCCASION_PAY, OCCASION_NEED, OCCASION_HEARTS, CHAPTER_VISITS, STORY_GIFT, STORY_REWARDS, CHAPTER_DAYS } from '../tycoon/Regulars.js';
 import { SPECIALS, SPECIAL_CHANCE, SPECIAL_LEVEL, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from '../tycoon/SpecialClients.js';
 
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
@@ -43,7 +44,7 @@ export class TycoonUI {
   key(page) {
     const g = this.game, b = this.build.active;
     return [page, this.i18n.lang, g.economy.cash, g.served, Math.floor(g.reputation.value), g.progression.level, g.priceLevel, g.layout.chairs, g.layout.tier, g.layout.branchOpen, g.layout.branchTier, Math.round(g.weekRevenue), g.monthReport && g.monthReport.to, g.layout.items.length, b && b.id, g.staff.owner.level, g.staff.owner.experience, g.staff.candidates.map(s => [s.hired, s.level, s.experience, Math.round(s.fatigue / 5), Math.round(s.stress / 5), s.restUntil > this.hooks.now(), this.hooks.hasChair(s)]).join(), g.staff.support.map(s => [s.hired, s.skills.marketing]).join(), 
-      g.clock.day, g.nextHours && g.nextHours.join(), g.lastCall, this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.weather, g.surprise && g.surprise.state, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage, Object.values(this.bizSub).join(), this.ladderSort, this.clientPage, this.mktPage, this.concept, this.line, g.brand.version, g.contest && [g.contest.entrant, g.contest.result && g.contest.result.place].join(), g.matchUntil, this.buildPage, this.shopCat, this.ownedCat, g.layout.items.map(it => it.id).join(), g.regularBook.version, g.special && g.special.state, g.specialLog.length].join('|');
+      g.clock.day, g.nextHours && g.nextHours.join(), g.lastCall, g.hq.version, this.hooks.filming(), this.hooks.canFilm(), g.marketing.version, g.reviews.version, g.hospitality.version, g.staff.version, g.finance.version, g.rival.version, g.missions.version, g.dayOff, g.weather, g.surprise && g.surprise.state, g.synergies.map(x => x.id).join(), g.regulars, this.reviewFilter, this.reviewLimit, this.staffPage, this.staffRole, this.staffSpec, this.staffPerk, this.bizPage, Object.values(this.bizSub).join(), this.ladderSort, this.clientPage, this.mktPage, this.concept, this.line, g.brand.version, g.contest && [g.contest.entrant, g.contest.result && g.contest.result.place].join(), g.matchUntil, this.buildPage, this.shopCat, this.ownedCat, g.layout.items.map(it => it.id).join(), g.regularBook.version, g.special && g.special.state, g.specialLog.length].join('|');
   }
   render(page) { return { staff: () => this.#staff(), syn: () => this.#synergies(), build: () => this.#build(), biz: () => this.#business(), mkt: () => this.#mktPages(), rev: () => this.#clients(), prog: () => this.#growth() }[page](); }
 
@@ -72,7 +73,7 @@ export class TycoonUI {
     const r = g.reviews.ratingFor(e.name), perf = e.hired ? `${t('staff.perf', r.count ? '★' + r.average.toFixed(1) : '–', r.count, e.today.earn.toLocaleString(), e.stats.earn.toLocaleString(), e.stats.served)}` : '';
     const special = SPECIAL_SKILL[e.specialty], stats = [['cut', s.cutting, 'cutting'], ['colour', s.colouring, 'colouring'], ['perm', s.perming, 'perming'], ['speed', s.speed, 'speed'], ['service', s.customerService, 'customerService'], ...(owner ? [['manage', Math.floor(g.staff.management), 'management']] : [])];
     const rows = [[e.specialty ? 'special' : null, `<span class="gold">${e.specialty ? t('staff.special', t('svc.' + e.specialty), SPECIALTY_BONUS, Math.round(SPECIALTY_SATISFACTION * 100)) : ''}</span>`],
-      [owner ? 'scope' : null, t('staff.allround')], [e.perk ? 'perk' : null, `<span class="good">${e.perk ? t('perk.' + e.perk) : ''}</span>`], ['times', times], [e.hired ? 'state' : 'pay', info], [owner ? 'mgmt' : null, owner ? this.#mgmt() : ''], [e.hired && !owner ? 'risk' : null, e.hired && !owner ? this.#risk(e) : ''], [e.hired && !owner ? 'rel' : null, e.hired && !owner ? this.#bonds(e) : ''], [perf ? 'perf' : null, perf], [this.hooks.seatOf(e) >= 0 ? 'seat' : null, this.#seatChips(e)]];
+      [owner ? 'scope' : null, t('staff.allround')], [e.perk || e.id !== 'owner' ? 'perk' : null, `<span class="good">${e.allPerks.map(p => t('perk.' + p)).join('<br>')}</span>${e.id !== 'owner' && e.allPerks.length < 3 && TALENT_LEVELS.some(l => l > e.level) ? `<div class="dim">${t('talent.next', TALENT_LEVELS.find(l => l > e.level))}</div>` : ''}`], ['times', times], [e.hired ? 'state' : 'pay', info], [owner ? 'mgmt' : null, owner ? this.#mgmt() : ''], [e.hired && !owner ? 'risk' : null, e.hired && !owner ? this.#risk(e) : ''], [e.hired && !owner ? 'rel' : null, e.hired && !owner ? this.#bonds(e) : ''], [perf ? 'perf' : null, perf], [this.hooks.seatOf(e) >= 0 ? 'seat' : null, this.#seatChips(e)]];
     return `<div class="scard r-${this.#kind(e)}">${this.#cardHead(e, actions)}${this.#statBars(stats.map(([k, v, key]) => [k, v, key === special]))}${this.#rows(rows)}</div>`;
   }
   /** Lia's management: what it does now, how it grows, and a course to raise it. */
@@ -171,19 +172,19 @@ export class TycoonUI {
     const lvl = this.game.progression.level, open = k => k === 'team' || k === 'hire' || shows('staff.' + k, lvl);
     if (!open(this.staffPage)) this.staffPage = 'team';
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, st = g.staff, page = this.staffPage, onTeam = page === 'team';
-    const counts = { team: 1 + st.hired.length + st.support.filter(e => e.hired).length, hire: st.candidates.filter(e => !e.hired && e.rival == null).length + st.support.filter(e => !e.hired).length };
+    const counts = { team: 1 + st.hired.length + st.support.filter(e => e.hired).length, hire: st.candidates.filter(e => !e.hired && (e.rival == null || this.game.rival.released.includes(e.id))).length + st.support.filter(e => !e.hired).length };
     const tabs = `<div class="seg stabs">${[['team', t('st.team', counts.team)], ['hire', t('st.hire', counts.hire)], ['policy', t('st.policy')], ['welfare', t('st.welfare', st.welfare.size)], ['career', t('st.career', st.hired.filter(e => promotionStatus(e)?.ready).length || '')], ['rel', t('st.rel')]].filter(([k]) => open(k)).map(([k, l]) => `<button data-do="stp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
     if (page === 'welfare') return tabs + this.#welfare();
     if (page === 'career') return tabs + this.#careers();
     if (page === 'rel') return tabs + this.#relations();
     if (page === 'policy') {
-      const commission = COMMISSION.map((r, i) => `<button data-do="commission:${i}" class="${st.commission === i ? 'sel' : ''}">${Math.round(r * 100)}%</button>`).join('');
+      const commission = COMMISSION.map((r, i) => `<button data-do="commission:${i}" class="${st.commission === i ? 'sel' : ''}" ${this.game.hqFx.commission ? 'disabled' : ''}>${Math.round(r * 100)}%</button>`).join('');
       return `${tabs}<div class="bsec"><h4>${t('staff.policy')}</h4><div class="brow"><span>${t('staff.commission')}</span><span class="sp"></span><span class="seg">${commission}</span></div>
       <div class="brow"><span>${t('staff.shuffle')}</span><span class="sp"></span><span class="seg"><button data-do="shuffle:0" class="${st.seatShuffle ? '' : 'sel'}">${t('pol.off')}</button><button data-do="shuffle:1" class="${st.seatShuffle ? 'sel' : ''}">${t('pol.on')}</button></span></div><div class="dim">${t('staff.shuffleD')}</div>
       <div class="brow"><span>${t('staff.dinner')}</span><span class="dim">${t('staff.perHead', DINNER_PER_HEAD)}</span><span class="sp"></span><button data-do="dinner" ${!st.hired.length || st.dinnerDay === g.clock.day || !g.economy.canAfford(st.dinnerCost()) ? 'disabled' : ''}>${st.dinnerDay === g.clock.day ? t('staff.dinnerDone') : '$' + st.dinnerCost()}</button></div></div>`;
     }
-    const pass = e => (this.staffSpec === 'all' || (e.specialty || 'none') === this.staffSpec) && (this.staffPerk === 'all' || e.perk === this.staffPerk);
-    const pool = st.candidates.filter(e => e.hired === onTeam && (onTeam || e.rival == null) && pass(e)), filtered = this.staffSpec !== 'all' || this.staffPerk !== 'all';
+    const pass = e => (this.staffSpec === 'all' || (e.specialty || 'none') === this.staffSpec) && (this.staffPerk === 'all' || e.hasPerk(this.staffPerk));
+    const pool = st.candidates.filter(e => e.hired === onTeam && (onTeam || (e.rival == null || this.game.rival.released.includes(e.id))) && pass(e)), filtered = this.staffSpec !== 'all' || this.staffPerk !== 'all';
     const groups = [['owner', onTeam && pass(st.owner) ? [st.owner] : []], ...['master', 'senior', 'designer', 'junior'].map(r => [r, pool.filter(e => e.rank === r)])];
     const role = this.staffRole, designers = role === 'all' || role === 'designer', support = filtered || role === 'designer' ? [] : st.support.filter(e => e.hired === onTeam && (role === 'all' || (role === 'reception') === (e.effect === 'reception')));
     const group = (r, list, row) => list.length ? `<div class="sgroup"><h5>${t('rank.' + r)} <span class="dim">${list.length}</span></h5>${list.map(row).join('')}</div>` : '';
@@ -243,7 +244,7 @@ export class TycoonUI {
   #business() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, e = g.economy, money = n => (n < 0 ? '−$' : '$') + Math.abs(n), line = (k, v) => `<div class="brow"><span>${t(k)}</span><span class="sp"></span><span>${v}</span></div>`;
     const costs = `<div class="bsec"><h4>${t('biz.opTitle')}</h4>${Object.entries(g.operatingCosts.breakdown).map(([k, v]) => line('led.' + k, `$${e.today.expenses[k] || 0} / $${v}`)).join('')}${line('led.materials', '$' + (e.today.expenses.materials || 0))}<div class="dim">${t('biz.opNote')}</div></div>`;
-    const rep = g.reputation, prices = (g.isUnlocked('luxury') ? [0, 1, 2, 3] : [0, 1, 2]).map(i => `<button data-do="price:${i}" class="${g.priceLevel === i ? 'sel' : ''}">${t('price.' + i)}</button>`).join('');
+    const rep = g.reputation, prices = (g.isUnlocked('luxury') ? [0, 1, 2, 3] : [0, 1, 2]).map(i => `<button data-do="price:${i}" class="${g.priceLevel === i ? 'sel' : ''}" ${g.priceLocked ? 'disabled' : ''}>${t('price.' + i)}</button>`).join('');
     // the ranking, Lia included, best first by whichever measure is picked
     const avg = s => s.stats.served ? s.stats.sum / s.stats.served : -1, rating = s => { const r = g.reviews.ratingFor(s.name); return r.count ? r.average + r.count / 1e4 : -1; };
     const BY = { earn: s => s.stats.earn, today: s => s.today.earn, sat: avg, rating, served: s => s.stats.served };
@@ -251,9 +252,10 @@ export class TycoonUI {
     const hs = g.hospitality, treats = Object.entries(AMENITIES).map(([id, a]) => `<div class="brow"><span>${t('hs.' + id)}</span><span class="dim">${t('hs.cost', a.cost)}</span><span class="sp"></span>${hs.available(id) ? `<span class="seg"><button data-do="amen:${id}" class="${hs.isOffered(id) ? 'sel' : ''}">${t('hs.on')}</button><button data-do="amen:${id}" class="${hs.isOffered(id) ? '' : 'sel'}">${t('hs.off')}</button></span>` : `<span class="dim">${t('hs.needs', t('f.' + a.needs))}</span>`}</div>`).join('');
     const lvl = g.progression.level, opsKeys = ['demand', 'menu', 'hours', 'price', 'treats'].filter(k => shows('ops.' + k, lvl));
     if (!shows('biz.' + this.bizPage, lvl)) this.bizPage = 'money'; if (!opsKeys.includes(this.bizSub.ops)) this.bizSub.ops = 'demand';
-    const page = this.bizPage, tabs = `<div class="seg stabs">${[['money', t('bz.money')], ['fund', t('bz.fund')], ['ops', t('bz.ops')], ['rank', t('bz.rank')]].filter(([k]) => shows('biz.' + k, lvl)).map(([k, l]) => `<button data-do="bzp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
+    const page = this.bizPage, tabs = `<div class="seg stabs">${[['money', t('bz.money')], ['fund', t('bz.fund')], ['ops', t('bz.ops')], ['rank', t('bz.rank')], ['hq', t('bz.hq')]].filter(([k]) => shows('biz.' + k, lvl)).map(([k, l]) => `<button data-do="bzp:${k}" class="${page === k ? 'sel' : ''}">${l}</button>`).join('')}</div>`;
     const sub = keys => `<div class="seg ssub">${keys.map(k => `<button data-do="bzs:${page}.${k}" class="${this.bizSub[page] === k ? 'sel' : ''}">${t('bzs.' + k)}</button>`).join('')}</div>`;
     if (page === 'fund') return tabs + sub(['value', 'invest', 'loan']) + this.#funding(this.bizSub.fund);
+    if (page === 'hq') return tabs + this.#hq();
     if (page === 'ops') return tabs + (opsKeys.length > 1 ? sub(opsKeys) : '') + { demand: () => this.#calendar() + this.#demand(), menu: () => this.#menu(), hours: () => `<div class="bsec"><h4>${t('hours.title')}</h4>${this.#hours()}<div class="dim">${t('hours.note')}</div></div>`, price: () => `<div class="bsec"><h4>${t('biz.price')}</h4>${g.isUnlocked('pricing') ? `<div class="seg">${prices}</div><div class="dim">${t('price.h')}</div>` : `<div class="dim">${t('biz.lockPrice')}</div>`}</div>${this.#rival()}`, treats: () => `<div class="bsec"><h4>${t('hs.title')}</h4>${treats}<div class="brow"><span>${t('hs.floor')}</span><span class="sp"></span><b class="${hs.floor ? 'good' : 'dim'}">${hs.floor ? t('hs.floorV', Math.round(hs.floor * 100), starsFor(hs.floor)) : t('hs.none')}</b></div><div class="dim">${t('hs.what')}</div></div>` }[this.bizSub.ops]();
     const by = this.ladderSort, th = (k, label) => `<th class="${by === k ? 'on' : ''}">${t(label)}</th>`;
     const sorts = `<div class="seg ssub">${['earn', 'today', 'sat', 'rating', 'served'].map(k => `<button data-do="lsort:${k}" class="${by === k ? 'sel' : ''}">${t('lsort.' + k)}</button>`).join('')}</div>`;
@@ -273,14 +275,15 @@ export class TycoonUI {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, { add, mult } = g.demandParts, f1 = v => (Math.round(v * 10) / 10).toString(), x = v => '×' + (Math.round(v * 100) / 100);
     const rows = Object.entries(add).filter(([k]) => k !== 'branch' || g.layout.branchOpen).map(([k, v]) => `<div class="brow"><span>${t('demand.' + k)}</span><span class="sp"></span><span>${f1(v)}</span></div>`).join('');
     const today = Math.round(g.dailyDemand * g.clock.hours / 8);
-    return `<div class="bsec"><h4>${t('demand.title')}</h4>${rows}<div class="dim">${t('demand.mult', x(mult.price), x(mult.marketing), x(mult.reviews), x(mult.rival))}${['calendar', 'award', 'booking', 'fame', 'signs', 'contest'].filter(k => mult[k] !== 1).map(k => ' · ' + t('demand.' + k, x(mult[k]))).join('')}</div><div class="brow"><span>${t('demand.total', g.clock.hours)}</span><span class="sp"></span><b class="gold">${t('demand.people', today)}</b></div></div>`;
+    return `<div class="bsec"><h4>${t('demand.title')}</h4>${rows}<div class="dim">${t('demand.mult', x(mult.price), x(mult.marketing), x(mult.reviews), x(mult.rival))}${['calendar', 'award', 'booking', 'fame', 'signs', 'contest', 'story', 'hq'].filter(k => mult[k] !== 1).map(k => ' · ' + t('demand.' + k, x(mult[k]))).join('')}</div><div class="brow"><span>${t('demand.total', g.clock.hours)}</span><span class="sp"></span><b class="gold">${t('demand.people', today)}</b></div></div>`;
   }
   /** The menu board: every cut, perm and colour with its price, this month's trends, and pricing by grade. */
   #menu() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, T = g.trends, k = PRICE_MULTIPLIER[g.priceLevel], usd = v => '$' + Math.round(v * k);
     const want = i => this.i18n.lang === 'ko' ? WANT_KO[i] : WANT[i][0], who = x => x.g === 'any' ? t('menu.any') : t('gender.' + x.g);
     const item = (name, x, hot, locked, extra = '') => `<div class="brow ${locked ? 'dim' : ''}"><span>${hot ? '<b class="gold">★ ' : ''}${name}${hot ? '</b>' : ''}${x.trend ? ` <span class="chip spec">2026</span>` : ''}</span><span class="dim">${extra}</span><span class="sp"></span><b>${locked ? t('build.lockedAt') : usd(x.price)}</b></div>`;
-    const cuts = Object.entries(CUTS).map(([id, c]) => item(t('cut.' + id), c, isHot(T, id), c.advanced && !g.isUnlocked('chairs'), `${who(c)} · ${c.L[0]}–${c.L[1]}cm`)).join('');
+    const cutRows = reference => Object.entries(CUTS).filter(([, c]) => !!c.reference === reference).map(([id, c]) => item(t('cut.' + id), c, isHot(T, id), c.advanced && !g.isUnlocked('chairs'), `${who(c)} · ${c.L[0]}–${c.L[1]}cm`) + (c.reference ? `<div class="dim">${t('cut.note.' + id)}</div>` : '')).join('');
+    const cuts = cutRows(false) + `<h4>${t('cuts.collection')}</h4><div class="dim">${t('cuts.note')}</div>` + cutRows(true);
     const perms = Object.entries(PERMS).map(([id, p]) => item(t('perm.' + id), p, isHot(T, id), !g.isUnlocked('perm'), `${who(p)} · ${t(p.straighten ? 'menu.straight' : 'wave.' + ['Straight', 'Wavy', 'Curly', 'Coily'][p.wave])}`)).join('');
     const colours = TREND_COLOURS.map(i => `<span class="chip ${isHot(T, i) ? 'spec' : ''}"><i class="dot" style="background:#${WANT[i][1].toString(16).padStart(6, '0')}"></i>${isHot(T, i) ? '★ ' : ''}${want(i)}</span>`).join('');
     const grades = Object.entries(GRADE_PAY).map(([r, v]) => `${t('grade.' + r)} ×${v}`).join(' · ');
@@ -289,14 +292,27 @@ export class TycoonUI {
       + `<div class="bsec"><h4>${t('menu.cuts')}</h4>${cuts}</div><div class="bsec"><h4>${t('menu.perms')}</h4>${perms}</div>`
       + `<div class="bsec"><h4>${t('menu.colours')}</h4><div class="brow"><span>${t('menu.colourFull')}</span><span class="sp"></span><b>${usd(COLOUR_PRICE)}</b></div><div class="brow"><span>${t('menu.colourTrend')}</span><span class="sp"></span><b>${usd(TREND_COLOUR_PRICE)}</b></div><div class="brow"><span>${t('menu.bleach')}</span><span class="sp"></span><b>+${usd(BLEACH_PRICE)}</b></div><div class="chips">${colours}</div></div>`;
   }
+  /** Shawn: his trust, the rules of his orders, what is running now and how past orders ended. */
+  #hq() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, H = g.hq, F = g.hqFx, day = g.clock.day, pct = v => Math.round(v * 100);
+    const bar = `<div class="brow"><span>${t('hq.trust')}</span><span class="sp"></span><b class="${H.trust >= TRUST.refuseMin ? 'good' : H.bossy ? 'bad' : 'gold'}">${H.trust} / 100</b></div>`;
+    const rules = [t('hq.r.when', HQ_GAP[0], HQ_GAP[1], HQ_GAP_INVESTED[0], HQ_GAP_INVESTED[1]), t('hq.r.accept', TRUST.accept), t('hq.r.talk', pct(g.hqTalkOdds), -TRUST.talkWin, -TRUST.talkLose), t('hq.r.refuse', TRUST.refuseMin, -TRUST.refuse),
+      t('hq.r.low', TRUST.low), t('hq.r.week', TRUST.weekProfit, -TRUST.weekLoss)].map(r => `<div class="dim">· ${r}</div>`).join('');
+    const now = [F.price >= day && t('hq.now.price', F.price - day + 1), F.promo >= day && t('hq.now.promo', F.promo - day + 1, pct(1 - ORDERS.promo.price), pct(ORDERS.promo.demand - 1)), F.hours && t('hq.now.hours', F.hours.until - day + 1),
+      F.commission && t('hq.now.commission', F.commission.until - day + 1), F.product && t('hq.now.product', Math.max(0, F.product.due - day))].filter(Boolean).map(x => `<div class="gold">${x}</div>`).join('');
+    const log = H.log.map(l => `<div class="brow"><span>${t('hq.o.' + l.id)}</span><span class="sp"></span><span class="dim">${t('hq.day', l.day)} · ${t('hq.how.' + l.how)}</span></div>`).join('');
+    return `<div class="bsec"><h4>${t('hq.title')}</h4>${bar}<div class="dim">${t('hq.note')}</div>${rules}</div><div class="bsec"><h4>${t('hq.active')}</h4>${now || `<div class="dim">${t('hq.none')}</div>`}</div>`
+      + `<div class="bsec"><h4>${t('hq.log')}</h4>${log || `<div class="dim">${t('hq.noLog')}</div>`}</div>`;
+  }
   /** Steppers for tomorrow's opening and closing hours. */
   #hours() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, [o, c] = g.plannedHours;
-    const step = (w, s) => `<button data-do="hrs:${w}${s > 0 ? '+' : '-'}" ${g.canShiftHours(w === 'o' ? 0 : 1, s) ? '' : 'disabled'}>${s > 0 ? '+' : '−'}</button>`;
+    const step = (w, s) => `<button data-do="hrs:${w}${s > 0 ? '+' : '-'}" ${g.canShiftHours(w === 'o' ? 0 : 1, s) && !g.hqFx.hours ? '' : 'disabled'}>${s > 0 ? '+' : '−'}</button>`;
     const now = `${g.clock.openHour}:00–${g.clock.closeHour}:00`;
     return `<div class="brow"><span>${t('hours.open')}</span><span class="sp"></span>${step('o', -1)}<b style="min-width:52px;text-align:center">${o}:00</b>${step('o', 1)}</div>
       <div class="brow"><span>${t('hours.close')}</span><span class="sp"></span>${step('c', -1)}<b style="min-width:52px;text-align:center">${c}:00</b>${step('c', 1)}</div>
       <div class="brow"><span>${t('hours.today', now)}</span><span class="sp"></span><span class="${g.nextHours ? 'gold' : 'dim'}">${g.nextHours ? t('hours.tomorrow', o, c, c - o) : t('hours.length', c - o)}</span></div>
+      ${g.hqFx.hours ? `<div class="gold">${t('hq.now.hours', g.hqFx.hours.until - g.clock.day + 1)}</div>` : ''}
       <div class="brow"><span>${t('hours.lastCall')}</span><span class="sp"></span><span class="seg">${LAST_CALLS.map(m => `<button data-do="lastcall:${m}" class="${g.lastCall === m ? 'sel' : ''}">${m ? t('hours.before', m) : t('hours.atClose')}</button>`).join('')}</span></div>
       <div class="dim">${t('hours.lastCallNote', g.lastCall ? `${c - 1}:${String(60 - g.lastCall).padStart(2, '0')}` : `${c}:00`, Math.round(g.staff.payroll * 1.5 / 8))}</div>`;
   }
@@ -337,18 +353,23 @@ export class TycoonUI {
   #brand() {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, B = g.brand, cash = g.economy, day = g.clock.day, stars = r => '★' + r.toFixed(1);
     const rules = `<div class="dim">${t('brand.rules', Math.round(DESK.base * 100), Math.round(DESK.satisfaction * 100), Math.round(DESK.display * 100), ONLINE.per.toLocaleString(), ONLINE.shipping)}</div>`;
-    const today = `<div class="brow"><span>${t('brand.today')}</span><span class="sp"></span><b class="gold">$${((cash.today.revenue.brand || 0) + (cash.today.revenue.online || 0)).toLocaleString()}</b></div><div class="dim">${t('brand.total', B.sold.desk.toLocaleString(), B.sold.online.toLocaleString(), g.displays)}</div>`;
+    const today = `<div class="brow"><span>${t('brand.today')}</span><span class="sp"></span><b class="gold">$${Math.round(['brand', 'online', 'wholesale', 'retail'].reduce((n, k) => n + (cash.today.revenue[k] || 0), 0)).toLocaleString()}</b></div><div class="dim">${t('brand.total', B.sold.desk.toLocaleString(), B.sold.online.toLocaleString(), g.displays)}</div>`;
     const product = p => { const price = B.unitPrice(p), cost = B.unitCost(p);
       return `<div class="rcard"><div class="brow"><b>CIEL ${t('pt.' + p.type)}</b><span class="chip">${t('line.' + p.line)}</span><span class="sp"></span><span class="gold">${stars(B.rating(p))}</span></div>`
         + `<div class="dim">${t('brand.row', p.quality, LINES[p.line].expect, price, cost, (price - cost).toFixed(1), p.sold.toLocaleString())}</div>`
-        + `<div class="brow"><span class="${p.stock ? '' : 'bad'}">${t('brand.stock', p.stock)}</span><span class="sp"></span>${BATCHES.map(n => `<button data-do="restock:${p.type}.${n}" ${cash.canAfford(Math.round(cost * n)) ? '' : 'disabled'}>+${n} ($${Math.round(cost * n).toLocaleString()})</button>`).join('')}</div></div>`; };
+        + `<div class="brow"><span class="${!p.stock || p.stock < B.weeklyNeed(p.type) ? 'bad' : ''}">${t('brand.stock', p.stock)}${B.weeklyNeed(p.type) ? ' · ' + t('brand.need', B.weeklyNeed(p.type)) : ''}</span><span class="sp"></span>${BATCHES.map(n => `<button data-do="restock:${p.type}.${n}" ${cash.canAfford(Math.round(cost * n)) ? '' : 'disabled'}>+${n} ($${Math.round(cost * n).toLocaleString()})</button>`).join('')}</div></div>`; };
     const team = [g.staff.owner, ...g.staff.hired], r = B.research;
     const lines = Object.keys(LINES).map(k => `<button data-do="line:${k}" class="${this.line === k ? 'sel' : ''}">${t('line.' + k)}</button>`).join('');
     const research = r ? `<div class="gold">${t('brand.researching', t('pt.' + r.type), t('line.' + r.line), Math.max(0, r.ready - day))}</div>`
       : Object.keys(PRODUCT_TYPES).filter(k => !B.get(k)).map(k => { const T = PRODUCT_TYPES[k], q = B.expectedQuality(k, team, g.staff.management), L = LINES[this.line];
-        return `<div class="frow"><div class="fx"><b>${t('pt.' + k)}</b> <span class="dim">${t('brand.plan', q, L.expect, Math.round(T.price * L.price), T.days, t('sk.' + { customerService: 'service', cutting: 'cut', colouring: 'colour', perming: 'perm' }[T.skill]))}</span></div><button class="go" data-do="research:${k}" ${cash.canAfford(T.research) ? '' : 'disabled'}>${t('brand.start', T.research.toLocaleString())}</button></div>`; }).join('');
+        const cost = B.researchCost(k, this.line);
+        return `<div class="frow"><div class="fx"><b>${t('pt.' + k)}</b> <span class="dim">${t('brand.plan', q, L.expect, Math.round(T.price * L.price), B.researchDays(k, this.line), t('sk.' + { customerService: 'service', cutting: 'cut', colouring: 'colour', perming: 'perm' }[T.skill]))}</span></div><button class="go" data-do="research:${k}" ${cash.canAfford(cost) ? '' : 'disabled'}>${t('brand.start', cost.toLocaleString())}</button></div>`; }).join('');
+    const deals = [...B.contracts.map(c => `<div class="brow"><span>${t('deal.' + c.deal)}</span><span class="sp"></span><span class="dim">${t('brand.contract', c.units, t('pt.' + c.type), c.price, c.weeksLeft, c.next)}</span></div>`),
+      ...B.listings.map(l => `<div class="brow"><span>${t('deal.' + l.deal)}</span><span class="sp"></span><span class="dim">${t('brand.listed', l.daily[0], l.daily[1], Math.round(l.cut * 100))}</span></div>`),
+      ...(B.boostNow > 1 ? [`<div class="gold">${t('brand.boost', B.boostNow, B.boost.until - day + 1)}</div>`] : [])].join('');
+    const dealSec = `<div class="bsec"><h4>${t('brand.deals')}</h4><div class="dim">${t('brand.dealsNote', Object.keys(DEALS).length)}</div>${deals || `<div class="dim">${t('brand.noDeals')}</div>`}</div>`;
     return `<div class="bsec"><h4>${t('brand.title')}</h4>${rules}${today}</div><div class="bsec"><h4>${t('brand.products')}</h4>${B.products.length ? B.products.map(product).join('') : `<div class="dim">${t('brand.none')}</div>`}</div>`
-      + `<div class="bsec"><h4>${t('brand.lab')}</h4><div class="dim">${t('brand.labNote', QUALITY.base, Math.round(QUALITY.skill * 100), QUALITY.cert, Math.round(QUALITY.mgmt * 100), QUALITY.luck)}</div>${r ? '' : `<div class="brow"><span>${t('brand.line')}</span><span class="seg">${lines}</span></div>`}${research || `<div class="dim">${t('brand.allDone')}</div>`}</div>`;
+      + dealSec + `<div class="bsec"><h4>${t('brand.lab')}</h4><div class="dim">${t('brand.labNote', QUALITY.base, Math.round(QUALITY.skill * 100), QUALITY.cert, Math.round(QUALITY.mgmt * 100), QUALITY.luck)}</div>${r ? '' : `<div class="brow"><span>${t('brand.line')}</span><span class="seg">${lines}</span></div><div class="dim">${t('brand.lineNote', Math.round(LINES[this.line].research * 100), LINES[this.line].days >= 0 ? '+' + LINES[this.line].days : LINES[this.line].days, LINES[this.line].expect, Math.round(LINES[this.line].price * 100))}</div>`}${research || `<div class="dim">${t('brand.allDone')}</div>`}</div>`;
   }
   /** This month's hair contest: when, what, the stakes, who could enter and how they would score; and past results. */
   #contest() {
@@ -379,8 +400,9 @@ export class TycoonUI {
     const share = g.marketShare, pct = v => Math.round(v * 100);
     const war = r.move === 'priceCut' || r.move === 'promo' ? (g.matching ? `<div class="good">${t('rv2.matching', g.matchUntil - day + 1)}</div>` : `<div class="brow"><span class="gold">${t('rv2.war', pct(r.discount))}</span><span class="sp"></span><button data-do="matchwar">${t('pw.match')}</button></div><div class="dim">${t('pw.matchN', pct(1 - MATCH_PRICE), pct(MATCH_BLUNTS))}</div>`) : '';
     const scouts = r.stylists.map(id => { const e = g.staff.find(id), cost = g.scoutCost(id); return `<div class="frow"><div class="fx"><b>${name(e.name)}</b> <span class="dim">${t('role.' + e.role)} · ${t('sk.cut')} ${e.skills.cutting} · ${t('sk.colour')} ${e.skills.colouring} · ${t('sk.perm')} ${e.skills.perming}</span></div><button class="go" data-do="scout:${id}" ${cost && g.economy.canAfford(cost) && this.hooks.hasOpenChair() ? '' : 'disabled'}>${cost ? t('rv2.scout', cost.toLocaleString()) : t('rv2.scoutLv', SCOUT_LEVEL)}</button></div>`; }).join('');
-    return `<div class="bsec"><h4>${t('rv2.title')}</h4><div class="brow"><b>${r.name}</b><span class="dim">${t('rv2.tier', r.tier + 1)} · ${t('price.' + r.priceLevel)} · ★ ${r.rating.toFixed(1)}</span></div>${r.move ? `<div class="gold">${t('rival.now.' + r.move, r.daysLeft)}</div>` : `<div class="dim">${t('rival.quiet')}</div>`}${war}</div>`
-      + `<div class="bsec"><h4>${t('rv2.share')}</h4><div class="brow"><span>Ciel Ground ${pct(share)}%</span><span class="sp"></span><span>${r.name} ${pct(1 - share)}%</span></div><div class="meter"><i style="width:${pct(share)}%"></i></div><div class="dim">${t('rv2.streak', r.streak, DOMINANT_DAYS, pct(DOMINANT))}</div></div>`
+    return `<div class="bsec"><h4>${t('rv2.title')}</h4><div class="brow"><b>${r.name}</b><span class="dim">${t('rv2.tier', r.tier + 1)} · ${t('price.' + r.priceLevel)} · ★ ${r.rating.toFixed(1)}</span></div><div class="dim">${t('rv2.style.' + r.tier % 3)}</div>${r.move ? `<div class="${['mishap', 'scandal'].includes(r.move) ? 'good' : 'gold'}">${t('rival.now.' + r.move, r.daysLeft)}</div>` : `<div class="dim">${r.rest ? t('rv2.rest', r.rest) : t('rival.quiet')}</div>`}${war}`
+      + `${r.history.length ? `<div class="dim">${t('rv2.history')}: ${r.history.map(h => t('rv2.h', h.day, t('rv2.m.' + h.id))).join(' · ')}</div>` : ''}</div>`
+      + `<div class="bsec"><h4>${t('rv2.share')}</h4><div class="brow"><span>Ciel Ground ${pct(share)}%</span><span class="sp"></span><span>${r.name} ${pct(1 - share)}%</span></div><div class="meter"><i style="width:${pct(share)}%"></i></div><div class="dim">${t('rv2.streak', r.streak, DOMINANT_DAYS, pct(DOMINANT), REOPEN_DAYS[0], REOPEN_DAYS[1])}</div></div>`
       + `<div class="bsec"><h4>${t('rv2.staff')}</h4><div class="dim">${t('rv2.scoutNote')}</div>${scouts || `<div class="dim">${t('rv2.noStaff')}</div>`}</div>`;
   }
   #marketing() {
@@ -395,7 +417,13 @@ export class TycoonUI {
     const influencer = !g.isUnlocked('influencer') ? `<span class="dim">${t('build.lockedAt')}</span>` : !desk.hired ? `<span class="dim">${t('mk.needDesk')}</span>` : m.influencerBooked ? `<span class="good">${t('mk.infBooked', m.booked.followers.toLocaleString())}</span>` : `<button class="go" data-do="influencer" ${m.canBookInfluencer(day) ? '' : 'disabled'}>${t('mk.infBook')}</button>`;
     const buzz = m.active.filter(a => !CAMPAIGNS[a.id]).map(a => `<div class="brow"><span class="gold">${t('mk.buzz.' + a.id)}</span><span class="sp"></span><span class="dim">${t('mk.running', a.daysLeft)}</span></div>`).join('');
     const manager = (desk.hired ? t('mk.manager', this.i18n.name(desk.name), desk.skills.marketing || 0) : t('mk.managerSelf', this.i18n.name(g.staff.owner.name))) + (this.hooks.filming() ? ' · ' + t('mk.filmingNow') : '');
-    return `<div class="bsec"><h4>${t('mk.sns')}</h4><div class="brow"><span>${t('mk.followers')}</span><span class="sp"></span><b>${m.followers.toLocaleString()}</b></div><div class="dim">${manager}</div>${Object.keys(CHANNELS).map(channel).join('')}${buzz}</div>
+    const A = m.auto, tog = (k, on) => `<span class="seg"><button data-do="mkauto:${k}.1" class="${on ? 'sel' : ''}">${t('pol.on')}</button><button data-do="mkauto:${k}.0" class="${on ? '' : 'sel'}">${t('pol.off')}</button></span>`;
+    const done = m.autoLog.map(l => l.gained != null ? t('mk.auto.posted', t('mk.ch.' + l.id), l.gained.toLocaleString()) : t('mk.auto.ran', t('mk.' + l.id))).join(' · ');
+    const agency = `<div class="bsec"><h4>${t('mk.auto.title')}</h4><div class="dim">${t('mk.auto.note', AGENCY.fee)}</div>`
+      + `<div class="brow"><span>${t('mk.auto.posts')}</span><span class="sp"></span>${tog('posts', A.posts)}</div><div class="dim">${t('mk.auto.postsD', Math.round(AGENCY.postMarkup * 100), Math.round(AGENCY.quality * 100))}</div>`
+      + `<div class="brow"><span>${t('mk.auto.ads')}</span><span class="sp"></span>${tog('ads', A.ads)}</div><div class="dim">${t('mk.auto.adsD', AGENCY.adCash.toLocaleString(), Math.round(AGENCY.adMarkup * 100))}</div>`
+      + `${done ? `<div class="gold">${t('mk.auto.today', done)}</div>` : ''}<div class="brow"><span>${t('mk.auto.spent')}</span><span class="sp"></span><b>$${(cash.today.expenses.agency || 0).toLocaleString()}</b></div></div>`;
+    return agency + `<div class="bsec"><h4>${t('mk.sns')}</h4><div class="brow"><span>${t('mk.followers')}</span><span class="sp"></span><b>${m.followers.toLocaleString()}</b></div><div class="dim">${manager}</div>${Object.keys(CHANNELS).map(channel).join('')}${buzz}</div>
       <div class="bsec"><h4>${t('mk.ads')}</h4>${campaign('flyers')}${campaign('instaAd')}<div class="brow"><span>${t('mk.influencer')}</span><span class="dim">${t('mk.infNote', INFLUENCER_FEE)}</span><span class="sp"></span>${influencer}</div><div class="dim">${INFLUENCER_POSTS.map(p => t('mk.infTier.' + p.tier, p.min.toLocaleString(), Math.round(p.demand * 100), p.days, Math.abs(p.rep))).join('<br>')}</div></div>${this.#hairShow()}`;
   }
   /** The hair show, once it is unlocked: what it costs and brings, and when it can be held again. */
@@ -432,14 +460,16 @@ export class TycoonUI {
     const t = (k, ...a) => this.#t(k, ...a), g = this.game, B = g.regularBook, name = n => this.i18n.name(n), pct = v => Math.round(v * 100);
     const hearts = n => `<span class="hearts">${'♥'.repeat(n)}<span class="dim">${'♡'.repeat(MAX_HEARTS - n)}</span></span>`;
     const rules = [t('reg.r.heart', pct(HEART_UP), pct(HEART_DOWN)), t('reg.r.fav', pct(FAVOURITE_SATISFACTION)), t('reg.r.friend', HEART_FRIEND, pct(FRIEND_CHANCE)), t('reg.r.loyal', HEART_LOYAL, pct(LOYAL_PAY - 1)),
-      t('reg.r.story', CHAPTER_VISITS.join('·')), t('reg.r.occ', OCCASION_PAY, pct(OCCASION_NEED), OCCASION_HEARTS), t('reg.r.gift', STORY_GIFT)].map(r => `<div class="dim">· ${r}</div>`).join('');
+      t('reg.r.story', CHAPTER_VISITS.join('·'), CHAPTER_DAYS), t('reg.r.occ', OCCASION_PAY, pct(OCCASION_NEED), OCCASION_HEARTS), t('reg.r.gift', STORY_GIFT)].map(r => `<div class="dim">· ${r}</div>`).join('');
     const card = e => {
       const story = STORIES[e.story], next = e.chapter + 1;
       const lines = story.slice(0, next).map((ch, i) => `<div class="say"><b>${i + 1}</b>${t('story.' + e.story + '.' + i)}${ch.occasion ? ` <span class="gold">· ${t('occ.' + ch.occasion)}</span>` : ''}</div>`).join('');
-      const upcoming = next < story.length ? t('reg.next', CHAPTER_VISITS[next], next + 1) : t(e.lifelong ? 'reg.storyDone' : 'reg.storyLast');
+      const wait = Math.max(0, (e.chapterDay ?? -CHAPTER_DAYS) + CHAPTER_DAYS - g.clock.day);
+      const upcoming = next < story.length ? t('reg.next', CHAPTER_VISITS[next], next + 1) + (wait ? ' · ' + t('reg.wait', wait) : '') : t(e.lifelong ? 'reg.storyDone' : 'reg.storyLast');
+      const reward = e.lifelong ? `<div class="say"><b>✓</b>${t('story.' + e.story + '.end')}</div>` : `<div class="dim">${t('reg.reward', STORY_GIFT, this.hooks.storyReward(STORY_REWARDS[e.story], e.stylist))}</div>`;
       return `<div class="rcard ${e.lifelong ? 'life' : ''}"><div class="brow"><b>${name(e.name)}</b>${e.lifelong ? `<span class="chip boss">${t('reg.lifelong')}</span>` : ''}<span class="sp"></span>${hearts(e.hearts)}</div>`
         + `<div class="brow dim"><span>${t('reg.fav', e.stylist ? name(e.stylist) : t('reg.anyone'))}</span><span class="sp"></span><span>${t('reg.visits', e.visits, e.lastDay)}</span></div>`
-        + `${lines || `<div class="dim">${t('reg.noStory')}</div>`}<div class="dim">${t('reg.chapter', Math.max(0, next), story.length)} · ${upcoming}</div></div>`;
+        + `${lines || `<div class="dim">${t('reg.noStory')}</div>`}<div class="dim">${t('reg.chapter', Math.max(0, next), story.length)} · ${upcoming}</div>${reward}</div>`;
     };
     const list = B.entries.slice().sort((a, b) => b.lifelong - a.lifelong || b.hearts - a.hearts || b.visits - a.visits);
     return `<div class="bsec"><h4>${t('reg.title')}</h4><div>${t('reg.count', g.regulars, B.size, BOOK_SIZE, B.lifelong)}</div><div class="dim">${t('reg.note')}</div>${rules}</div>`
@@ -494,15 +524,15 @@ export class TycoonUI {
       hire: () => this.hooks.hire(e), fire: () => this.hooks.fire(e),
       shire: () => { if (g.staff.hire(e)) this.hooks.syncSupport(); }, sfire: () => { if (g.staff.fire(e)) this.hooks.syncSupport(); }, train: () => { if (g.trainStaff(e)) g.bus.emit('staff:levelup', e); }, claim: () => { if (g.claimMission(+value)) this.hooks.spent(); },
       rest: () => { e.restUntil = this.hooks.now() + 20; e.rest(50); },
-      price: () => { g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), hairShow: () => { const n = g.hostHairShow(); if (n != null) this.hooks.hairShow(n); }, bexpand: () => { if (g.expandBranch()) this.hooks.branchExpanded(); }, monthView: () => this.hooks.openMonth(), view: () => this.hooks.viewSite(+value),
+      price: () => { if (!g.priceLocked) g.priceLevel = +value; }, openBranch: () => this.hooks.openBranch(), hairShow: () => { const n = g.hostHairShow(); if (n != null) this.hooks.hairShow(n); }, bexpand: () => { if (g.expandBranch()) this.hooks.branchExpanded(); }, monthView: () => this.hooks.openMonth(), view: () => this.hooks.viewSite(+value),
       expand: () => { if (g.expand()) this.hooks.expanded(); },
       buy: () => this.build.start(value), move: () => { const it = g.layout.items[+value]; this.build.start(it.id, it); },
       sell: () => this.build.sell(g.layout.items[+value]), rot: () => this.build.rotate(), cancel: () => this.build.cancel(),
       post: () => this.hooks.post(value), campaign: () => { if (g.runCampaign(value)) this.hooks.spent(); }, influencer: () => { if (g.staff.receptionist.hired) g.marketing.bookInfluencer(g.clock.day); },
-      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, clp: () => { this.clientPage = value; }, mkp: () => { this.mktPage = value; }, line: () => { this.line = value; }, research: () => { if (g.startResearch(value, this.line)) this.hooks.spent(); }, restock: () => { const [type, n] = value.split('.'); if (g.brand.restock(type, +n, g.economy)) this.hooks.spent(); }, concept: () => { this.concept = value; }, enter: () => { if (g.enterContest(value, this.concept)) this.hooks.spent(); },
+      reply: () => { const [id, kind] = value.split('.'); this.hooks.reply(+id, kind); }, rvf: () => { this.reviewFilter = value; this.reviewLimit = 25; }, clp: () => { this.clientPage = value; }, mkp: () => { this.mktPage = value; }, mkauto: () => { const [k, on] = value.split('.'); g.marketing.auto[k] = on === '1'; g.marketing.version++; }, line: () => { this.line = value; }, research: () => { if (g.startResearch(value, this.line)) this.hooks.spent(); }, restock: () => { const [type, n] = value.split('.'); if (g.brand.restock(type, +n, g.economy)) this.hooks.spent(); }, concept: () => { this.concept = value; }, enter: () => { if (g.enterContest(value, this.concept)) this.hooks.spent(); },
       matchwar: () => { g.matchPriceWar(); }, scout: () => { const s = g.staff.find(value), cost = g.scoutCost(value); if (!s || !cost) return; s.hireCost = cost; this.hooks.hire(s); if (s.hired) { g.rival.lose(value); this.hooks.scouted(s); } }, welfare: () => { const [id, on] = value.split('.'); g.staff.setWelfare(id, on === '1'); }, talk: () => { const c = g.staff.talk(e, g.clock.day); if (c) this.hooks.talked(e, c); }, promote: () => { if (g.staff.promote(e)) this.hooks.promoted(e); }, study: () => { if (g.staff.study(g.clock.day)) this.hooks.spent(); }, cert: () => { const [id, c] = value.split('.'); const who = g.staff.find(id); if (g.staff.takeCert(who, c, g.clock.day)) this.hooks.certified(who, c); }, bdp: () => { this.buildPage = value; }, bdc: () => { this.shopCat = value; }, bdo: () => { this.ownedCat = value; }, stp: () => { this.staffPage = value; }, sfr: () => { this.staffRole = value; if (value !== 'all' && value !== 'designer') { this.staffSpec = 'all'; this.staffPerk = 'all'; } }, rhire: () => { const [id, site] = value.split('.'), who = g.staff.find(id); if (who && g.staff.hireAt(who, +site)) this.hooks.syncSupport(); }, bzp: () => { this.bizPage = value; }, bzs: () => { const [p, k] = value.split('.'); this.bizSub[p] = k; }, lsort: () => { this.ladderSort = value; }, sfs: () => { this.staffSpec = value; }, sfp: () => { this.staffPerk = value; }, rvmore: () => { this.reviewLimit += 25; },
       amen: () => g.hospitality.toggle(value), autoreply: () => { g.reviews.autoReply = !g.reviews.autoReply; g.reviews.version++; }, lastcall: () => g.setLastCall(+value), hrs: () => g.shiftHours(value[0] === 'o' ? 0 : 1, value[1] === '+' ? 1 : -1),
-      commission: () => g.staff.setCommission(+value), shuffle: () => g.staff.setSeatShuffle(value === '1'),
+      commission: () => { if (!g.hqFx.commission) g.staff.setCommission(+value); }, shuffle: () => g.staff.setSeatShuffle(value === '1'),
       seat: () => { const [id, i] = value.split('.'), who = id === 'owner' ? g.staff.owner : g.staff.find(id); if (who) this.hooks.moveSeat(who, +i); }, dinner: () => { if (g.staff.teamDinner(g.clock.day)) this.hooks.spent(); },
       bonus: () => { if (g.staff.giveBonus(e)) this.hooks.spent(); }, leave: () => g.staff.sendOnLeave(e, g.clock.day), mtrain: () => { if (g.staff.trainMarketing(e)) this.hooks.spent(); },
       invest: () => { if (g.investIn(+value)) this.hooks.spent(); }, buyback: () => { if (g.buyBackStake()) this.hooks.spent(); },

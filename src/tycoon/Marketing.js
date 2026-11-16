@@ -29,6 +29,12 @@ export const INFLUENCER_POSTS = [
   { tier: 'poor', from: 0, min: 60, share: [0, 0], days: 1, demand: .1, rep: -3 },
 ];
 const VIRAL = { days: 2, demand: .5 };
+/**
+ * An agency that runs marketing for the salon: each working day it is on costs `fee`; it posts on every channel that
+ * is ready (each post `postMarkup` dearer, filmed at `quality` of the salon's own) and keeps a campaign running
+ * (`adMarkup` dearer): Instagram ads while cash is above `adCash`, else flyers.
+ */
+export const AGENCY = { fee: 25, postMarkup: .5, adMarkup: .25, quality: .85, adCash: 3000 };
 const START_FOLLOWERS = { instagram: 150, tiktok: 0, youtube: 0 };
 
 /**
@@ -37,7 +43,7 @@ const START_FOLLOWERS = { instagram: 150, tiktok: 0, youtube: 0 };
  */
 export class Marketing {
   constructor(economy) {
-    this.economy = economy;
+    this.economy = economy; this.auto = { posts: false, ads: false }; this.autoLog = [];
     this.channels = Object.fromEntries(Object.keys(CHANNELS).map(id => [id, { followers: START_FOLLOWERS[id], lastDay: -99, last: null }]));
     this.active = []; this.booked = null; this.influencerDay = 0; this.showReady = 0; this.version = 0;
   }
@@ -105,13 +111,13 @@ export class Marketing {
 
   /** Campaigns run for whole days, counting the day they were bought. */
   startDay() { this.active.forEach(a => a.daysLeft--); this.active = this.active.filter(a => a.daysLeft > 0); this.version++; }
-  toJSON() { return { channels: this.channels, active: this.active, booked: this.booked, influencerDay: this.influencerDay, showReady: this.showReady }; }
+  toJSON() { return { auto: this.auto, channels: this.channels, active: this.active, booked: this.booked, influencerDay: this.influencerDay, showReady: this.showReady }; }
   restore(d) {
     if (!d) return;
     if (d.channels) Object.entries(d.channels).forEach(([id, c]) => { if (this.channels[id]) Object.assign(this.channels[id], c); });
     // Saves from before channels: everything was Instagram.
     else this.channels.instagram = { followers: d.followers ?? START_FOLLOWERS.instagram, lastDay: d.reelDay || -99, last: d.lastReel || null };
-    Object.assign(this, { active: d.active || [], booked: d.booked || (d.influencerBooked ? { followers: 20000 } : null), influencerDay: d.influencerDay || 0, showReady: d.showReady || 0 });
+    this.auto = { posts: false, ads: false, ...d.auto }; Object.assign(this, { active: d.active || [], booked: d.booked || (d.influencerBooked ? { followers: 20000 } : null), influencerDay: d.influencerDay || 0, showReady: d.showReady || 0 });
     this.version++;
   }
 }

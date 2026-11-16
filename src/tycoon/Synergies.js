@@ -22,7 +22,7 @@ export const SYNERGIES = [
 export function teamOf(stylists, support) {
   const count = f => stylists.filter(f).length, desk = support.find(e => e.effect === 'reception' && e.hired);
   return {
-    specialists: k => count(e => e.specialty === k), perk: p => count(e => e.perk === p), rank: r => count(e => e.rank === r),
+    specialists: k => count(e => e.specialty === k), perk: p => count(e => e.hasPerk(p)), rank: r => count(e => e.rank === r),
     marketing: desk ? desk.skills.marketing || 0 : 0, assistants: support.filter(e => e.effect === 'tidy' && e.hired).length,
   };
 }
