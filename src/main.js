@@ -4,6 +4,8 @@ import { MAX_HEARTS, OCCASION_PAY, OCCASION_NEED } from './tycoon/Regulars.js';
 import { SPECIAL_FAIL_REP } from './tycoon/SpecialClients.js';
 import { TALK_RELIEF } from './employees/Welfare.js';
 import { GRADE_PAY, TREND_PAY } from './hair/StyleMenu.js';
+import { decorThemeOf } from './tycoon/Decor.js';
+import { DECOR_MODELS } from './rendering/decorModels.js';
 import { WEATHER, SHOVEL_AT, SHOVEL_CLEARS, SLIP_DEPTH, SLIP_CHANCE, SLIP_REP } from './tycoon/Weather.js';
 import { lab2lin, labCss, labMix, hexCss, PAL_LAB, PAL_RGB } from './rendering/color.js';
 import { STR, NS, CAP } from './hair/strands.js';
@@ -153,7 +155,7 @@ function makeWall(along,c,segs,n){
   glass.forEach(([L,m])=>{const g=new THREE.Mesh(BOX,GLASS);if(along==='x'){g.scale.set(L,1.24,.04);g.position.set(m,1.5,c);}else{g.scale.set(.04,1.24,L);g.position.set(c,1.5,m);}gF.add(g);});
   const a=segs[0][0],b=segs[segs.length-1][1],cove=new THREE.Mesh(BOX,LAMP);cove.raycast=noRay;
   if(along==='x'){cove.scale.set(b-a,.05,.05);cove.position.set((a+b)/2,2.5,c-n.z*.11);}else{cove.scale.set(.05,.05,b-a);cove.position.set(c-n.x*.11,2.5,(a+b)/2);}gF.add(cove);
-  return {n,full:gF,low:gL};
+  return {n,full:gF,low:gL,along,c,a,b,glass};
 }
 /** Every wall, with the salon sizes it stands at. The first four are the original room. */
 const walls=[];
@@ -719,6 +721,23 @@ function updateLights(dt){const P=PRE[phaseNow()],k=Math.min(1,dt*1.5),[grey,sun
   scene.background.copy(L.sky);sun.color.copy(L.sun);sun.intensity=L.si;sun.position.copy(L.sp).normalize().multiplyScalar(30).add(camTarget);sun.target.position.copy(camTarget);hemi.color.copy(L.hs);hemi.groundColor.copy(L.hg);hemi.intensity=L.hi;
   inLights.forEach(l=>l.intensity=L.inI);spots.forEach(s=>s.intensity=L.spI);GLASS.emissiveIntensity=L.glow*.6;LAMP.emissiveIntensity=L.glow*1.2+.05;}
 
+/* ================= seasonal decorations ================= */
+const LIT={},litMat=c=>LIT[c]||(LIT[c]=new THREE.MeshBasicMaterial({color:c}));
+/** Builds one decoration with the furniture's box builder; `fx.light` adds a small lit piece. */
+function decorGroup(fn,...args){const group=new THREE.Group(),sb=new SB(),fx={light:(c,sx,sy,sz,x,y,z)=>{const m=new THREE.Mesh(BOX,litMat(c));m.scale.set(sx,sy,sz);m.position.set(x,y,z);group.add(m);}};
+  fn(sb,fx,...args);sb.build(group);group.traverse(o=>{o.raycast=noRay;});return group;}
+let decorKey='';const decorProps=[];
+/** Dresses both salons for the time of year: a garland along every wall top, stickers on the windows, a pair of pieces by each door.
+ * Garlands belong to their wall, so they hide with it when the view lowers the wall nearest the camera. */
+function decorate(){const th=decorThemeOf(game.clock.day),key=th+'|'+walls.length+'|'+game.layout.branchOpen;if(key===decorKey)return;decorKey=key;const D=DECOR_MODELS[th];
+  walls.forEach(w=>{if(w.decor)w.full.remove(w.decor);w.decor=null;if(!D||w.along==null)return;const g=new THREE.Group(),inX=w.along==='x';g.userData.decor=true;
+    const yaw=inX?(w.n.z<0?0:Math.PI):(w.n.x<0?Math.PI/2:-Math.PI/2),place=(o,u,y,off)=>{o.rotation.y=yaw;if(inX)o.position.set(u,y,w.c-w.n.z*off);else o.position.set(w.c-w.n.x*off,y,u);g.add(o);};
+    place(decorGroup(D.garland,w.b-w.a),(w.a+w.b)/2,2.38,.14);
+    if(D.sticker)(w.glass||[]).forEach(([GL,m])=>{place(decorGroup(D.sticker),m-GL*.28,1.85,.05);place(decorGroup(D.sticker),m+GL*.22,1.3,.05);});
+    w.full.add(g);w.decor=g;});
+  decorProps.forEach(p=>world.remove(p));decorProps.length=0;if(!D)return;
+  [0,...(game.layout.branchOpen?[1]:[])].forEach(s=>[[-3.3,3.75,0],[-.5,3.75,1]].forEach(([x,z,side])=>{const g=decorGroup(D.prop,side);g.position.set(x+(s?BRANCH_X:0),0,z);world.add(g);decorProps.push(g);}));}
+
 /* ================= popups ================= */
 const pops=[];
 function popup(text,obj,cls){const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:cls==='big'?4.2:2.6,w:null,h:null});}
@@ -994,6 +1013,7 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));
   game.staff.news.splice(0).forEach(n=>news.push(tx(n.key,nm(n.name),n.n)));
+  {const th=decorThemeOf(day);if(th!==decorThemeOf(day-1))news.push(tx('decor.news',tx('decor.'+th)));}
   if(game.staff.waitingToQuit){news.push(tx('wf.alsoTired',game.staff.waitingToQuit));game.staff.waitingToQuit=0;}
   if(!game.dayOff&&['rain','storm','heat','cold','snow'].includes(game.weather))news.unshift(tx('wx.news.'+game.weather,fxText(WEATHER[game.weather])));
   // a new month brings new trends
@@ -1039,7 +1059,7 @@ function buildBranchShell(){if(branchShell||!game.layout.branchOpen)return;const
   const copy=o=>{const c=o.clone();c.visible=true;root.add(c);return c;},sign=signTexture('CIEL GROUND 2');
   copy(salonMesh);extras.forEach(copy);salonFloor(8,6,0,0,root);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7,root);
   // the first salon's walls up to its second expansion, shown by the second salon's own size
-  walls.slice(0,10).forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});walls.push({n:w.n,full,low,off:false,show:w.show,branch:true});});
+  walls.slice(0,10).forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});full.children.filter(o=>o.userData.decor).forEach(o=>full.remove(o));walls.push({n:w.n,full,low,off:false,show:w.show,branch:true,along:w.along,c:w.c,a:w.a,b:w.b,glass:w.glass});});
   branchZones=[copy(backGroup),copy(annexGroup)];branchZones.forEach(z=>z.traverse(o=>{if(o.isPointLight)inLights.push(o);}));syncBranchSize();
   const light=new THREE.PointLight(0xffd98a,0,8,1.5);light.position.set(0,2.4,0);root.add(light);inLights.push(light);}
 /** Opens the second salon, if the game allows it, and shows it. */
@@ -1135,7 +1155,7 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   // Fast speeds run the simulation in small steps so walking and services stay smooth.
   if(started&&!paused){const total=dt*(styling?1:speed),steps=Math.ceil(total/.06);for(let i=0;i<steps;i++)simStep(total/steps);}else figs.forEach(f=>f.pose(0));
   stylingTick(dt);if(started&&!paused)incidents.update(dt);
-  updateLights(dt);updatePrecip(dt);updateCam(dt);
+  updateLights(dt);updatePrecip(dt);decorate();updateCam(dt);
   {const wet=started&&!game.dayOff&&['rain','storm','snow'].includes(game.weather);custs.forEach(c=>c.fig.setUmbrella(wet&&!indoors(c.fig.pos)));}envStep(dt,realT);updatePops(dt);
   if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
     // Difficult clients darken the music, more with each one; a busy salon livens it up, evenings calm it down.
@@ -1150,4 +1170,4 @@ checkForUpdate({atStart:true});
 setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update');el.querySelector('span').textContent=tx('upd.ready');el.querySelector('button').textContent=tx('upd.reload');el.classList.add('show');el.querySelector('button').onclick=()=>refreshToLatest(b);}},10*60*1000);
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),referrals,overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
