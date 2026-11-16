@@ -18,7 +18,7 @@ export class IncidentCard {
     const c = this.#current = this.#queue.shift() || null;
     this.el.classList.toggle('show', !!c);
     if (!c) { this.el.innerHTML = ''; return; }
-    this.el.innerHTML = `<b class="gold">${c.title}</b><div class="itext">${c.text}</div><div class="ibtns${c.options.length > 3 ? ' list' : ''}">${c.options.map((o, i) => `<button data-pick="${i}"><b>${o.label}</b>${o.note ? `<span>${o.note}</span>` : ''}</button>`).join('')}</div><div class="tbar"><i></i></div>`;
+    this.el.innerHTML = `<b class="gold">${c.title}</b><div class="itext">${c.text}</div><div class="ibtns${c.options.length > 3 ? ' list' : ''}">${c.options.map((o, i) => `<button data-pick="${i}" ${o.disabled ? 'disabled' : ''}><b>${o.label}</b>${o.note ? `<span>${o.note}</span>` : ''}</button>`).join('')}</div><div class="tbar"><i></i></div>`;
   }
   #resolve(i) { const c = this.#current; if (!c) return; this.#current = null; c.options[i].run(); this.#next(); }
   /** Counts down in real seconds, so a fast game speed does not rush the player. */

@@ -3,6 +3,8 @@
  * `needs` lists local points that must stay reachable on foot. How each piece looks lives in rendering/furnitureModels.js.
  */
 export const FURNITURE = {
+  makeupVanity: { price: 1800, comfort: 1, w: 3, d: 3, minTier: 1, max: 2, requires: 'seniors', needs: [[0, 1]] },
+  nailDesk: { price: 1400, comfort: 1, w: 3, d: 3, minTier: 1, max: 2, requires: 'seniors', needs: [[0, 1]] },
   // `chairs` lists each styling chair on a piece as [x, z, quarter turns] in its own frame.
   // A styling chair is a free-standing seat with its own mirror and partitions; placed side by side they form a styling island.
   station: { price: 300, comfort: 0, w: 3, d: 3, needs: [[0, 1]], chairs: [[0, 0, 0]] },
@@ -74,7 +76,7 @@ export const FURNITURE_IDS = Object.keys(FURNITURE).filter(id => id !== 'station
 export const CHAIR_PRICE = FURNITURE.station.price;
 /** Shop and inventory categories: services, the front of house, running the salon, selling and promotion, and decoration. */
 export const CATEGORIES = {
-  service: ['station', 'processIsland', 'shampooBooth', 'spaBooth', 'vipRoom', 'colour', 'towelStation', 'sterilizer', 'sharpener', 'digitalPerm', 'proDryer', 'scalpScanner', 'island', 'basin', 'shampoo', 'dryer'],
+  service: ['makeupVanity', 'nailDesk', 'station', 'processIsland', 'shampooBooth', 'spaBooth', 'vipRoom', 'colour', 'towelStation', 'sterilizer', 'sharpener', 'digitalPerm', 'proDryer', 'scalpScanner', 'island', 'basin', 'shampoo', 'dryer'],
   waiting: ['desk', 'bench', 'bench2', 'sofa', 'kiosk', 'chargingStation', 'champagneFridge', 'coffeeBar', 'cafeBar', 'wardrobe'],
   ops: ['staffRoom', 'academy', 'stockroom', 'cctv', 'airPurifier', 'massageChair', 'aromaDiffuser', 'robotVacuum'],
   sales: ['displayTable', 'shelf', 'vendingMachine', 'photoZone', 'signboard', 'neonSign'],

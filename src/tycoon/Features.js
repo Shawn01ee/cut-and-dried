@@ -4,8 +4,8 @@
  */
 export const FEATURE_LEVEL = {
   'tab.staff': 2, 'tab.mkt': 2, 'tab.syn': 3,
-  'staff.policy': 2, 'staff.welfare': 3, 'staff.career': 3, 'staff.rel': 4,
-  'biz.rank': 2, 'biz.fund': 3, 'ops.menu': 2, 'ops.hours': 2, 'ops.price': 2, 'ops.treats': 2,
+  'staff.parts': 3, 'staff.policy': 2, 'staff.welfare': 3, 'staff.career': 3, 'staff.rel': 4,
+  'biz.rank': 2, 'biz.fund': 3, 'biz.hq': 2, 'ops.menu': 2, 'ops.hours': 2, 'ops.price': 2, 'ops.treats': 2,
   'clients.regulars': 2, 'clients.special': 3,
   'build.expand': 2, 'build.branch': 4,
   'mkt.rival': 2, 'mkt.contest': 3, 'mkt.brand': 4,

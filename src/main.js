@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { $, V, UP, rand, pick, clamp, lerp, smooth, angLerp, fwd, rgt } from './core/math.js';
+import { SUPPLY_PENALTY } from './tycoon/Brand.js';
+import { concernOf } from './employees/Welfare.js';
+import { ORDERS as HQ_ORDERS, TRUST as HQ_TRUST } from './tycoon/Headquarters.js';
 import { MAX_HEARTS, OCCASION_PAY, OCCASION_NEED } from './tycoon/Regulars.js';
 import { SPECIAL_FAIL_REP } from './tycoon/SpecialClients.js';
 import { WISH_RELIEF, WISH_LOYALTY } from './employees/Management.js';
@@ -12,7 +15,7 @@ import { MATCH_PRICE, MATCH_BLUNTS } from './tycoon/Rival.js';
 import { WEATHER, SHOVEL_AT, SHOVEL_CLEARS, SLIP_DEPTH, SLIP_CHANCE, SLIP_REP } from './tycoon/Weather.js';
 import { lab2lin, labCss, labMix, hexCss, PAL_LAB, PAL_RGB } from './rendering/color.js';
 import { STR, NS, CAP } from './hair/strands.js';
-import { profile, SHAPES, WAVES, DYES, dyeLab, cloneHair, hasColour, opColour, opWave, opCut, applyPlan, score, aiPlan, blankPlan } from './hair/rules.js';
+import { profile, WAVES, DYES, dyeLab, cloneHair, hasColour, opColour, opWave, opCut, applyPlan, score, aiPlan, blankPlan } from './hair/rules.js';
 import { StylingSession } from './hair/StylingSession.js';
 import { NATURAL, WANT } from './customers/catalog.js';
 import { I18n } from './i18n/I18n.js';
@@ -22,12 +25,14 @@ import { TycoonGame } from './tycoon/TycoonGame.js';
 import { BuildMode } from './building/BuildMode.js';
 import { FurnitureView } from './rendering/FurnitureView.js';
 import { TycoonUI } from './ui/TycoonUI.js';
+import { DayInsights } from './ui/DayInsights.js';
+import { CutSelector } from './ui/CutSelector.js';
 import { PROCESS_MINUTES, GRUDGE_DAYS, GRUDGE_PENALTY, RAISE } from './employees/Employee.js';
 import { nameColour, rankMark } from './ui/nameStyle.js';
 import { NavGrid } from './building/NavGrid.js';
 import { paintSign } from './rendering/pixelFont.js';
 import { BRANCH_X, siteOf } from './building/SalonLayout.js';
-import { RESIGN_LEAVE , RAISE_RELIEF, RAISE_LOYALTY, RAISE_CALM, RAISE_MAX_EFFECT} from './employees/StaffManager.js';
+import { RESIGN_LEAVE, RAISE_RELIEF, RAISE_LOYALTY, RAISE_CALM, RAISE_MAX_EFFECT, COMMISSION, HOURS_RELIEF } from './employees/StaffManager.js';
 import { FURNITURE } from './building/FurnitureCatalog.js';
 import { CHANNELS } from './tycoon/Marketing.js';
 import { AudioManager } from './audio/AudioManager.js';
@@ -36,6 +41,7 @@ import { checkForUpdate, refreshToLatest } from './core/Updater.js';
 import { dateOf, seasonOf, eventsOn, HAPPENINGS } from './tycoon/Calendar.js';
 
 const game = new TycoonGame(), i18n = new I18n(window.__lang), audio = new AudioManager(game.bus);
+const dayInsights = new DayInsights(i18n), cutSelector = new CutSelector(i18n);
 const tx = (k, ...a) => i18n.t(k, ...a), nm = n => i18n.name(n);
 
 /* ================= renderer & post ================= */
@@ -425,7 +431,7 @@ function spawnCustomer(o={}){
   const fig=new Fig({skin:pick(SKINS),shirt:c.villain?VILLAIN_SHIRT:c.special==='bride'?0xf6f3ee:pick(SHIRTS),pants:c.villain?0x0d0b14:pick(PANTS),beard:c.look.beard});
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(D.street);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
-  custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');arrivalNews(c,o);
+  custs.push(c);game.metrics.arrive(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');arrivalNews(c,o);
   fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.accepting){leave(c,'full');return;}audio.play('chime');
     if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}greetAt(c,site);const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
@@ -439,13 +445,16 @@ function arrivalNews(c,o){const desk=deskFig(c.site||0).head;
   if(!c.regular)return;popup(tx('reg.arrive',nm(c.name),hearts(c.regular.hearts)),desk,'');
   if(c.occasion)later(4.6,()=>popup(tx('occ.arrive',nm(c.name),tx('occ.'+c.occasion),OCCASION_PAY,Math.round(OCCASION_NEED*100)),desk,'big'));}
 const hearts=n=>'♥'.repeat(n)+'♡'.repeat(MAX_HEARTS-n);
+/** A story's reward in words; `who` is the stylist who got the skill, when known. */
+function storyRewardText(R,who){const parts=[];if(R.followers)parts.push(tx('rw.followers',R.followers));if(R.rep)parts.push(tx('rw.rep',R.rep));if(R.boost)parts.push(tx('rw.boost',Math.round((R.boost[0]-1)*100),R.boost[1]));
+  if(R.hospitality)parts.push(tx('rw.hospitality',R.hospitality));if(R.skill)parts.push(tx('rw.skill',R.who||who?nm(R.who||who):tx('rw.fav'),tx('sk.cut'),R.skill[1]));if(R.calm)parts.push(tx('rw.calm',R.calm));if(R.contest)parts.push(tx('rw.contest',R.contest));return parts.join(' · ');}
 /** What came of a visit: a new regular, hearts won or lost, a story's end, a friend on the way, the special booking's verdict. */
 function visitNews(c,r){if(!r)return;const head=c.fig.head,desk=deskFig(c.site||0).head;
   if(r.newRegular)later(.9,()=>popup(tx('reg.new',nm(c.name)),head,''));
   const g=r.regular;if(g){
     if(g.occasionMet!=null)later(.9,()=>popup(tx(g.occasionMet?'occ.ok':'occ.fail',nm(c.name),tx('occ.'+c.occasion)),head,'big'));
     else if(g.change)later(.9,()=>popup(tx(g.change>0?'reg.heartUp':'reg.heartDown',nm(c.name),hearts(c.regular.hearts)),head,''));
-    if(g.gift){audio.play('levelUp');later(2,()=>popup(tx('reg.gift',nm(c.name),g.gift),desk,'big'));}
+    if(g.finished){audio.play('levelUp');later(1.5,()=>incidents.show({title:tx('story.endT',nm(c.name)),text:`“${tx('story.'+c.regular.story+'.end')}” · ${tx('reg.gift',nm(c.name),g.gift)} · ${storyRewardText(g.reward)}`,options:[{label:tx('inc.ok'),run:()=>{}}]}));}
     if(g.lost)later(2,()=>popup(tx('reg.lost',nm(c.name)),desk,'big'));
     if(g.friend&&!g.lost)referrals.push({name:c.name,site:c.site||0,at:simT+game.clock.hourLength*(.4+Math.random()*.6)});}
   const s=r.special;if(s){audio.play(s.ok?'levelUp':'bad');incidents.show({title:tx(s.ok?'sp.okT':'sp.failT',tx('sp.'+s.kind)),
@@ -510,7 +519,7 @@ let idleT=20;function idleChat(dt){idleT-=dt;if(idleT>0)return;idleT=rand(25,45)
 /** Which salon a new client walks into: in proportion to the stylists at each salon's chairs. */
 function pickSite(){if(!game.layout.branchOpen)return 0;const w=[0,1].map(s=>stations.filter(st=>!st.vacant&&siteOf(st.item.x)===s).length),t=w[0]+w[1];return t&&Math.random()*t>=w[0]?1:0;}
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
-function leave(c,why){freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos,site=c.site||0,D=SITE_DOORS[site],T=game.layout.tier;
+function leave(c,why){if(!game.accepting)game.metrics.leave(c,'closing');freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos,site=c.site||0,D=SITE_DOORS[site],T=game.layout.tier;
   const inside=site?Math.abs(p.x-BRANCH_X)<4.1&&p.z<3.1&&p.z>-3.1:p.x>-4.1&&p.x<(T>=4?12.1:T>=2?8.1:4.1)&&p.z<3.1&&p.z>(T>=5?-9.1:T>=3?-7.1:T>=1?-5.1:-3.1);
   let pts=inside?[...route(p,D.inn),D.out,D.door,D.street]:[D.door,D.street];
   if(why==='full')pts=[D.out,D.door,D.street];
@@ -646,6 +655,14 @@ const sweepTime=cleaning=>3.2*(1.5-cleaning/100);
 function startSweep(fig,cleaning=50){const S=siteOf(fig.pos.x),landed=landedClips().filter(c=>siteOf(c.p.x)===S);if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
   const at=a.clone().add(V(.5,0,.45));if(S){at.x=clamp(at.x,BRANCH_X-3.6,BRANCH_X+3.6);at.z=clamp(at.z,-2.6,2.6);}else{at.x=clamp(at.x,-3.6,t>=4?11.6:t>=2?7.6:3.6);at.z=clamp(at.z,t>=5?-8.6:t>=3?-6.6:t>=1?-4.6:-2.6,2.6);}
   const job={kind:'sweep',phase:'walk',fig,aim:a,t:sweepTime(cleaning),r:.8+cleaning/250};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
+/** Lia with no one to see: a small job at a shelf, a plant, the coffee bar or a mirror, dropped as soon as a client is waiting. */
+const TIDY_AT=['shelf','displayTable','plant','coffeeBar','cafeBar','sideTable','mirror','bookcase','towelStation','kiosk','lamp'];
+function startTidy(st){const f=OWNER.fig,S=siteOf(st.item.x),items=game.layout.items.filter(it=>TIDY_AT.includes(it.id)&&siteOf(it.x)===S);if(!items.length)return null;
+  const it=items[Math.floor(Math.random()*items.length)],c=V(it.x,0,it.z),dir=f.pos.clone().sub(c).setY(0);if(dir.lengthSq()<1e-4)dir.set(0,0,1);dir.normalize();
+  const job={kind:'tidy',phase:'walk',fig:f,aim:c,t:rand(2.5,4.5),site:S};f.handL=f.handR=null;f.setTool(null);f.walkTo(route(f.pos,c.clone().addScaledVector(dir,.7)),()=>{job.phase='work';f.yaw=Math.atan2(c.x-f.pos.x,c.z-f.pos.z);});return job;}
+function updateTidy(job,dt){const f=job.fig;if(queue.some(q=>q.state==='wait'&&(q.site||0)===job.site)){f.handL=f.handR=null;f.path.length=0;return true;}
+  if(job.phase!=='work')return false;job.t-=dt;const k=Math.sin(simT*3.2);f.handR=f.pos.clone().add(V(0,1.0+k*.06,0)).addScaledVector(fwd(f.yaw),.3).addScaledVector(rgt(f.yaw),.12);f.handL=f.handR.clone().addScaledVector(rgt(f.yaw),-.24).add(V(0,-k*.08,0));
+  if(job.t>0)return false;f.handL=f.handR=null;return true;}
 /** An assistant heads out to shovel the snow off the pavement in front of the door. */
 function startShovel(h,s){const D=SITE_DOORS[s],f=h.fig,spot=D.door.clone().add(V(rand(-1.2,1.6),0,rand(.3,1.1)));f.handL=f.handR=null;f.setTool(null);popup(tx('snow.out',nm(h.e.name)),f.head,'');
   const job={kind:'shovel',phase:'walk',site:s,t:game.clock.hourLength*Math.max(.25,.7-h.e.cleaning/250),spot};
@@ -701,8 +718,8 @@ function moveToSeat(e,i){const to=stations[i],from=stations.find(s=>s.sty===e);i
 function morningSeats(){if(game.staff.seatShuffle){const sts=stations.filter(s=>!s.vacant&&seatFree(s)),people=sts.map(s=>s.sty);
     for(let i=people.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[people[i],people[j]]=[people[j],people[i]];}
     sts.forEach((s,k)=>{s.sty=people[k];goToChair(s.sty.fig,s);});}
-  const room=stations.find(s=>s.item.id==='vipRoom');if(!room||room.sty.perk==='vip')return;
-  const vip=stations.find(s=>s!==room&&!s.vacant&&s.sty.perk==='vip');if(vip)swapSeats(room,vip);}
+  const room=stations.find(s=>s.item.id==='vipRoom');if(!room||room.sty.hasPerk?.('vip'))return;
+  const vip=stations.find(s=>s!==room&&!s.vacant&&s.sty.hasPerk?.('vip'));if(vip)swapSeats(room,vip);}
 /** Each morning: stylists on leave give up their chair and stylists who are in take any free one. */
 function syncRoster(){const day=game.clock.day;
   stations.forEach(st=>{if(!st.vacant&&st.sty!==OWNER&&!st.cust&&(!st.sty.hired||st.sty.onLeave(day)))vacate(st);});
@@ -776,7 +793,7 @@ function dayTick(dt){if(game.report||game.dayOff)return;game.tick(dt);if(!game.c
 game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');queue.slice().forEach(c=>leave(c));});
 game.bus.on('mission:done',m=>{popup(tx('ms.done',tx('ms.t.'+m.kind)),recep.head,'big');audio.play('levelUp');renderPanel(true);});
 $('#offday').addEventListener('click',e=>{const b=e.target.closest('[data-off]');if(!b)return;if(b.dataset.off==='week')openMenu('week','game');else{game.save();beginDay();}});
-game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');renderPanel(true);});
+game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');if(e.newTalent){const p=e.newTalent;e.newTalent=null;later(1.4,()=>popup(tx('talent.new',nm(e.name),tx('perk.'+p)),e.fig.head,'big'));}renderPanel(true);});
 game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');const f=featuresAt(l);if(f.length)later(1.6,()=>popup(tx('feat.opened',f.map(k=>tx('feat.'+k)).join(' · ')),recep.head,'big'));renderPanel(true);});
 game.bus.on('review:bonus',b=>{popup(b.kind==='streak'?tx('rv.bonusStreak',b.streak,b.amount.toLocaleString()):tx('rv.bonusMilestone',b.at,b.amount.toLocaleString(),b.rating.toFixed(1),b.mult.toFixed(2)),recep.head,'big');audio.play('cash');renderPanel(true);});
 game.bus.on('review:new',r=>{if(sel==='rev')game.reviews.markRead();if(r.stars<=2){popup(tx('rv.newLow','★'.repeat(r.stars)),recep.head,'');audio.play('bad');}});
@@ -864,12 +881,14 @@ function simStep(dt){simT+=dt;
   // stations
   stations.forEach(st=>{
     if(st.vacant)return;st.sty.workSite=siteOf(st.item.x);
-    if(st.sweep){if(updateSweep(st.sweep,dt))st.sweep=null;}
-    else if(st.state==='free'&&st.sty===OWNER&&!helpers.some(h=>h.fig.root.visible)&&!queue.some(q=>q.state==='wait')&&landedClips().length>24)st.sweep=startSweep(OWNER.fig);
+    if(st.sweep){if(st.sweep.kind==='tidy'?updateTidy(st.sweep,dt):updateSweep(st.sweep,dt))st.sweep=null;}
+    else if(st.state==='free'&&st.sty===OWNER&&!st.filming&&!queue.some(q=>q.state==='wait'&&(q.site||0)===siteOf(st.item.x))){st.idleT=(st.idleT||0)+dt;
+      if(st.idleT>4){st.idleT=-rand(3,8);const S=siteOf(st.item.x),mess=landedClips().filter(c=>siteOf(c.p.x)===S).length;st.sweep=(mess>6&&!helpers.some(h=>h.fig.root.visible)?startSweep(OWNER.fig):null)||startTidy(st);}}
+    else if(st.sty===OWNER)st.idleT=0;
     if(st.state==='free'){if(st.sty.restUntil>simT||st.sweep||st.filming||pendingMoves.has(st.item)||queuedMoves.has(st.item))return;
       // A client whose colour or perm is done waits at the island for their own stylist; another takes over only if theirs is not at a chair, or after an hour.
       const here=siteOf(st.item.x),done=custs.filter(q=>q.state==='ready'&&(q.site||0)===here),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>!stations.some(s=>s.sty===q.resume.sty)||simT-q.readyAt>game.clock.hourLength);if(back){resumeAt(st,back);return;}
-      if(!game.clock.isOpen||(booths.some(b=>siteOf(b.item.x)===here)&&!freeBooth(here)))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.perk==='vip',vipOnDuty=stations.some(s=>!s.vacant&&siteOf(s.item.x)===here&&(s.item.id==='vipRoom'||s.sty.perk==='vip'));
+      if(!game.clock.isOpen||(booths.some(b=>siteOf(b.item.x)===here)&&!freeBooth(here)))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.hasPerk?.('vip'),vipOnDuty=stations.some(s=>!s.vacant&&siteOf(s.item.x)===here&&(s.item.id==='vipRoom'||s.sty.hasPerk?.('vip')));
       // VIP clients wait for a VIP chair (the VIP room or a VIP specialist) while one is on duty, unless half their patience is gone.
       // A regular waits for the stylist they like while that stylist is at a chair here, until half their patience is gone.
       const elsewhere=q=>q.preferredStylist&&q.preferredStylist!==st.sty.name&&q.pat>q.maxPat*.5&&stations.some(s=>s!==st&&!s.vacant&&s.sty.name===q.preferredStylist&&siteOf(s.item.x)===here);
@@ -945,9 +964,10 @@ function renderPanel(force){if(panelHeldAt&&performance.now()-panelHeldAt<2000){
   let h=chairRow+`<div class="ph"><b>${tx('chair',st.i+1)}</b> · <span style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</span> <span class="dim">(${tx('style.'+st.sty.style)})</span> · <span id="stl">${stLabel(st)}</span></div>`;
   if(!c){pbody.innerHTML=h+`<div class="dim">${tx('free.next',queue.length?queue.map(q=>nm(q.name)).join(', '):tx('free.nobody'))}</div><div id="help">${tx('free.help')}</div>`;return;}
   h+=`<div class="ord">${c.special?`<span class="gold">✦ ${tx('sp.'+c.special)} · ${tx('sp.need',Math.round(c.specialNeed*100))}</span> `:''}${c.regular?`<span class="gold">${tx('reg.tag')} ${hearts(c.regular.hearts)}</span> `:''}${c.occasion?`<span class="gold">${tx('occ.'+c.occasion)} · ${tx('sp.need',Math.round(OCCASION_NEED*100))}</span> `:''}${c.trending?`<span class="gold">${tx('tr.tag')}</span> `:''}${c.vip?`<span class="gold">${tx('vip')}</span> `:''}${c.influencer?`<span class="gold">${tx('inf.tag',c.influencer.handle)}</span> `:''}<b class="${c.villain?'bad':''}">${tx('order.wants',nm(c.name))}</b> <span class="otext">${orderText(c.order)}</span> <span class="dim">· ${c.influencer?tx('inf.free'):`$${c.price} · ${tx('p.budget',c.budget)} · ${tx('grade.pay',tx('grade.'+game.gradeOf(st.sty)),GRADE_PAY[game.gradeOf(st.sty)])}`}</span>${st.state==='consult'&&!styling?` <button class="go" data-do="style" ${ownerBusy()?'disabled':''}>${tx('p.direct')}</button>`:''}</div>`;
+  if(cutSelector.note(c.order.shape))h+=`<div class="dim">${cutSelector.note(c.order.shape)}</div>`;
   h+=`<div class="pv"><figure><canvas id="pvO" width="48" height="56"></canvas><figcaption>${tx('fig.order')}</figcaption></figure><figure><canvas id="pvN" width="48" height="56"></canvas><figcaption>${tx('fig.now')}</figcaption></figure>${st.state==='consult'?`<figure><canvas id="pvP" width="48" height="56"></canvas><figcaption>${tx('fig.plan')}</figcaption></figure>`:''}<div class="bars" id="bars"></div></div>`;
   if(st.state==='consult'){const p=st.plan;
-    h+=`${styling&&styling.station===st?`<div class="row"><button data-do="turn:-1">◀</button><button data-do="turn:1">▶</button><button data-do="compare">${tx('style.compare')}</button><button data-do="style-close">${tx('style.close')}</button></div>`:''}<div class="row"><label><input type="checkbox" data-k="doCut" ${p.doCut?'checked':''}> ${tx('p.cut')}</label>${seg('shape',SHAPES,p.shape,n=>tx('shape.'+n))}</div>
+    h+=`${styling&&styling.station===st?`<div class="row"><button data-do="turn:-1">◀</button><button data-do="turn:1">▶</button><button data-do="compare">${tx('style.compare')}</button><button data-do="style-close">${tx('style.close')}</button></div>`:''}<div class="row"><label><input type="checkbox" data-k="doCut" ${p.doCut?'checked':''}> ${tx('p.cut')}</label>${cutSelector.render(p.shape)}</div><div class="row dim" id="cutNote">${cutSelector.note(p.shape)}</div>
     <div class="row"><label class="dim">${tx('p.length')}</label><input type="range" min="1" max="60" step="0.5" value="${p.L}" data-r="L"><span id="Lv"></span></div>
     <div class="row"><label class="dim">${tx('p.zFront')}</label><input type="range" min="-12" max="12" step="0.5" value="${p.zones.front}" data-z="front"><span id="zfront"></span></div><div class="row"><label class="dim">${tx('p.zSide')}</label><input type="range" min="-12" max="12" step="0.5" value="${p.zones.side}" data-z="side"><span id="zside"></span></div><div class="row"><label class="dim">${tx('p.zBack')}</label><input type="range" min="-12" max="12" step="0.5" value="${p.zones.back}" data-z="back"><span id="zback"></span></div>
     <div class="row"><label><input type="checkbox" data-k="doColour" ${p.doColour?'checked':''}> ${tx('p.colour')}</label><span class="dim">${tx('p.bleach')}</span>${seg('bl',['0','1','2','3'],p.bleach)}</div>
@@ -966,7 +986,7 @@ function renderPanel(force){if(panelHeldAt&&performance.now()-panelHeldAt<2000){
     pbody.querySelectorAll('[data-z]').forEach(e=>e.oninput=()=>{p.zones[e.dataset.z]=+e.value;markCut();touch();refreshDynamic();});
     pbody.querySelectorAll('[data-k]').forEach(e=>e.onchange=()=>{p[e.dataset.k]=e.checked;touch();refreshDynamic();});
     pbody.querySelectorAll('[data-r]').forEach(e=>e.oninput=()=>{p[e.dataset.r]=+e.value;if(e.dataset.r==='L')markCut();touch();refreshDynamic();});
-    pbody.querySelectorAll('[data-shape]').forEach(e=>e.onclick=()=>{p.shape=e.dataset.shape;p.doCut=true;touch();renderPanel(true);});
+    pbody.querySelector('[data-cut-shape]').onchange=e=>{p.shape=e.target.value;markCut();touch();$('#cutNote').textContent=cutSelector.note(p.shape);refreshDynamic();};
     pbody.querySelectorAll('[data-bl]').forEach(e=>e.onclick=()=>{p.bleach=+e.dataset.bl;p.doColour=true;touch();renderPanel(true);});
     pbody.querySelectorAll('[data-a]').forEach(e=>e.onclick=()=>{p.dyeA=+e.dataset.a;p.doColour=true;touch();renderPanel(true);});
     pbody.querySelectorAll('[data-b]').forEach(e=>e.onclick=()=>{p.dyeB=+e.dataset.b;p.doColour=true;touch();renderPanel(true);});
@@ -1105,7 +1125,7 @@ function postOn(channel){const who=filmer();if(!who){popup(tx('mk.busy'),OWNER.f
     popup(r.viral?tx('mk.viralPop',name,r.views.toLocaleString()):tx('mk.postPop',name,r.views.toLocaleString(),r.gained.toLocaleString()),f.head,'big');audio.play(r.viral?'levelUp':'happy');renderPanel(true);});
   renderPanel(true);}
 /** Morning news: what the rival did overnight, and stylists who have had enough. */
-function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):k.startsWith('brand:')?tx('brand.news.'+k.split(':')[1],tx('pt.'+k.split(':')[2])):k.startsWith('contest:')?tx('contest.news.'+k.slice(8),tx('contest.kind.'+game.contest.kind),tx('contest.cat.'+game.contest.category)):tx('rival.news.'+k,game.rival.name));
+function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):k.startsWith('hq:')?tx('hq.news.'+k.split(':')[1],tx('hq.o.'+(k.split(':')[2]||''))):k.startsWith('freed:')?tx('rival.news.freed',game.rival.freed?.from||'',k.slice(6).split(',').map(id=>nm(game.staff.find(id)?.name||id)).join(', ')):k.startsWith('brand:')?(([,kind,arg])=>tx('brand.news.'+kind,tx((kind==='done'||kind==='viral'?'pt.':'deal.')+arg)))(k.split(':')):k.startsWith('contest:')?tx('contest.news.'+k.slice(8),tx('contest.kind.'+game.contest.kind),tx('contest.cat.'+game.contest.category)):tx('rival.news.'+k,game.rival.name));
   // a new season, and calendar events on their first day
   if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));
@@ -1114,7 +1134,7 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   // a quarrel between two stylists, from yesterday
   {const cl=game.staff.clash;game.staff.clash=null;const a=cl&&game.staff.find(cl.a),b=cl&&game.staff.find(cl.b);if(a&&b&&a.hired&&b.hired){const res=how=>()=>{game.staff.resolveClash(a,b,how,day);renderPanel(true);};
     later(1.5,()=>{audio.play('bad');incidents.show({title:tx('rel.clashT',nm(a.name),nm(b.name)),text:tx('rel.clash.'+cl.why),fallback:2,options:[{label:tx('rel.mediate'),note:tx('rel.mediateN'),run:res('mediate')},{label:tx('rel.rest'),note:tx('rel.restN'),run:res('rest')},{label:tx('rel.ignore'),note:tx('rel.ignoreN'),run:res('ignore')}]});});}}
-  rivalCards(day);
+  rivalCards(day);brandOfferCard();hqCard();
   if(game.staff.waitingToQuit){news.push(tx('wf.alsoTired',game.staff.waitingToQuit));game.staff.waitingToQuit=0;}
   if(!game.dayOff&&['rain','storm','heat','cold','snow'].includes(game.weather))news.unshift(tx('wx.news.'+game.weather,fxText(WEATHER[game.weather])));
   // a new month brings new trends
@@ -1124,10 +1144,36 @@ function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>
   happeningCard();
   game.resignations.splice(0).forEach(e=>{if(!e.hired)return;audio.play('bad');const day=game.clock.day,answer=how=>()=>{const stays=game.staff.answerResignation(e,how,day);
       if(how==='talk'){audio.play(stays?'cash':'bad');incidents.show({title:tx(stays?'inc.talkOkT':'inc.talkNoT',nm(e.name)),text:tx(stays?'inc.talkOk':'inc.talkNo',nm(e.name),GRUDGE_DAYS,GRUDGE_PENALTY),options:[{label:tx('inc.ok'),run:()=>{}}]});}renderPanel(true);};
-    incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.resign'),fallback:4,options:[
-      {label:tx('inc.keep',e.salary*2),note:tx('inc.keepN',game.staff.bonusRelief(e,day)),run:answer('bonus')},{label:tx('inc.talk'),note:tx('inc.talkN',GRUDGE_DAYS,GRUDGE_PENALTY),run:answer('talk')},
-      {label:tx('inc.raise'),note:tx('inc.raiseN',Math.round(e.salary*(RAISE-1)),RAISE_RELIEF,RAISE_LOYALTY,Math.round(RAISE_CALM*100),e.raises>=RAISE_MAX_EFFECT?tx('inc.raiseMax'):''),run:answer('raise')},{label:tx('inc.leave'),note:tx('inc.leaveN',RESIGN_LEAVE),run:answer('leave')},{label:tx('inc.letGo'),note:tx('inc.letGoN'),run:answer('go')}]});});}
+    // Why they want to go decides what is on offer: worn out by hours or work, money is not the answer.
+    const ls=e.lastStress,why=ls&&ls.overtime>0&&ls.overtime>=Math.max(ls.work,ls.fatigue)?'overtime':concernOf(e,game.staff),worn=['overtime','tired','busy'].includes(why),O={
+      bonus:{label:tx('inc.keep',e.salary*2),note:tx('inc.keepN',game.staff.bonusRelief(e,day)),run:answer('bonus')},
+      hours:{label:tx('inc.hours'),note:tx('inc.hoursN',HOURS_RELIEF),run:()=>{game.lastCall=Math.max(game.lastCall,60);answer('hours')();}},
+      talk:{label:tx('inc.talkP',Math.round(game.staff.persuadeChance(e)*100)),note:tx('inc.talkN',GRUDGE_DAYS,GRUDGE_PENALTY),run:answer('talk')},
+      raise:{label:tx('inc.raise'),note:tx('inc.raiseN',Math.round(e.salary*(RAISE-1)),RAISE_RELIEF,RAISE_LOYALTY,Math.round(RAISE_CALM*100),e.raises>=RAISE_MAX_EFFECT?tx('inc.raiseMax'):''),run:answer('raise')},
+      leave:{label:tx('inc.leave'),note:tx('inc.leaveN',RESIGN_LEAVE),run:answer('leave')},go:{label:tx('inc.letGo'),note:tx('inc.letGoN'),run:answer('go')}};
+    const order=worn?[why==='tired'?'leave':'hours',why==='tired'?'hours':'leave','talk','raise','go']:why==='pay'?['raise','bonus','talk','leave','go']:['bonus','talk','raise','leave','go'];
+    incidents.show({title:tx('inc.resign.t',nm(e.name)),text:tx('inc.why.'+(TX_WHY.includes(why)?why:'fine')),fallback:order.length-1,options:order.map(k=>O[k])});});}
+const TX_WHY=['busy','tired','overtime','pay','grudge','rival','promotion','welfare'];
 /** The rival's moves that ask for an answer: a price war to match, a stylist being poached; and Sunday's contest result. */
+/** Shawn's order: go along, talk him round (with the odds), or refuse (only with enough trust). */
+function hqCard(){const H=game.hq,o=H.order;if(!o||o.shown)return;o.shown=true;const O=HQ_ORDERS[o.id],[,cl]=game.plannedHours,P=game.priceLevel,top=game.isUnlocked('luxury')?3:2;
+  const effect={priceUp:()=>tx('hq.e.priceUp',tx('price.'+P),tx('price.'+Math.min(top,P+1)),O.days),promo:()=>tx('hq.e.promo',O.days,Math.round((1-O.price)*100),Math.round((O.demand-1)*100)),
+    longHours:()=>tx('hq.e.longHours',O.days,cl,Math.min(O.maxClose,cl+1)),agency:()=>tx('hq.e.agency',o.cost.toLocaleString(),o.followers),noCommission:()=>tx('hq.e.noCommission',O.days,Math.round(COMMISSION[game.staff.commission]*100)),newProduct:()=>tx('hq.e.newProduct',O.days,-HQ_TRUST.ignored)}[o.id]();
+  const odds=Math.round(game.hqTalkOdds*100),done=r=>{audio.play(r==='talked'||r==='refused'?'cash':'bad');popup(tx('hq.res.'+r,tx('hq.o.'+o.id)),recep.head,'big');renderPanel(true);};
+  later(3.5,()=>incidents.show({title:tx('hq.t',tx('hq.o.'+o.id)),text:`“${tx('hq.q.'+o.id)}” · ${effect}`,fallback:0,options:[
+    {label:tx('hq.accept'),note:tx('hq.acceptN',HQ_TRUST.accept),run:()=>done(game.answerOrder('accept'))},
+    {label:tx('hq.talk',odds),note:tx('hq.talkN',-HQ_TRUST.talkWin,-HQ_TRUST.talkLose),run:()=>done(game.answerOrder('talk'))},
+    {label:tx('hq.refuse'),disabled:!H.canRefuse,note:H.canRefuse?tx('hq.refuseN',-HQ_TRUST.refuse):tx('hq.refuseNo',HQ_TRUST.refuseMin,H.trust),run:()=>done(game.answerOrder('refuse'))}]}));}
+/** A business offer for the brand: the deal in numbers, take it or leave it. */
+function brandOfferCard(){const B=game.brand,o=B.offer;if(!o||o.shown)return;o.shown=true;const p=B.get(o.type),cash=game.economy;
+  const text=o.kind==='supply'?tx('deal.supply',o.units,tx('pt.'+o.type),o.price,o.weeks,Math.round(o.units*o.price).toLocaleString(),p?p.stock:0,Math.round(SUPPLY_PENALTY*100))
+    :o.kind==='listing'?tx('deal.listing',o.fee.toLocaleString(),Math.round(o.cut*100),o.daily[0],o.daily[1])
+    :o.kind==='sponsor'?tx('deal.sponsor',o.units,tx('pt.'+o.type),o.followers.toLocaleString(),o.boost,o.days)
+    :tx('deal.ppl',o.cost.toLocaleString(),o.followers.toLocaleString(),o.boost,o.days);
+  const can=o.kind==='listing'?cash.canAfford(o.fee):o.kind==='ppl'?cash.canAfford(o.cost):o.kind==='sponsor'?!!p&&p.stock>=o.units:true;
+  later(3,()=>incidents.show({title:tx('deal.t',tx('deal.'+o.deal)),text,fallback:1,options:[
+    {label:tx('deal.yes'),disabled:!can,note:can?'':tx('deal.cant'),run:()=>{if(game.brand.accept(game.economy,game.marketing,game.clock.day)){audio.play('cash');popup(tx('deal.done',tx('deal.'+o.deal)),recep.head,'big');}else game.brand.decline();renderPanel(true);}},
+    {label:tx('deal.no'),run:()=>{game.brand.decline();renderPanel(true);}}]}));}
 function rivalCards(day){const R=game.rival;
   if(R.open&&(R.move==='priceCut'||R.move==='promo')&&R.daysLeft>0&&!game.matching&&R.warAsked!==R.move+day-R.daysLeft){R.warAsked=R.move+day-R.daysLeft;
     later(2,()=>incidents.show({title:tx('pw.t',R.name),text:tx('pw.text',Math.round(R.discount*100),R.daysLeft),fallback:1,options:[{label:tx('pw.match'),note:tx('pw.matchN',Math.round((1-MATCH_PRICE)*100),Math.round(MATCH_BLUNTS*100)),run:()=>{game.matchPriceWar();renderPanel(true);}},{label:tx('pw.hold'),note:tx('pw.holdN'),run:()=>{}}]}));}
@@ -1154,7 +1200,7 @@ function happeningCard(){const h=game.happening;if(!h)return;const t=tx('hap.'+h
     :[{label:tx('hap.join',h.cost),note:tx('hap.joinN',h.followers),run:()=>{if(game.resolveHappening(true))audio.play('cash');renderPanel(true);}},{label:tx('hap.skip'),run:()=>{}}]});}
 function replyToReview(id,kind){const r=game.replyToReview(id,kind);if(!r)return;
   if(r.review.removed)popup(tx('rv.pop.removed'),recep.head,'big');else if(r.review.replied==='rejected'){popup(tx('rv.pop.rejected'),recep.head,'big');audio.play('bad');}else if(r.edited)popup(tx('rv.pop.edited'),recep.head,'big');}
-const ui=new TycoonUI(game,build,i18n,{now:()=>simT,sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},branchExpanded:()=>{syncFurniture();syncChairs();focusSite(1);},syncSupport,openBranch,hairShow:n=>{audio.play('levelUp');popup(tx('show.done',n.toLocaleString()),recep.head,'big');},openMonth:()=>{monthFrom='panel';openMenu('month','game');paused=true;},viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
+const ui=new TycoonUI(game,build,i18n,{now:()=>simT,storyReward:(R,who)=>storyRewardText(R,who),sweepMinutes:c=>Math.round(sweepTime(c)/game.clock.hourLength*60),canMove:it=>canMove(it),isQueued:it=>queuedMoves.has(it),hasOpenChair:()=>!!openChair(),hire:hireStaff,fire:fireStaff,syncChairs:()=>{syncFurniture();syncChairs();alignToWalls();},expanded:()=>{syncFurniture();syncChairs();alignToWalls(true);},branchExpanded:()=>{syncFurniture();syncChairs();focusSite(1);},syncSupport,openBranch,hairShow:n=>{audio.play('levelUp');popup(tx('show.done',n.toLocaleString()),recep.head,'big');},openMonth:()=>{monthFrom='panel';openMenu('month','game');paused=true;},viewSite:i=>focusSite(i),canModify:it=>canModify(it),canSell:it=>canSell(it),
   scouted:e=>{audio.play('levelUp');popup(tx('rv2.scouted',nm(e.name),game.rival.name),recep.head,'big');},promoted:e=>{audio.play('levelUp');popup(tx('car.done',nm(e.name),tx('grade.'+e.rank)),e.fig?e.fig.head:recep.head,'big');},certified:(e,c)=>{audio.play('cash');popup(tx('cert.done',nm(e.name),tx('cert.'+c)),e.fig?e.fig.head:recep.head,'big');},talked:(e,r)=>{audio.play('happy');const W=r.wish,who=r.target?nm(game.staff.find(r.target).name):'',arg=W==='apart'?who:W==='raise'?Math.round(e.salary*(RAISE-1)):W==='learn'?game.staff.trainingCostFor(e):'';
     incidents.show({title:tx('wf.talkT',nm(e.name)),text:'“'+tx('wf.say.'+r.concern,who)+'” “'+tx('wish.say.'+W,who)+'”',fallback:1,options:[
       {label:tx('wish.do.'+W,arg),note:tx('wish.note.'+W)+' · '+tx('wish.plus',WISH_RELIEF,WISH_LOYALTY),run:()=>{const ok=game.grantWish(e);audio.play(ok?'cash':'bad');popup(tx(ok?'wish.done':'wish.cant',nm(e.name)),recep.head,'big');renderPanel(true);}},
@@ -1215,7 +1261,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mbtns">${game.saves.has()?`<button class="go big" data-act="start">${tx('m.continue',game.saves.load().day)}</button><button data-act="new">${tx('m.new')}</button>`:`<button class="go big" data-act="new">${tx('m.start')}</button>`}<button data-act="how">${tx('m.how')}</button><button data-act="opts">${tx('m.opts')}</button></div>`;
   else if(menuScreen==='how')h=`<div class="mhead">${tx('m.how')}</div>${HOW[i18n.lang].map(([t,b])=>`<div class="hsec"><h3>${t}</h3>${b}</div>`).join('')}<div class="mbtns side">${backBtn}</div>`;
   else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v,c)).join('');
-    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
+    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${dayInsights.render(q)}${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
   else if(menuScreen==='week'){const w=game.weekReport,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v.toLocaleString(),c)).join(''),usd=v=>(v<0?'−$':'$')+Math.abs(v).toLocaleString();
     const bars=profitChart(w.days,d=>tx('wd.'+((d.day-1)%7)));
     h=`<div class="mhead">${tx('week.title',w.week,w.from,w.to)}</div><div class="dim">${tx('week.sub')}</div>${bars}<table style="width:100%;border-collapse:collapse">${ledger(w.revenue,'')}${line(tx('day.totalRev'),usd(w.totalRevenue),'gold')}${ledger(w.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+w.totalOperating.toLocaleString(),'gold')}${line(tx('week.profit'),usd(w.profit),w.profit<0?'bad':'good')}${w.totalInvestment?ledger(w.investment,'−','dim'):''}${Object.keys(w.funding).length?ledger(w.funding,'+','good'):''}${line(tx('week.served'),w.served)}${line(tx('day.reviews'),w.reviews.count?tx('day.reviewsV',w.reviews.count,w.reviews.average.toFixed(1)):'–')}${line(tx('day.rep'),(w.reputation>=0?'+':'')+w.reputation.toFixed(1))}${line(tx('day.followers'),(w.followers>=0?'+':'−')+Math.abs(w.followers).toLocaleString())}</table><div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:''}<button class="${game.monthClosedToday?'':'go big'}" data-act="weekfix">${tx('week.fix')}</button><button data-act="monday">${tx('week.monday')}</button></div>`;}
@@ -1286,3 +1332,6 @@ setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update')
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
 if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,bots:()=>[...bots.values()].map(b=>({state:b.state,pos:b.pos?[+b.pos.x.toFixed(2),+b.pos.z.toFixed(2)]:null,n:b.n})),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+
+// Read-only state for browser checks; available only in debug mode.
+if(new URLSearchParams(location.search).has('debug'))window.render_game_to_text=()=>JSON.stringify({day:game.clock.day,open:game.clock.isOpen,dayOff:game.dayOff,metrics:game.metrics.snapshot(),report:game.report&&{profit:game.report.profit,comparison:game.report.comparison,advice:game.report.advice}});

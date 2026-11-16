@@ -37,13 +37,13 @@ export function contestFor(month, level) {
 /** An entrant's score before the concept's roll, and its parts. */
 export function baseScore(e, category, isOwner = false) {
   const C = CATEGORIES[category], S = e.effectiveSkills, skill = C.skills.reduce((n, k) => n + S[k], 0) / C.skills.length;
-  const parts = { skill: Math.round(skill), level: Math.round(e.level * LEVEL_BONUS), cert: C.cert && hasCert(e, C.cert) ? CERT_BONUS : 0, perk: C.perk && e.perk === C.perk ? PERK_BONUS : 0, trait: isOwner ? 0 : TRAIT_BONUS[e.trait] || 0, stress: -Math.round(Math.max(0, e.stress - 60) / 4) };
+  const parts = { skill: Math.round(skill), level: Math.round(e.level * LEVEL_BONUS), cert: C.cert && hasCert(e, C.cert) ? CERT_BONUS : 0, perk: C.perk && e.hasPerk(C.perk) ? PERK_BONUS : 0, trait: isOwner ? 0 : TRAIT_BONUS[e.trait] || 0, stress: -Math.round(Math.max(0, e.stress - 60) / 4) };
   return { total: Object.values(parts).reduce((a, b) => a + b, 0), parts };
 }
 /** Runs the contest: our entrant against five others (one from the rival). Returns the ranking and our place (0-based). */
-export function runContest(c, entrant, isOwner, rival, rivalName = id => id) {
+export function runContest(c, entrant, isOwner, rival, rivalName = id => id, edge = 0) {
   const def = CONTESTS[c.kind], [lo, hi] = CONCEPTS[c.concept] || CONCEPTS.classic;
-  const ours = { name: entrant.name, salon: 'Ciel Ground', score: Math.round(baseScore(entrant, c.category, isOwner).total + rand(lo, hi)), ours: true };
+  const ours = { name: entrant.name, salon: 'Ciel Ground', score: Math.round(baseScore(entrant, c.category, isOwner).total + rand(lo, hi) + edge), ours: true };
   const others = [...FIELD].sort(() => Math.random() - .5).slice(0, 4).map(name => ({ name, score: Math.round(def.field + (Math.random() + Math.random() + Math.random() - 1.5) * def.spread * 1.4) }));
   if (rival && rival.open && rival.stylists.length) others.push({ name: rivalName(rival.stylists[0]), salon: rival.name, rival: true, score: Math.round(def.field + 3 + rival.tier * 3 + (Math.random() - .5) * def.spread * 2) });
   else others.push({ name: FIELD[9], score: Math.round(def.field + (Math.random() - .5) * def.spread * 2) });

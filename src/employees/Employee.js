@@ -5,6 +5,10 @@ import { PROMO_PAY } from './Career.js';
 const SPECIALTY_SKILL = { cut: 'cutting', colour: 'colouring', perm: 'perming' };
 const REQUEST_SPECIALTY = { haircut: 'cut', colour: 'colour', perm: 'perm' };
 export const SPECIALTY_BONUS = 10, SPECIALTY_SATISFACTION = .05, MAX_LEVEL = 10;
+/** Talents a stylist can pick up as they grow, and the levels that bring one (up to three in all, counting the one they came with). */
+export const TALENTS = ['speed', 'consult', 'vip', 'mentor', 'trend', 'calm'], TALENT_LEVELS = [4, 7, 10];
+/** Skill gained per level: their specialty, the other crafts, speed and service. */
+export const LEVEL_GAIN = { specialty: 6, craft: 3, speed: 2, customerService: 3 };
 /** Standard service times in minutes, for an average stylist. */
 export const BASE_MINUTES = { shampoo: 10, cut: 30, colour: 60, wave: 55, dry: 12 };
 /** Of those, the minutes colour and perm are left to process: the same for everyone, and no stylist is needed. */
@@ -35,7 +39,11 @@ export class Employee {
     this.loyalty = 0; this.talkDay = -99; this.lastStress = null;
     // Personality, certificates earned, and promotions given (each raises base pay; `defSalary` is the starting pay).
     this.trait = traitOf(id); this.certs = []; this.promotions = 0; this.defSalary = salary;
+    // Talents learned on the job, on top of `perk`; `newTalent` is the one just learned, for the scene to announce.
+    this.talents = []; this.newTalent = null;
   }
+  hasPerk(p) { return this.perk === p || this.talents.includes(p); }
+  get allPerks() { return [this.perk, ...this.talents].filter(Boolean); }
   get fatigue() { return 100 - this.stamina; }
   get trainingCost() { return 250 * this.level; }
   get canTrain() { return this.level < MAX_LEVEL; }
@@ -57,7 +65,7 @@ export class Employee {
   /** Translates skills, tiredness and stress into the error and speed the hair rules use. */
   serviceProfile(speedBonus = 1) {
     const strain = this.strain, s = this.effectiveSkills;
-    return { cut: (100 - s.cutting) / 25 * strain, bias: this.bias, col: (100 - s.colouring) / 2000 * strain, wave: (100 - s.perming) / 400 * strain, spd: s.speed / 60 * (1 - this.fatigue / 250) * speedBonus * (this.perk === 'speed' ? 1.2 : 1), fine: this.fine, single: this.single };
+    return { cut: (100 - s.cutting) / 25 * strain, bias: this.bias, col: (100 - s.colouring) / 2000 * strain, wave: (100 - s.perming) / 400 * strain, spd: s.speed / 60 * (1 - this.fatigue / 250) * speedBonus * (this.hasPerk('speed') ? 1.2 : 1), fine: this.fine, single: this.single };
   }
   /**
    * How long a service takes this stylist, in minutes: the standard time, quicker with speed and with skill
@@ -65,7 +73,7 @@ export class Employee {
    */
   serviceMinutes(type, speedBonus = 1) {
     const s = this.effectiveSkills, skill = s[SERVICE_SKILL[type]] ?? s.speed;
-    const minutes = (BASE_MINUTES[type] - (PROCESS_MINUTES[type] || 0)) * (1.6 - s.speed / 100) * (1.2 - skill / 250) * (1 + this.fatigue / 250) / speedBonus / (this.perk === 'speed' ? 1.2 : 1);
+    const minutes = (BASE_MINUTES[type] - (PROCESS_MINUTES[type] || 0)) * (1.6 - s.speed / 100) * (1.2 - skill / 250) * (1 + this.fatigue / 250) / speedBonus / (this.hasPerk('speed') ? 1.2 : 1);
     return Math.max(3, Math.round(minutes / (TRAITS[this.trait]?.speed || 1)));
   }
   /** How good a wash this person gives, 0 to 1: assistants by their shampoo skill, stylists an ordinary .6. */
@@ -88,12 +96,18 @@ export class Employee {
   }
   #levelUp() {
     this.level++;
-    for (const k of ['cutting', 'colouring', 'perming', 'speed', 'customerService']) this.skills[k] = Math.min(100, this.skills[k] + 3);
-    const key = SPECIALTY_SKILL[this.specialty];
-    if (key) this.skills[key] = Math.min(100, this.skills[key] + 2);
+    const key = SPECIALTY_SKILL[this.specialty], up = (k, n) => { this.skills[k] = Math.min(100, this.skills[k] + n); };
+    for (const k of ['cutting', 'colouring', 'perming']) up(k, k === key ? LEVEL_GAIN.specialty : LEVEL_GAIN.craft);
+    up('speed', LEVEL_GAIN.speed); up('customerService', LEVEL_GAIN.customerService);
+    // Some levels bring a talent, leaning towards what they are good at.
+    if (TALENT_LEVELS.includes(this.level) && this.id !== 'owner' && this.allPerks.length < 3) {
+      const s = this.skills, weight = { speed: s.speed >= 65 ? 3 : 1, consult: s.customerService >= 65 ? 3 : 1, vip: s.customerService >= 70 ? 2 : 1, mentor: this.level >= 7 ? 3 : 0, trend: key === 'colouring' ? 2 : 1, calm: 1 };
+      const pool = TALENTS.filter(p => !this.hasPerk(p)).flatMap(p => Array(weight[p]).fill(p));
+      if (pool.length) { const p = pool[Math.floor(Math.random() * pool.length)]; if (!this.perk) this.perk = p; else this.talents.push(p); this.newTalent = p; }
+    }
   }
   recordService(satisfaction, payment) { this.stats.served++; this.stats.sum += satisfaction; this.stats.earn += payment; this.today.served++; this.today.earn += payment; }
-  toJSON() { return { id: this.id, site: this.site, wishes: this.wishes || 0, easyUntil: this.easyUntil || 0, rank: this.rank, role: this.role, promotions: this.promotions, certs: this.certs, bonusDays: this.bonusDays || [], loyalty: this.loyalty, talkDay: this.talkDay, lastStress: this.lastStress, grudge: this.grudge, persuaded: this.persuaded, raises: this.raises, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
+  toJSON() { return { talents: this.talents, perk: this.perk, id: this.id, site: this.site, wishes: this.wishes || 0, easyUntil: this.easyUntil || 0, rank: this.rank, role: this.role, promotions: this.promotions, certs: this.certs, bonusDays: this.bonusDays || [], loyalty: this.loyalty, talkDay: this.talkDay, lastStress: this.lastStress, grudge: this.grudge, persuaded: this.persuaded, raises: this.raises, skills: this.skills, experience: this.experience, level: this.level, hired: this.hired, stats: this.stats, stress: this.stress, leaveFrom: this.leaveFrom, leaveTo: this.leaveTo, daysEmployed: this.daysEmployed }; }
   restore(data) {
     // Someone who has never worked here keeps today's skills, so balance changes reach older saves too.
     const worked = data.hired || data.level > 1 || data.experience > 0 || (data.stats && data.stats.served > 0);
@@ -101,7 +115,7 @@ export class Employee {
     // Fields added later default to a settled, rested stylist.
     if (data.site !== undefined) this.site = data.site;
     if (data.rank) Object.assign(this, { rank: data.rank, role: data.role || this.role }); this.promotions = data.promotions || 0; this.certs = data.certs || []; this.baseSalary = Math.round(this.defSalary * PROMO_PAY ** this.promotions);
-    this.wishes = data.wishes || 0; this.easyUntil = data.easyUntil || 0;
+    this.wishes = data.wishes || 0; this.easyUntil = data.easyUntil || 0; this.talents = data.talents || []; if (data.perk && worked) this.perk = data.perk;
     this.bonusDays = data.bonusDays || []; this.loyalty = data.loyalty || 0; this.talkDay = data.talkDay ?? -99; this.lastStress = data.lastStress || null;
     this.grudge = data.grudge || 0; this.persuaded = data.persuaded || 0; this.raises = data.raises || 0; this.salary = Math.round(this.baseSalary * RAISE ** this.raises);
     Object.assign(this, { stress: data.stress || 0, leaveFrom: data.leaveFrom || 0, leaveTo: data.leaveTo || 0, daysEmployed: data.daysEmployed ?? 99 });

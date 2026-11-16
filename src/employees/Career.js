@@ -2,17 +2,18 @@
  * Careers: promotion up the grades (junior, designer, senior, master) once a stylist has the level, the clients and
  * the results, and certificates from short courses that each add one skill or one thing they do better.
  */
-export const RANKS = ['junior', 'designer', 'senior', 'master'];
+export const RANKS = ['junior', 'designer', 'senior', 'master', 'deputy'];
 /** What each promotion asks for: the level, clients served, and average client satisfaction. */
 export const PROMOTION = {
   designer: { level: 4, served: 40, satisfaction: .7 },
   senior: { level: 7, served: 150, satisfaction: .78 },
   master: { level: 10, served: 350, satisfaction: .85 },
+  deputy: { level: 10, served: 600, satisfaction: .9 },
 };
 /** A promotion's rewards: a raise in base pay, relief, and more reason to stay. */
 export const PROMO_PAY = 1.2, PROMO_RELIEF = 20, PROMO_LOYALTY = 5;
-export const ROLE_OF = { junior: 'Junior Designer', designer: 'Designer', senior: 'Senior Designer', master: 'Master Designer' };
-export const nextRank = e => RANKS[RANKS.indexOf(e.rank || 'designer') + 1] || null;
+export const ROLE_OF = { junior: 'Junior Designer', designer: 'Designer', senior: 'Senior Designer', master: 'Master Designer', deputy: 'Deputy Director' };
+export const nextRank = e => e.id === 'owner' || !RANKS.includes(e.rank) ? null : RANKS[RANKS.indexOf(e.rank) + 1] || null;
 /** How far a stylist is from their next promotion: each requirement as [have, need], and whether all are met. */
 export function promotionStatus(e) {
   const to = nextRank(e); if (!to) return null;

@@ -1,11 +1,12 @@
+import { REFERENCE_SHAPES } from './ReferenceCuts.js';
 import { STR, NS } from './strands.js';
 import { hexLab, labMix, labDist } from '../rendering/color.js';
 import { gauss, clamp, lerp } from '../core/math.js';
 
 /* ================= salon rules: cut, colour, wave ================= */
-export const SHAPES=['Blunt','Layered','A-line','Undercut','Hush','Hime','Wolf','Dandy','Crop','Ivy'];
+export const SHAPES=['Blunt','Layered','A-line','Undercut','Hush','Hime','Wolf','Dandy','Crop','Ivy',...Object.keys(REFERENCE_SHAPES)];
 export const WAVES=['Straight','Wavy','Curly','Coily'];
-export function profile(shape,L){return STR.map(s=>{const z=s.z;switch(shape){case'Layered':return L*[1,.86,.72,.58][z];case'A-line':return L*[.72,.84,1,1][z];case'Undercut':return(z===1||z===2)?1.5:L*(z===3?.9:1);
+export function profile(shape,L){if(REFERENCE_SHAPES[shape])return REFERENCE_SHAPES[shape].profile(L,STR);return STR.map(s=>{const z=s.z;switch(shape){case'Layered':return L*[1,.86,.72,.58][z];case'A-line':return L*[.72,.84,1,1][z];case'Undercut':return(z===1||z===2)?1.5:L*(z===3?.9:1);
   // soft layers that frame the face; sidelocks at the cheek; a shaggy top over a long back; a fringe-led men's cut; a short textured crop; short sides with a side part
   case'Hush':return L*[1,.84,.66,.5][z];case'Hime':return L*[1,1,.5,.5][z];case'Wolf':return L*[1,.7,.5,.42][z];case'Dandy':return L*[.85,.85,.85,1][z];case'Crop':return L*[.7,.55,.55,.8][z];case'Ivy':return(z===1||z===2)?3:L*(z===3?1:.7);default:return L;}});}
 export const DYES=[['Jet Black',0x1a1410],['Dark Brown',0x3b2618],['Chestnut',0x6a3f25],['Caramel',0x9a6436],['Copper',0xc25a26],['Auburn',0x8e2f1c],['Golden',0xd9ad62],['Ash',0xc9bfa4],['Platinum',0xece6dc],['Silver',0xb9b9c2],['Rose',0xe07aa0],['Violet',0x6f3fa8],['Ocean',0x2c6fb8],['Teal',0x1e9c94],['Cherry',0xb8203a],['Lilac',0xc4a8e6],['Beige',0xc9ab8a],['Mocha',0x5c3d2c],['Khaki',0x6b6a52]].map(([n,h])=>({n,h,lab:hexLab(h)}));

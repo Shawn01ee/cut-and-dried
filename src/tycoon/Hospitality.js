@@ -16,10 +16,10 @@ export const satisfactionFloor = points => points > 0 ? Math.min(.6, .3 + points
 
 /** What the salon offers clients while they wait, and what it costs. */
 export class Hospitality {
-  constructor(economy, layout) { this.economy = economy; this.layout = layout; this.offered = new Set(); this.version = 0; }
+  constructor(economy, layout) { this.economy = economy; this.layout = layout; this.offered = new Set(); this.version = 0; this.extra = 0; }
   available(id) { const needs = AMENITIES[id].needs; return !needs || this.layout.items.some(it => needs.includes(it.id)); }
   /** A lounge cafe makes the whole wait nicer, on top of whatever is offered. */
-  get bonus() { return this.layout.items.some(it => it.id === 'cafeBar') ? 1 : 0; }
+  get bonus() { return (this.layout.items.some(it => it.id === 'cafeBar') ? 1 : 0) + this.extra; }
   isOffered(id) { return this.offered.has(id); }
   toggle(id) { if (!AMENITIES[id]) return; if (this.offered.has(id)) this.offered.delete(id); else this.offered.add(id); this.version++; }
   get serving() { return [...this.offered].filter(id => this.available(id)); }

@@ -19,17 +19,35 @@ export const OCCASION_PAY = 1.5, OCCASION_NEED = .85, OCCASION_HEARTS = 2;
 export const CHAPTER_VISITS = [2, 4, 6, 8];
 /** A story seen to its end: a thank-you gift, and they stay whatever the rival does. */
 export const STORY_GIFT = 300;
-/** Days between a regular's visits, at least. */
+/** Days between a regular's visits, at least; and between two chapters of a story, so that it has time to happen. */
 const VISIT_GAP = 2;
+export const CHAPTER_DAYS = 6;
 
 /** Each story has four chapters; some chapters are a special day, one may send a friend. */
 export const STORIES = {
-  wedding: [{}, {}, {}, { occasion: 'wedding' }],
-  job: [{}, {}, { occasion: 'interview' }, {}],
-  student: [{}, {}, { occasion: 'graduation' }, {}],
-  band: [{}, {}, { occasion: 'gig' }, {}],
-  newcomer: [{}, {}, { friend: true }, {}],
-  parent: [{}, {}, {}, { occasion: 'photo' }],
+  double: [{}, {}, { occasion: 'shoot' }, {}],
+  groomer: [{}, {}, { occasion: 'dogShow' }, {}],
+  barista: [{}, { friend: true }, {}, { occasion: 'final' }],
+  grandma: [{}, {}, {}, { occasion: 'reunion' }],
+  novelist: [{}, {}, {}, { occasion: 'launch' }],
+  magician: [{}, {}, { occasion: 'stage' }, {}],
+  foodtruck: [{}, { friend: true }, {}, { occasion: 'festival' }],
+  model: [{}, {}, { occasion: 'photoshoot' }, {}],
+};
+/**
+ * What each story leaves behind when it ends, on top of the thank-you gift: followers, reputation, a few days of
+ * extra clients ([×, days]), a permanent hospitality point, a skill for the stylist they like, calmer staff, or
+ * points at the next hair contest.
+ */
+export const STORY_REWARDS = {
+  double: { followers: 300, boost: [1.15, 7] },
+  groomer: { followers: 400 },
+  barista: { hospitality: 1 },
+  grandma: { skill: ['cutting', 5] },
+  novelist: { rep: 3, followers: 200 },
+  magician: { boost: [1.25, 3] },
+  foodtruck: { calm: 15 },
+  model: { contest: 6 },
 };
 
 /** The chance a walk-in is someone from the book, which grows as the book fills. */
@@ -57,8 +75,8 @@ export class RegularBook {
     if (!free.length) return null;
     const e = pick(free); e.visits++; e.gap = day - e.lastDay; e.lastDay = day;
     const next = e.chapter + 1, story = STORIES[e.story];
-    const chapter = next < story.length && e.visits >= CHAPTER_VISITS[next] && e.hearts >= next + 1 ? next : null;
-    if (chapter != null) e.chapter = chapter;
+    const chapter = next < story.length && e.visits >= CHAPTER_VISITS[next] && e.hearts >= next + 1 && day - (e.chapterDay ?? -CHAPTER_DAYS) >= CHAPTER_DAYS ? next : null;
+    if (chapter != null) { e.chapter = chapter; e.chapterDay = day; }
     this.version++;
     return { entry: e, chapter, occasion: chapter != null ? story[chapter].occasion || null : null, friend: chapter != null && !!story[chapter].friend };
   }
@@ -96,5 +114,6 @@ export class RegularBook {
   get lifelong() { return this.entries.filter(e => e.lifelong).length; }
 
   toJSON() { return { entries: this.entries, nextId: this.nextId, stories: this.stories }; }
-  restore(d) { if (!d) return; this.entries = (d.entries || []).filter(e => STORIES[e.story]); this.nextId = d.nextId || this.entries.length + 1; this.stories = d.stories || 0; this.version++; }
+  // A story from an older version starts over as one of today's.
+  restore(d) { if (!d) return; this.entries = (d.entries || []).map(e => STORIES[e.story] ? e : { ...e, story: pick(Object.keys(STORIES)), chapter: -1, lifelong: false }); this.nextId = d.nextId || this.entries.length + 1; this.stories = d.stories || 0; this.version++; }
 }
