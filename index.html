@@ -24,7 +24,11 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0b14;font-family:va
 #hud .srv td:first-child{color:#ffd98a}
 #hud .foot{margin-top:3px;border-top:1px solid #45404f;padding-top:2px;color:#dcd9dc}
 .dim{color:#9c98a2}.gold{color:#ffd98a}.good{color:#8fc25a}.bad{color:#ff7a3d}
-#ctrl{position:fixed;right:8px;top:8px;display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:210px}
+#ctrl{position:fixed;right:8px;top:8px;display:grid;gap:4px;width:222px}
+.cgrp{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:3px;padding:3px;background:rgba(13,11,20,.6);border:1px solid #2a2433;border-radius:4px}
+.cgrp button{width:100%;min-width:0;height:28px;padding:0 2px;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden}
+#notify{position:fixed;right:8px;z-index:7;width:min(320px,calc(100vw - 16px));box-sizing:border-box;display:none;padding:8px 10px;font-size:13px}#notify.show{display:block}
+#notify .brow+.dim{margin:-2px 0 6px}
 button{font-family:var(--f);font-size:17px;line-height:1;background:#2e2a38;color:#f6f3ee;border:2px solid #5f5a68;padding:4px 7px;cursor:pointer;border-radius:0}
 button:active{transform:translateY(1px)}
 button.on{background:#8a2d3b;border-color:#ff7a3d}
@@ -84,7 +88,7 @@ body.inmenu #nowPlaying{display:none}
 #playlist .plist{max-height:min(46vh,380px);overflow-y:auto;margin:4px 0;scrollbar-width:thin}
 .plr{display:grid;grid-template-columns:28px 1fr auto 18px;align-items:center;gap:6px;padding:2px 0;border-bottom:1px solid #241e2f}.plr button{padding:1px 0}
 .plr.on span:nth-child(2){color:#ffd98a}.plr input{margin:0;accent-color:#ffd98a}
-body.inmenu #playlist{display:none}
+body.inmenu #playlist,body.inmenu #notify{display:none}
 #hud .hsum{display:flex;align-items:center;gap:8px;margin-top:3px;padding-top:3px;border-top:1px solid #45404f;color:#9c98a2}
 #hud .hsum span{flex:1}#hud .htog{pointer-events:auto;font-size:12px;padding:1px 6px;cursor:pointer}
 .tag.villain{border-color:#d8314a;box-shadow:0 0 0 1px #d8314a}
@@ -148,7 +152,7 @@ html[lang=ko] .hsec h3,html[lang=ko] .mhead{font-size:15px}
 html[lang=ko] .hsec li,html[lang=ko] .hsec p{font-size:13px}
 @media (min-width:880px){#panel{left:auto;width:470px;height:55vh;max-height:72vh}#hud{font-size:14px;max-width:330px}#hud h1{font-size:14px}}
 @media (min-width:880px){html[lang=ko] #hud{font-size:13px}html[lang=ko] #hud h1{font-size:13px}}
-@media (max-width:420px){#hud{font-size:14px;min-width:0;max-width:calc(100vw - 172px);box-sizing:border-box}#hud h1{font-size:12px;flex-wrap:wrap;gap:0 8px}#ctrl{max-width:150px}#ctrl button{font-size:15px;padding:3px 5px}}
+@media (max-width:420px){#hud{font-size:14px;min-width:0;max-width:calc(100vw - 172px);box-sizing:border-box}#hud h1{font-size:12px;flex-wrap:wrap;gap:0 8px}#ctrl{width:176px}.cgrp button{font-size:13px;height:26px}}
 body.closeup #hud,body.closeup #ctrl{display:none}
 #sites{position:fixed;left:50%;top:8px;transform:translateX(-50%);display:none;gap:3px;padding:3px}
 #sites.show{display:flex}
@@ -356,11 +360,11 @@ button.on:hover:not(:disabled){background:#a3384a}
 <div id="pops"></div>
 <div id="hud" class="card"></div>
 <div id="ctrl">
-  <button id="bRotL" title="Rotate left (Q)">⟲</button><button id="bRotR" title="Rotate right (E)">⟳</button>
-  <button id="bTime" title="Time of day">☀ Auto</button>
-  <button id="bSpd" title="Speed">×1</button><button id="bAuto" class="on" title="Stylists plan and start on their own">Auto</button>
-  <button id="bZo">−</button><button id="bZi">+</button><button id="bCenter" title="">⌖</button><button id="bTrack">♪</button><button id="bSound"></button><button id="bLang"></button><button id="bHelp">?</button>
+  <div class="cgrp"><button id="bSpd" title="Speed">×1</button><button id="bAuto" class="on" title="Stylists plan and start on their own">Auto</button><button id="bTime" title="Time of day">☀ Auto</button></div>
+  <div class="cgrp"><button id="bRotL" title="Rotate left (Q)">⟲</button><button id="bRotR" title="Rotate right (E)">⟳</button><button id="bZo">−</button><button id="bZi">+</button><button id="bCenter" title="">⌖</button></div>
+  <div class="cgrp"><button id="bNotify" title="Notifications">Alerts</button><button id="bTrack">♪</button><button id="bSound"></button><button id="bLang"></button><button id="bHelp">?</button></div>
 </div>
+<div id="notify" class="card"></div>
 <div id="sites" class="card"></div><div id="branchCard" class="card"></div><div id="incident" class="card"></div>
 <div id="panel" class="card"><div id="tabs"></div><div id="pnav" hidden></div><div id="pbody"></div></div>
 
