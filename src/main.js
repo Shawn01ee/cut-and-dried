@@ -8,6 +8,7 @@ import { SUPPLY_PENALTY } from './tycoon/Brand.js';
 import { STEPS } from './tycoon/Onboarding.js';
 import { OwnerRoutine } from './scene/OwnerRoutine.js';
 import { Toasts } from './ui/Toasts.js';
+import { NotifySettings } from './ui/NotifySettings.js';
 import { LightRig } from './rendering/LightRig.js';
 import { concernOf } from './employees/Welfare.js';
 import { ORDERS as HQ_ORDERS, TRUST as HQ_TRUST } from './tycoon/Headquarters.js';
@@ -868,7 +869,9 @@ const pops=[];
 /** A floating note. Routine ones (`quiet`, or no class) are skipped while five are already up or when their subject is out of sight. */
 /** Salon-wide notes in one fixed column at the top (see Toasts). */
 const toasts=new Toasts(document.body);
-function popup(text,obj,cls,quiet){if(obj===recep.head||obj===recep2.head){toasts.show(text,cls==='big'?'':'quiet');return;}if((quiet||!cls)&&(pops.length>=5||!inView(obj)))return;const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:cls==='big'?4.2:2.6,w:null,h:null});}
+/** What the player has chosen to see (see NotifySettings); the chat switch is the same one as in the menu. */
+const notify=new NotifySettings({chat:chatOn,onChat:on=>{chatOn=on;try{localStorage.setItem('cd.chat',on?'1':'0');}catch{/* private mode */}if(!on)bubbles.splice(0).forEach(b=>b.el.remove());}});
+function popup(text,obj,cls,quiet){const salon=obj===recep.head||obj===recep2.head,kind=cls==='big'&&!quiet?(salon?'news':'people'):'minor';if(!notify.allows(kind))return;if(salon){toasts.show(text,cls==='big'?'':'quiet');return;}if((quiet||!cls)&&(pops.length>=5||!inView(obj)))return;const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:cls==='big'?4.2:2.6,w:null,h:null});}
 const _p=V();
 function screenOf(v){_p.copy(v).project(cam);return [(_p.x+1)/2*W*PIX+camOff.x*PIX,(1-_p.y)/2*H*PIX-camOff.y*PIX];}
 /** True when a point is on screen and not under the HUD or the panel. */
@@ -1075,7 +1078,7 @@ addEventListener('keydown',e=>{const K={KeyQ:'q',KeyE:'e',KeyR:'r',Escape:'escap
   if(K==='q')camK--;if(K==='e')camK++;});
 const TM=['auto','day','dusk','night'];
 function syncCtrl(){$('#bTime').textContent=tx('time.'+timeMode);$('#bSpd').textContent='×'+speed;$('#bSpd').classList.toggle('on',speed>1);
-  $('#bAuto').disabled=game.network.executive;$('#bAuto').textContent=tx('ctl.auto');$('#bAuto').classList.toggle('on',autoOn);$('#bLang').textContent=tx('ctl.lang');$('#bSound').textContent=tx('ctl.sound');$('#bSound').classList.toggle('on',!audio.muted);
+  $('#bAuto').disabled=game.network.executive;$('#bAuto').textContent=tx('ctl.auto');$('#bAuto').classList.toggle('on',autoOn);$('#bLang').textContent=tx('ctl.lang');$('#bNotify').title=tx('nt.title');$('#bNotify').textContent=tx('ctl.notify');$('#bSound').textContent=tx('ctl.sound');$('#bSound').classList.toggle('on',!audio.muted);
   [['bRotL','rotL'],['bRotR','rotR'],['bTime','time'],['bSpd','spd'],['bAuto','auto'],['bHelp','help'],['bLang','lang'],['bSound','sound']].forEach(([i,k])=>$('#'+i).title=tx('tt.'+k));}
 function setAuto(on){autoOn=game.network.executive||on;syncCtrl();renderPanel(true);}
 function setLang(l){i18n.lang=l;document.documentElement.lang=l;try{localStorage.setItem('cd-lang',l);}catch(e){}syncCtrl();updateHud();renderPanel(true);renderSites();if(!$('#menu').classList.contains('hide'))renderMenu();}
@@ -1097,6 +1100,9 @@ function renderPlaylist(){const el=$('#playlist'),cur=audio.trackId,custom=audio
   <div class="seg">${['auto','order','repeat'].map(k=>`<button data-pl="mode.${k}" class="${audio.mode===k?'sel':''}">${tx('pl.mode.'+k)}</button>`).join('')}</div><div class="dim">${tx('pl.modeD.'+audio.mode)}</div>
   <div class="plist">${audio.tracks.filter(t=>custom||t.inList).map(t=>`<div class="plr ${t.id===cur?'on':''}"><button data-pl="play.${t.id}" title="${tx('pl.play')}">${t.id===cur?'♪':'▶'}</button><span>${tx('mu.'+t.id)}</span><span class="dim">${tx('pl.e.'+t.energy)} · ${t.tempo}</span>${custom?`<input type="checkbox" data-pl="use.${t.id}" ${t.enabled?'checked':''} title="${tx('pl.use')}">`:'<i></i>'}</div>`).join('')}</div>
   <div class="brow"><span class="dim">${tx('pl.note')}</span><span class="sp"></span><button data-pl="next">${tx('m.nextTrack')}</button></div>`;}
+$('#bNotify').onclick=()=>{const el=$('#notify');el.classList.toggle('show');if(el.classList.contains('show'))renderNotify();};
+function renderNotify(){const el=$('#notify');el.style.top=($('#ctrl').getBoundingClientRect().bottom+6)+'px';el.innerHTML=notify.html(tx);}
+$('#notify').onclick=ev=>{const b=ev.target.closest('[data-nt]');if(!b)return;const v=b.dataset.nt;if(v==='close'){$('#notify').classList.remove('show');return;}const [k,on]=v.split('.');notify.set(k,on==='1');renderNotify();renderMenu();};
 $('#bTrack').onclick=()=>{const el=$('#playlist');el.classList.toggle('show');if(el.classList.contains('show'))renderPlaylist();};
 $('#playlist').addEventListener('click',e=>{const b=e.target.closest('[data-pl]');if(!b)return;const [a,v]=b.dataset.pl.split('.');
   if(a==='close')$('#playlist').classList.remove('show');
@@ -1334,7 +1340,7 @@ mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)r
   else if(a==='back'){if(menuFrom==='game'){paused=false;closeMenu();}else openMenu('main','main');}
   else if(a==='lang')setLang(v);
   else if(a==='hrs'){game.shiftHours(v[0]==='o'?0:1,v[1]==='+'?1:-1);renderMenu();}
-  else{if(a==='mode')setAuto(v==='auto');if(a==='time')timeMode=v;if(a==='spd')speed=+v;if(a==='chat'){chatOn=v==='1';try{localStorage.setItem('cd.chat',v);}catch{/* private mode */}if(!chatOn)bubbles.splice(0).forEach(b=>b.el.remove());}syncCtrl();renderMenu();}});
+  else{if(a==='mode')setAuto(v==='auto');if(a==='time')timeMode=v;if(a==='spd')speed=+v;if(a==='chat')notify.set('chat',v==='1');syncCtrl();renderMenu();}});
 mbox.addEventListener('input',e=>{const k=e.target.dataset.vol;if(k)audio.setVolume(k,+e.target.value/100);});
 addEventListener('click',e=>{if(e.target.closest('button'))audio.play('click');});
 function boot(){const fonts=document.fonts?Promise.all([document.fonts.load('16px VT323'),document.fonts.load('14px Silkscreen'),document.fonts.load('13px Galmuri11','가')]):Promise.resolve();
