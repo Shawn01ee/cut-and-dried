@@ -55,7 +55,7 @@ export class RegularBook {
     if (Math.random() >= returnChance(this.entries.length)) return null;
     const free = this.entries.filter(e => e.site === site && day - e.lastDay >= VISIT_GAP && !inside.has(e.name));
     if (!free.length) return null;
-    const e = pick(free); e.visits++; e.lastDay = day;
+    const e = pick(free); e.visits++; e.gap = day - e.lastDay; e.lastDay = day;
     const next = e.chapter + 1, story = STORIES[e.story];
     const chapter = next < story.length && e.visits >= CHAPTER_VISITS[next] && e.hearts >= next + 1 ? next : null;
     if (chapter != null) e.chapter = chapter;

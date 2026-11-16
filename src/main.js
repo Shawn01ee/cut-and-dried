@@ -101,6 +101,8 @@ const MC={};const M=h=>MC[h]||(MC[h]=new THREE.MeshLambertMaterial({color:h}));
 const VCMAT=new THREE.MeshLambertMaterial({vertexColors:true});
 const GLASS=new THREE.MeshLambertMaterial({color:0x7fb6f0,transparent:true,opacity:0.45,emissive:0xffd98a,emissiveIntensity:0});
 const LAMP=new THREE.MeshLambertMaterial({color:0xfff1c4,emissive:0xffd98a,emissiveIntensity:0});
+// street lamps light up at dusk; the salon's own lamps whenever it is open
+const STREET=LAMP.clone();
 const HAIRMAT=new THREE.MeshLambertMaterial({color:0xffffff});
 const noRay=()=>{};
 class SB{constructor(){this.p=[];this.n=[];this.c=[];}
@@ -140,7 +142,7 @@ S.box(.24,.16,.24,0x45404f,-1.2,.08,3.4).box(.18,.12,.18,0xbdb9c0,-1.2,1.72,3.4)
 const salonMesh=S.build();
 
 // lamp heads (emissive)
-[[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{const m=new THREE.Mesh(BOX,LAMP);m.scale.set(.22,.12,.22);m.position.set(x,3.22,z);world.add(m);extras.push(m);});
+[[-3.7,4.5],[4.3,3.7]].forEach(([x,z])=>{const m=new THREE.Mesh(BOX,STREET);m.scale.set(.22,.12,.22);m.position.set(x,3.22,z);world.add(m);extras.push(m);});
 
 /* walls with cutaway */
 // Greige plaster walls, steel window frames and a warm cove light along the top, after the real Ciel Ground.
@@ -256,7 +258,7 @@ function updateSnowCover(){const T=game.layout.tier,bt=game.layout.branchTier;[[
 const indoors=p=>salonRects().some(b=>p.x>b.x0&&p.x<b.x1&&p.z>b.z0&&p.z<b.z1);
 const UMBRELLAS=[0x1d1a26,0x2a4478,0xd8314a,0xffd98a,0x1fa39a,0xe25c8f,0xf6f3ee,0x8a4fc2];
 world.add(rainMesh,snowMesh,...snowCover);
-const clips=[];let clipHead=0,vacT=0;const _m4=new THREE.Matrix4(),_q=new THREE.Quaternion(),_s=V(),_c=new THREE.Color();
+const clips=[];let clipHead=0;const _m4=new THREE.Matrix4(),_q=new THREE.Quaternion(),_s=V(),_c=new THREE.Color();
 for(let i=0;i<NC;i++){clipMesh.setColorAt(i,_c.set(0));}
 function spawnClip(p,lab){const [r,g,b]=lab2lin(lab.L,lab.a,lab.b);const o={p:p.clone(),v:V(rand(-.25,.25),rand(0,.3),rand(-.25,.25)),landed:false,alive:true,ry:rand(0,3)};
   if(clips.length<NC)clips.push(o);else{clips[clipHead]=o;clipHead=(clipHead+1)%NC;}const i=clips.indexOf(o);clipMesh.setColorAt(i,_c.setRGB(r,g,b,THREE.LinearSRGBColorSpace));clipMesh.instanceColor.needsUpdate=true;}
@@ -424,7 +426,7 @@ function spawnCustomer(o={}){
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(D.street);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');arrivalNews(c,o);
-  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.clock.isOpen){leave(c,'full');return;}audio.play('chime');
+  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.accepting){leave(c,'full');return;}audio.play('chime');
     if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}greetAt(c,site);const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
     seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
@@ -473,8 +475,8 @@ function whyCame(){const A=game.demandParts.add,w=[['walk',A.walk],['rep',A.rep*
   let r=Math.random()*w.reduce((n,x)=>n+x[1],0);return (w.find(x=>(r-=x[1])<0)||w[0])[0];}
 /** At the door: the desk says hello and the client says why they came. */
 function greetAt(c,site){if(c.villain||c.special||bubbles.length>=3||Math.random()>.6)return;const desk=game.staff.receptionistAt(site).hired?deskFig(site):null;
-  if(desk)say(desk,line(c.regular?'greetRegular':'greet',{n:nm(c.name)}),true);
-  later(desk?1.4:.3,()=>say(c.fig,c.regular?line('regularHello'):line('src.'+(c.influencer?'insta':whyCame())),false));}
+  const away=c.regular&&(c.regular.gap||0)>=21?'.long':'';if(desk)say(desk,line(c.regular?'greetRegular'+away:'greet',{n:nm(c.name)}),true);
+  later(desk?1.4:.3,()=>say(c.fig,c.regular?line('regularHello'+away):line('src.'+(c.influencer?'insta':whyCame())),false));}
 /** The consultation: the client asks in their own words, the stylist answers. A special day is said as it is. */
 function consultTalk(st,c){if(st.cust!==c||c.villain)return;const o=c.order,mean=c.hair.len.reduce((a,b)=>a+b,0)/c.hair.len.length;let ask=null;
   if(c.occasion&&c.regular&&c.chapter!=null){ask=tx('story.'+c.regular.story+'.'+c.chapter);c.storyTold=true;}
@@ -487,19 +489,24 @@ function consultTalk(st,c){if(st.cust!==c||c.villain)return;const o=c.order,mean
 function smallTalk(st,dt){const c=st.cust;if(!c||c.villain)return;st.talkT=(st.talkT??rand(4,8))-dt;if(st.talkT>0)return;st.talkT=rand(14,24);const sf=(st.worker||st.sty).fig;
   if(c.regular&&c.chapter!=null&&!c.storyTold){c.storyTold=true;chat(sf,true,[line('reg.ask',{n:nm(c.name)}),tx('story.'+c.regular.story+'.'+c.chapter)],c.fig);return;}
   if(Math.random()<.45||bubbles.length>=3)return;const r=Math.random(),wx=line('talk.'+game.weather),ev=line('talk.'+decorThemeOf(game.clock.day));
-  if(r<.3&&wx)chat(sf,true,wx,c.fig);else if(r<.55&&ev)chat(sf,true,ev,c.fig);else if(r<.75)chat(c.fig,false,line('talkc.any'),sf);else chat(sf,true,line('talk.any'),c.fig);}
+  if(r<.3&&wx)chat(sf,true,wx,c.fig);else if(r<.55&&ev)chat(sf,true,ev,c.fig);else if(r<.75){const d=game.clock.day,age=d<=21?line('talkc.new',{x:d}):d>=180?line('talkc.old',{x:Math.floor(d/30)}):null;chat(c.fig,false,age&&Math.random()<.4&&!c.regular?age:line('talkc.any'),sf);}else chat(sf,true,line('talk.any'),c.fig);}
 /** The client's first words on seeing the result: delight, or what exactly is off (length, colour or curl). */
 function reaction(c,sc){const s=sc.all,tier=s>=.88?'love':s>=.75?'good':s>=.6?'meh':'bad',head=line('react.'+tier);if(tier==='love'||tier==='good')return head;
   const o=c.order,h=c.hair,wf=1-.12*h.wave,tp=profile(o.shape,o.L),bias=h.len.reduce((a,l,j)=>a+l*wf-tp[j],0)/h.len.length,worst=[['cut',sc.cut],['col',sc.col],['wav',sc.wav]].sort((a,b)=>a[1]-b[1])[0][0];
   const def=worst==='cut'?(bias<0?'def.short':'def.long'):worst==='col'?(Math.abs(h.lab.L-o.lab.L)>.04?(h.lab.L<o.lab.L?'def.dark':'def.light'):'def.tone'):(h.wave>o.wave?'def.curly':'def.flat');return head+' '+line(def);}
 /** Paying up: the desk thanks them (minding the weather), and they say goodbye as their visit went. */
 function farewell(c,sc){if(c.villain||Math.random()>.7)return;const site=c.site||0,desk=game.staff.receptionistAt(site).hired?deskFig(site):null;
-  if(desk)say(desk,line(['rain','storm','snow'].includes(game.weather)?'desk.byeRain':Math.random()<.4?'pay.desk':'desk.bye'),true);later(desk?1.3:.2,()=>say(c.fig,line(sc.all>=.6?'bye.happy':'bye.sad'),false));}
+  if(desk)say(desk,line(game.weather==='snow'?'desk.byeSnow':['rain','storm'].includes(game.weather)?'desk.byeRain':Math.random()<.4?'pay.desk':'desk.bye'),true);later(desk?1.3:.2,()=>say(c.fig,line(sc.all>=.6?'bye.happy':'bye.sad'),false));}
 /** A long wait: the client asks how long, the desk apologises. Once a visit. */
 function grumble(c){if(c.grumbled||c.villain||c.pat>=c.maxPat*.3)return;c.grumbled=true;if(Math.random()>.6)return;say(c.fig,line('wait.long'),false);const site=c.site||0;if(game.staff.receptionistAt(site).hired)later(1.4,()=>say(deskFig(site),line('wait.sorry'),true));}
 /** Two stylists with no client chat between jobs. */
+/** What two free stylists talk about: a quiet salon, lunch before one, a colour or perms done today, or small things. */
+const doneToday={colour:0,perm:0,day:0};
+function idleTopic(site){if(doneToday.day!==game.clock.day)Object.assign(doneToday,{colour:0,perm:0,day:game.clock.day});
+  const opts=['staff.idle'];if(!queue.some(q=>q.state==='wait'&&(q.site||0)===site))opts.push('staff.quiet');if(game.clock.hour<13)opts.push('staff.lunch');if(doneToday.colour)opts.push('staff.colour');if(doneToday.perm>=2)opts.push('staff.perm');
+  return opts[Math.floor(Math.random()*opts.length)];}
 let idleT=20;function idleChat(dt){idleT-=dt;if(idleT>0)return;idleT=rand(25,45);if(!game.clock.isOpen||bubbles.length>=2)return;const free=stations.filter(s=>!s.vacant&&s.state==='free'&&!s.sweep&&s.sty.restUntil<=simT);
-  for(const site of [0,1]){const here=free.filter(s=>siteOf(s.item.x)===site);if(here.length>=2){const [a,b]=here.sort(()=>Math.random()-.5),cold=a.sty.trait&&b.sty.trait&&game.staff.relation(a.sty,b.sty)<=-25;chat(a.sty.fig,true,line(cold?'staff.cold':'staff.idle'),b.sty.fig,true);if(!cold)game.staff.bond(a.sty,b.sty,1);return;}}}
+  for(const site of [0,1]){const here=free.filter(s=>siteOf(s.item.x)===site);if(here.length>=2){const [a,b]=here.sort(()=>Math.random()-.5),cold=a.sty.trait&&b.sty.trait&&game.staff.relation(a.sty,b.sty)<=-25;chat(a.sty.fig,true,line(cold?'staff.cold':idleTopic(site)),b.sty.fig,true);if(!cold)game.staff.bond(a.sty,b.sty,1);return;}}}
 /** Which salon a new client walks into: in proportion to the stylists at each salon's chairs. */
 function pickSite(){if(!game.layout.branchOpen)return 0;const w=[0,1].map(s=>stations.filter(st=>!st.vacant&&siteOf(st.item.x)===s).length),t=w[0]+w[1];return t&&Math.random()*t>=w[0]?1:0;}
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
@@ -584,7 +591,7 @@ function runOps(st,dt){const op=st.ops[st.opi],c=st.cust,h=c.hair,sf=st.worker.f
 const WORDS=[[.9,'w0'],[.75,'w1'],[.55,'w2'],[.35,'w3'],[0,'w4']];
 let last=null;
 function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.setTool(null);sf.handL=sf.handR=null;
-  const sc=game.completeService(c,s,st.byOwner);c.result=sc;
+  const sc=game.completeService(c,s,st.byOwner);c.result=sc;if(doneToday.day!==game.clock.day)Object.assign(doneToday,{colour:0,perm:0,day:game.clock.day});if(c.order.col.t==='want')doneToday.colour++;if(c.order.perm)doneToday.perm++;
   last={name:c.name,sty:s.name,all:sc.all,mins:(simT-c.tStart)/60};
   sf.walkTo([st.at(-.55,1.15)],()=>{sf.yaw=st.face-Math.PI*.2;});
   c.fig.walkTo([st.at(.55,1.2)],()=>{c.fig.yaw=st.face;audio.play(sc.all>=.6?'happy':'sad');
@@ -596,7 +603,11 @@ function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.se
   if(sel===st.i)renderPanel(true);}
 /** Paying at the desk. Difficult clients may haggle, demand a refund or run off without paying. */
 function checkout(c,sc){const pay=sc.payment,head=c.fig.head;
-  const settle=(amount,outcome={})=>{if(amount>0){game.receivePayment(amount);audio.play('cash');popup('+$'+amount,head,'big',true);farewell(c,sc);}
+  const settle=(amount,outcome={})=>{if(amount>0){game.receivePayment(amount);audio.play('cash');popup('+$'+amount,head,'big',true);const b=!c.villain&&!c.influencer?game.brandSale(sc.all):null;
+      // a brand sale at the desk: the pitch, the yes, then the goodbye
+      if(b){const site=c.site||0,desk=game.staff.receptionistAt(site).hired?deskFig(site):null;if(desk)say(desk,tx('brand.pitch',tx('pt.'+b.type)),true);
+        later(desk?1.4:.2,()=>{say(c.fig,tx('brand.buy'),false);popup('+$'+b.price+' · '+tx('pt.'+b.type),head,'',true);audio.play('cash');later(1.6,()=>farewell(c,sc));});}
+      else farewell(c,sc);}
     const r=game.finishVisit(c,sc,outcome);visitNews(c,r);const ip=r.influencerPost;if(ip)popup(tx('inf.post.'+ip.tier,ip.followers.toLocaleString(),ip.days,Math.round(ip.demand*100)),head,'big');c.state='paid';leave(c);};
   if(c.influencer){popup(tx('inf.sponsored'),recep.head,'');settle(0);return;}
   if(c.villain==='dasher'){
@@ -613,6 +624,23 @@ function clapAll(q){const n=q>.5;if(n)audio.play('clap');const who=[recep,recep2
 
 /* sweeping: assistants keep the floor clean; without them Lia does it between clients */
 const landedClips=()=>clips.filter(c=>c.alive&&c.landed);
+/** Robot vacuums: the robot leaves its dock for the nearest hair on the floor, sucks up a patch, goes on to the next and drives home. */
+const bots=new Map(),BOT_SPEED=.9,BOT_REACH=.55,BOT_PATCHES=6;
+function nearestClip(p,site){let best=null,bd=Infinity;for(const c of clips){if(!c.alive||!c.landed||siteOf(c.p.x)!==site)continue;const d=Math.hypot(c.p.x-p.x,c.p.z-p.z);if(d<bd){bd=d;best=c;}}return best;}
+function updateBots(dt){
+  for(const it of game.layout.items){if(it.id!=='robotVacuum')continue;const g=furnitureView.groupOf(it),bot=g&&g.getObjectByName('bot');if(!bot)continue;
+    let b=bots.get(it);if(!b||b.bot!==bot){b={bot,state:'dock',wait:rand(2,5),pos:null,yaw:0,path:[],n:0};bots.set(it,b);}
+    const site=siteOf(it.x),home=()=>g.localToWorld(bot.userData.home.clone()).setY(0);
+    const go=(to,state)=>{b.path=route(b.pos,to);b.state=state;};
+    if(b.state==='dock'){if((b.wait-=dt)>0)continue;const c=nearestClip(home(),site);if(!c){b.wait=rand(3,6);continue;}b.pos=home();b.yaw=g.rotation.y;b.n=0;go(V(c.p.x,0,c.p.z),'go');}
+    else if(b.state==='suck'){b.yaw+=Math.sin(simT*9)*dt*1.5;if((b.t-=dt)>0){}else{clips.forEach(c=>{if(c.alive&&c.landed&&Math.hypot(c.p.x-b.pos.x,c.p.z-b.pos.z)<BOT_REACH)c.alive=false;});
+      const c=++b.n<BOT_PATCHES&&nearestClip(b.pos,site);if(c)go(V(c.p.x,0,c.p.z),'go');else go(home(),'home');}}
+    else{const to=b.path[0];if(to){const dx=to.x-b.pos.x,dz=to.z-b.pos.z,d=Math.hypot(dx,dz),step=BOT_SPEED*dt;
+        if(d<=step){b.pos.set(to.x,0,to.z);b.path.shift();}else{b.pos.x+=dx/d*step;b.pos.z+=dz/d*step;const want=Math.atan2(dx,dz);let turn=want-b.yaw;turn=Math.atan2(Math.sin(turn),Math.cos(turn));b.yaw+=turn*Math.min(1,dt*8);}}
+      else if(b.state==='go'){b.state='suck';b.t=.9;}
+      else{bot.position.copy(bot.userData.home);bot.rotation.y=0;b.state='dock';b.wait=rand(4,8);continue;}}
+    const local=g.worldToLocal(b.pos.clone());bot.position.set(local.x,0,local.z);bot.rotation.y=b.yaw-g.rotation.y;}
+  for(const k of bots.keys())if(!game.layout.items.includes(k))bots.delete(k);}
 /** Sweeping time and reach follow `cleaning` (0 to 100); Lia and stylists sweep at 50. */
 const sweepTime=cleaning=>3.2*(1.5-cleaning/100);
 function startSweep(fig,cleaning=50){const S=siteOf(fig.pos.x),landed=landedClips().filter(c=>siteOf(c.p.x)===S);if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
@@ -761,16 +789,19 @@ const PRE={day:{sky:0x7ea2d0,sun:0xfff1c4,si:2.8,sp:V(6,12,5),hs:0xb6d2ec,hg:0xb
   dusk:{sky:0xd88a6a,sun:0xff7a3d,si:1.9,sp:V(-11,4,4),hs:0xffb15a,hg:0x5a2440,hi:.75,inI:7,spI:22,glow:.55},
   night:{sky:0x0b1530,sun:0x7ea2d0,si:.3,sp:V(-4,10,-6),hs:0x2a4478,hg:0x0d0b14,hi:.3,inI:10,spI:38,glow:1}};
 function phaseNow(){if(timeMode!=='auto')return timeMode;const d=new Date(),h=started?game.clock.hour:d.getHours()+d.getMinutes()/60;return(h>=7&&h<17.5)?'day':((h>=17.5&&h<19.5)||(h>=5.5&&h<7))?'dusk':'night';}
-const L={sky:new THREE.Color(0x7ea2d0),sun:new THREE.Color(0xfff1c4),si:2.8,sp:V(6,12,5),hs:new THREE.Color(0xb6d2ec),hg:new THREE.Color(0x5f9e45),hi:1.1,inI:0,spI:0,glow:0};
+const L={sky:new THREE.Color(0x7ea2d0),sun:new THREE.Color(0xfff1c4),si:2.8,sp:V(6,12,5),hs:new THREE.Color(0xb6d2ec),hg:new THREE.Color(0x5f9e45),hi:1.1,inI:0,spI:0,glow:0,shop:0};
+/** While the salon is open its lights are on, brighter the greyer the sky: [ceiling light, lamp glow] at a clear and at the darkest sky. */
+const SHOP_LIT={inI:[2.5,7],glow:[.3,.8]};
 const _ca=new THREE.Color(),_cb=new THREE.Color();
 /** How each kind of weather greys the sky and dims the sun. */
 const SKY_WX={sunny:[0,1],cloudy:[.45,.65],rain:[.6,.5],storm:[.8,.3],heat:[0,1.15],cold:[.25,.8],snow:[.5,.7]};
 function updateLights(dt){const P=PRE[phaseNow()],k=Math.min(1,dt*1.5),[grey,sunK]=started&&!game.dayOff?SKY_WX[game.weather]||[0,1]:[0,1];
   _ca.set(P.sky).lerp(_cb.set(0x6e7480),grey);L.sky.lerp(_ca,k);
   L.sun.lerp(_ca.set(P.sun),k);L.si=lerp(L.si,P.si*sunK,k);L.sp.lerp(P.sp,k);L.hs.lerp(_ca.set(P.hs),k);L.hg.lerp(_ca.set(P.hg),k);
-  L.hi=lerp(L.hi,P.hi,k);L.inI=lerp(L.inI,P.inI,k);L.spI=lerp(L.spI,P.spI+(P===PRE.day?0:0),k);L.glow=lerp(L.glow,P.glow,k);
+  const lit=started&&!game.dayOff&&(game.clock.isOpen||game.clock.after),need=K=>lit?lerp(SHOP_LIT[K][0],SHOP_LIT[K][1],Math.max(grey,1-sunK)):0;
+  L.hi=lerp(L.hi,P.hi,k);L.inI=lerp(L.inI,Math.max(P.inI,need('inI')),k);L.shop=lerp(L.shop,Math.max(P.glow,need('glow')),k);L.spI=lerp(L.spI,P.spI+(P===PRE.day?0:0),k);L.glow=lerp(L.glow,P.glow,k);
   scene.background.copy(L.sky);sun.color.copy(L.sun);sun.intensity=L.si;sun.position.copy(L.sp).normalize().multiplyScalar(30).add(camTarget);sun.target.position.copy(camTarget);hemi.color.copy(L.hs);hemi.groundColor.copy(L.hg);hemi.intensity=L.hi;
-  inLights.forEach(l=>l.intensity=L.inI);spots.forEach(s=>s.intensity=L.spI);GLASS.emissiveIntensity=L.glow*.6;LAMP.emissiveIntensity=L.glow*1.2+.05;}
+  inLights.forEach(l=>l.intensity=L.inI);spots.forEach(s=>s.intensity=L.spI);GLASS.emissiveIntensity=L.glow*.6;STREET.emissiveIntensity=L.glow*1.2+.05;LAMP.emissiveIntensity=L.shop*1.2+.05;}
 
 /* ================= seasonal decorations ================= */
 const LIT={},litMat=c=>LIT[c]||(LIT[c]=new THREE.MeshBasicMaterial({color:c}));
@@ -822,7 +853,7 @@ function updatePops(dt){if(!pops.length){popRects=[];return;}const hud=$('#hud')
 function simStep(dt){simT+=dt;
   for(let i=timers.length-1;i>=0;i--){if((timers[i].t-=dt)<=0){const f=timers[i].fn;timers.splice(i,1);f();}}
   // arrivals
-  if(game.clock.isOpen){spawnTimer-=dt;if(spawnTimer<=0){spawnCustomer();spawnTimer=game.nextArrival();}
+  if(game.accepting){spawnTimer-=dt;if(spawnTimer<=0){spawnCustomer();spawnTimer=game.nextArrival();}
     const sp=game.special;if(sp&&sp.state==='due'&&game.clock.hour>=sp.hour)spawnCustomer({special:true});
     const su=game.surprise;if(su&&su.state==='due'&&game.clock.hour>=su.hour)surpriseCard(game.triggerSurprise());
     if(referrals.length&&simT>=referrals[0].at){const f=referrals.shift();spawnCustomer({friendOf:f.name,site:f.site});}}
@@ -856,7 +887,7 @@ function simStep(dt){simT+=dt;
       if(st.state==='consult'&&st.cust){const hp=st.cust.fig.head.getWorldPosition(V());sf.handR=hp.clone().add(st.rot(V(Math.sin(simT*2)*.08,.05,.22)));}}});
   updateWashes(dt);helpersUpdate(dt);idleChat(dt);
   // a robot vacuum picks up a bit of hair at a time at its salon
-  vacT-=dt;if(vacT<=0){vacT=game.clock.hourLength/FURNITURE.robotVacuum.vacuum;[0,1].forEach(s=>{if(!game.layout.countAt('robotVacuum',s))return;const c=landedClips().find(q=>siteOf(q.p.x)===s);if(c)c.alive=false;});}
+  updateBots(dt);
   // receptionist watches the latest reveal / door
   const rv=stations.find(s=>s.state==='reveal');{const tgt=rv?rv.chair:DOOR_IN;const a=Math.atan2(tgt.x-recep.pos.x,tgt.z-recep.pos.z)-recep.yaw;recep.look=angLerp(recep.look,clamp(((a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI,-1,1),Math.min(1,dt*3));}
   // spectators look at reveals
@@ -976,7 +1007,7 @@ $('#hud').addEventListener('pointerdown',e=>{if(!e.target.closest('[data-hud]'))
 function updateHud(){game.syncMissions();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
-  $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)}(${tx('wd.'+g.weekday)}) ${(d=>d.month+'/'+d.date)(dateOf(g.clock.day))} ${tx('season.'+seasonOf(g.clock.day))} ${tx('wx.'+g.weather)} ${g.dayOff?tx('hud.off'):g.clock.timeText}</span></h1>
+  $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)}(${tx('wd.'+g.weekday)}) ${(d=>d.month+'/'+d.date)(dateOf(g.clock.day))} ${tx('season.'+seasonOf(g.clock.day))} ${tx('wx.'+g.weather)} ${g.dayOff?tx('hud.off'):g.clock.timeText+(g.clock.after?' · '+tx('hud.overtime'):!g.accepting&&g.clock.isOpen?' · '+tx('hud.lastCall'):'')}</span></h1>
   <table>${row('hud.cash',money(e.cash))}${row('hud.rep',g.reputation.starText)}${row('hud.rating',g.reviews.count?`★${g.reviews.rating.toFixed(1)} (${g.reviews.count})`:'–')}${row('hud.followers',g.marketing.followers.toLocaleString())}${row('hud.hours',`${g.clock.openHour}:00–${g.clock.closeHour}:00`)}${row('hud.cust',g.servedToday)}${row('hud.load',`${queue.length+stations.filter(s=>s.cust).length+custs.filter(q=>q.state==='process'||q.state==='ready').length} / ${stations.length+terr.length+procSeats.length}`)}${row('hud.staff',`${g.staff.hired.length+1} / ${g.layout.chairs+1}`)}${row('hud.opcost',money(-e.dailyOperatingCost))}${row('hud.profit',money(e.dailyProfit))}</table>
   ${hudChairs(stations.filter(st=>siteOf(st.item.x)===site),st=>`<tr class="${st.state==='work'?'srv':''}"><td>${st.state==='work'?'✂':st.i+1}</td><td style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</td><td class="${st.cust&&st.cust.villain?'bad':''}">${st.cust?(st.cust.special?'✦':st.cust.vip?'★':'')+(st.cust.regular?'♥':'')+nm(st.cust.name):'—'}</td><td>${st.vacant?'':stage(st)}</td><td>${m(st)}</td></tr>`)}
   ${g.special&&(g.special.state==='due'||g.special.state==='arrived')?`<div class="gold">${tx('sp.hud',g.special.hour+':00',tx('sp.'+g.special.kind),Math.round(g.special.need*100),g.special.state==='arrived'?tx('sp.here'):'')}</div>`:''}
@@ -1074,7 +1105,7 @@ function postOn(channel){const who=filmer();if(!who){popup(tx('mk.busy'),OWNER.f
     popup(r.viral?tx('mk.viralPop',name,r.views.toLocaleString()):tx('mk.postPop',name,r.views.toLocaleString(),r.gained.toLocaleString()),f.head,'big');audio.play(r.viral?'levelUp':'happy');renderPanel(true);});
   renderPanel(true);}
 /** Morning news: what the rival did overnight, and stylists who have had enough. */
-function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):k.startsWith('contest:')?tx('contest.news.'+k.slice(8),tx('contest.kind.'+game.contest.kind),tx('contest.cat.'+game.contest.category)):tx('rival.news.'+k,game.rival.name));
+function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):k.startsWith('brand:')?tx('brand.news.'+k.split(':')[1],tx('pt.'+k.split(':')[2])):k.startsWith('contest:')?tx('contest.news.'+k.slice(8),tx('contest.kind.'+game.contest.kind),tx('contest.cat.'+game.contest.category)):tx('rival.news.'+k,game.rival.name));
   // a new season, and calendar events on their first day
   if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));
@@ -1184,7 +1215,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mbtns">${game.saves.has()?`<button class="go big" data-act="start">${tx('m.continue',game.saves.load().day)}</button><button data-act="new">${tx('m.new')}</button>`:`<button class="go big" data-act="new">${tx('m.start')}</button>`}<button data-act="how">${tx('m.how')}</button><button data-act="opts">${tx('m.opts')}</button></div>`;
   else if(menuScreen==='how')h=`<div class="mhead">${tx('m.how')}</div>${HOW[i18n.lang].map(([t,b])=>`<div class="hsec"><h3>${t}</h3>${b}</div>`).join('')}<div class="mbtns side">${backBtn}</div>`;
   else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v,c)).join('');
-    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
+    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
   else if(menuScreen==='week'){const w=game.weekReport,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v.toLocaleString(),c)).join(''),usd=v=>(v<0?'−$':'$')+Math.abs(v).toLocaleString();
     const bars=profitChart(w.days,d=>tx('wd.'+((d.day-1)%7)));
     h=`<div class="mhead">${tx('week.title',w.week,w.from,w.to)}</div><div class="dim">${tx('week.sub')}</div>${bars}<table style="width:100%;border-collapse:collapse">${ledger(w.revenue,'')}${line(tx('day.totalRev'),usd(w.totalRevenue),'gold')}${ledger(w.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+w.totalOperating.toLocaleString(),'gold')}${line(tx('week.profit'),usd(w.profit),w.profit<0?'bad':'good')}${w.totalInvestment?ledger(w.investment,'−','dim'):''}${Object.keys(w.funding).length?ledger(w.funding,'+','good'):''}${line(tx('week.served'),w.served)}${line(tx('day.reviews'),w.reviews.count?tx('day.reviewsV',w.reviews.count,w.reviews.average.toFixed(1)):'–')}${line(tx('day.rep'),(w.reputation>=0?'+':'')+w.reputation.toFixed(1))}${line(tx('day.followers'),(w.followers>=0?'+':'−')+Math.abs(w.followers).toLocaleString())}</table><div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:''}<button class="${game.monthClosedToday?'':'go big'}" data-act="weekfix">${tx('week.fix')}</button><button data-act="monday">${tx('week.monday')}</button></div>`;}
@@ -1254,4 +1285,4 @@ checkForUpdate({atStart:true});
 setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update');el.querySelector('span').textContent=tx('upd.ready');el.querySelector('button').textContent=tx('upd.reload');el.classList.add('show');el.querySelector('button').onclick=()=>refreshToLatest(b);}},10*60*1000);
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,bots:()=>[...bots.values()].map(b=>({state:b.state,pos:b.pos?[+b.pos.x.toFixed(2),+b.pos.z.toFixed(2)]:null,n:b.n})),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};

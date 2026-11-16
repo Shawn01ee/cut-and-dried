@@ -1,5 +1,5 @@
 // Running costs. Everything else spent (furniture, hiring, loan repayments, the investor's share) sits below operating profit.
-const OPERATING = new Set(['rent', 'wages', 'commission', 'bonus', 'utilities', 'maintenance', 'materials', 'hospitality', 'marketing', 'fees', 'repairs', 'fine']);
+const OPERATING = new Set(['rent', 'wages', 'commission', 'bonus', 'utilities', 'maintenance', 'materials', 'hospitality', 'marketing', 'fees', 'repairs', 'fine', 'production', 'shipping', 'overtime']);
 const blankDay = () => ({ revenue: {}, expenses: {}, funding: {} });
 const pickCosts = (expenses, wanted) => Object.fromEntries(Object.entries(expenses).filter(([k]) => OPERATING.has(k) === wanted));
 

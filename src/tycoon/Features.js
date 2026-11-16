@@ -8,7 +8,7 @@ export const FEATURE_LEVEL = {
   'biz.rank': 2, 'biz.fund': 3, 'ops.menu': 2, 'ops.hours': 2, 'ops.price': 2, 'ops.treats': 2,
   'clients.regulars': 2, 'clients.special': 3,
   'build.expand': 2, 'build.branch': 4,
-  'mkt.rival': 2, 'mkt.contest': 3,
+  'mkt.rival': 2, 'mkt.contest': 3, 'mkt.brand': 4,
 };
 /** True when a salon at `level` shows the feature. */
 export const shows = (key, level) => level >= (FEATURE_LEVEL[key] || 1);
