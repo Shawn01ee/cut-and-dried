@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { $, V, UP, rand, pick, clamp, lerp, smooth, angLerp, fwd, rgt } from './core/math.js';
 import { SUPPLY_PENALTY } from './tycoon/Brand.js';
 import { STEPS } from './tycoon/Onboarding.js';
+import { OwnerRoutine } from './scene/OwnerRoutine.js';
+import { Toasts } from './ui/Toasts.js';
 import { concernOf } from './employees/Welfare.js';
 import { ORDERS as HQ_ORDERS, TRUST as HQ_TRUST } from './tycoon/Headquarters.js';
 import { MAX_HEARTS, OCCASION_PAY, OCCASION_NEED } from './tycoon/Regulars.js';
@@ -428,15 +430,15 @@ function orderText(o){return `${o.cut?tx('cut.'+o.cut):tx('shape.'+o.shape)} · 
 /** A new client at the door: a walk-in (maybe a regular coming back), a friend a regular brought, or today's special booking. */
 function spawnCustomer(o={}){
   if(custs.filter(c=>c.state!=='gone').length>=40)return;
-  const used=new Set(custs.map(q=>q.name)),site=o.special?0:o.site??pickSite(),D=SITE_DOORS[site],c=o.special?game.newSpecial(used):game.newCustomer(used,true,site);if(!c)return;
+  const used=new Set(custs.map(q=>q.name)),site=o.special?0:o.site??pickSite(),D=SITE_DOORS[site],c=o.special?game.newSpecial(used):o.rebook?game.newCustomer(used,false,site,o.rebook):game.newCustomer(used,true,site);if(!c)return;if(o.rebook)c.rebookedIn=true;
   const fig=new Fig({skin:pick(SKINS),shirt:c.villain?VILLAIN_SHIRT:c.special==='bride'?0xf6f3ee:pick(SHIRTS),pants:c.villain?0x0d0b14:pick(PANTS),beard:c.look.beard});
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(D.street);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);game.metrics.arrive(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');arrivalNews(c,o);
-  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.accepting){leave(c,'full');return;}audio.play('chime');
+  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.accepting){if(game.lateArrival(c)==='book'){game.rebook(c);c.rebooked=true;const dk=game.staff.receptionistAt(site).hired?deskFig(site):null;if(dk)say(dk,line('desk.rebook'),true);later(1.2,()=>say(fig,line('rebook.ok'),false));leave(c);}else leave(c,'full');return;}audio.play('chime');
     if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}greetAt(c,site);const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
     if(!seat){popup(tx('noSeats'),fig.head,'');audio.play('bad');game.customerTurnedAway(c);leave(c,'full');return;}
-    seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen){leave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
+    seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen&&game.closingPolicy!=='serve'){closingLeave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);
       // Drinks and snacks are served as soon as the client sits down.
       const drink=game.dayFx.drinks===0?null:game.hospitality.serve(c);if(drink){fig.setTool(drink==='juice'?'juice':'cup');if(Math.random()<.35)later(.6,()=>say(fig,line('drink.thanks'),false));}});});
 }
@@ -472,7 +474,7 @@ const onScreen=fig=>{const [x,y]=screenOf(fig.head.getWorldPosition(V()));return
 /** A speech bubble over someone's head, only while they are on screen; one each, a few at a time. */
 function say(fig,text,staff){if(!chatOn||!text||!fig||!fig.root.visible||!onScreen(fig))return;const old=bubbles.findIndex(b=>b.fig===fig);if(old>=0){bubbles[old].el.remove();bubbles.splice(old,1);}
   if(bubbles.length>=4)bubbles.shift().el.remove();const el=document.createElement('div');el.className='bubble'+(staff?' staff':'');el.textContent=text;$('#pops').appendChild(el);bubbles.push({el,fig,t:0,life:2.4+text.length*.045});}
-function updateBubbles(dt){const taken=[...popRects],box=el=>{const r=el.getBoundingClientRect();return r.width?{L:r.left,R:r.right,T:r.top,B:r.bottom}:null;},ui=[box($('#hud')),box($('#panel'))].filter(Boolean);
+function updateBubbles(dt){const taken=[...popRects],box=el=>{const r=el.getBoundingClientRect();return r.width?{L:r.left,R:r.right,T:r.top,B:r.bottom}:null;},ui=[box($('#hud')),box($('#panel')),toasts.rect].filter(Boolean);
   for(const b of bubbles.slice()){b.t+=dt;if(b.t>=b.life||!b.fig.root.visible){b.el.remove();bubbles.splice(bubbles.indexOf(b),1);continue;}
     if(b.w==null){b.w=b.el.offsetWidth;b.h=b.el.offsetHeight;}const w=b.fig.head.getWorldPosition(V());w.y+=.2;let [x,y]=screenOf(w),ok=x>10&&x<innerWidth-10&&y>30&&y<innerHeight;
     // step up past notes, other bubbles and the HUD or panel; give up (hide this frame) if there is no room
@@ -485,7 +487,7 @@ function whyCame(){const A=game.demandParts.add,w=[['walk',A.walk],['rep',A.rep*
   let r=Math.random()*w.reduce((n,x)=>n+x[1],0);return (w.find(x=>(r-=x[1])<0)||w[0])[0];}
 /** At the door: the desk says hello and the client says why they came. */
 function greetAt(c,site){if(c.villain||c.special||bubbles.length>=3||Math.random()>.6)return;const desk=game.staff.receptionistAt(site).hired?deskFig(site):null;
-  const away=c.regular&&(c.regular.gap||0)>=21?'.long':'';if(desk)say(desk,line(c.regular?'greetRegular'+away:'greet',{n:nm(c.name)}),true);
+  const away=c.regular&&(c.regular.gap||0)>=21?'.long':'';if(desk)say(desk,line(c.rebookedIn?'greetRebook':c.regular?'greetRegular'+away:'greet',{n:nm(c.name)}),true);
   later(desk?1.4:.3,()=>say(c.fig,c.regular?line('regularHello'+away):line('src.'+(c.influencer?'insta':whyCame())),false));}
 /** The consultation: the client asks in their own words, the stylist answers. A special day is said as it is. */
 function consultTalk(st,c){if(st.cust!==c||c.villain)return;const o=c.order,mean=c.hair.len.reduce((a,b)=>a+b,0)/c.hair.len.length;let ask=null;
@@ -520,7 +522,7 @@ let idleT=20;function idleChat(dt){idleT-=dt;if(idleT>0)return;idleT=rand(25,45)
 /** Which salon a new client walks into: in proportion to the stylists at each salon's chairs. */
 function pickSite(){if(!game.layout.branchOpen)return 0;const w=[0,1].map(s=>stations.filter(st=>!st.vacant&&siteOf(st.item.x)===s).length),t=w[0]+w[1];return t&&Math.random()*t>=w[0]?1:0;}
 function freeSeat(c){if(c.seat){c.seat.occ=null;c.seat=null;}const i=queue.indexOf(c);if(i>=0)queue.splice(i,1);}
-function leave(c,why){if(!game.accepting)game.metrics.leave(c,'closing');freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos,site=c.site||0,D=SITE_DOORS[site],T=game.layout.tier;
+function leave(c,why){if(!game.accepting&&!c.rebooked)game.metrics.leave(c,'closing');freeSeat(c);c.state='leaving';const f=c.fig,p=f.pos,site=c.site||0,D=SITE_DOORS[site],T=game.layout.tier;
   const inside=site?Math.abs(p.x-BRANCH_X)<4.1&&p.z<3.1&&p.z>-3.1:p.x>-4.1&&p.x<(T>=4?12.1:T>=2?8.1:4.1)&&p.z<3.1&&p.z>(T>=5?-9.1:T>=3?-7.1:T>=1?-5.1:-3.1);
   let pts=inside?[...route(p,D.inn),D.out,D.door,D.street]:[D.door,D.street];
   if(why==='full')pts=[D.out,D.door,D.street];
@@ -656,14 +658,10 @@ const sweepTime=cleaning=>3.2*(1.5-cleaning/100);
 function startSweep(fig,cleaning=50){const S=siteOf(fig.pos.x),landed=landedClips().filter(c=>siteOf(c.p.x)===S);if(!landed.length)return null;const a=landed[0].p.clone();a.y=0;const t=game.layout.tier;
   const at=a.clone().add(V(.5,0,.45));if(S){at.x=clamp(at.x,BRANCH_X-3.6,BRANCH_X+3.6);at.z=clamp(at.z,-2.6,2.6);}else{at.x=clamp(at.x,-3.6,t>=4?11.6:t>=2?7.6:3.6);at.z=clamp(at.z,t>=5?-8.6:t>=3?-6.6:t>=1?-4.6:-2.6,2.6);}
   const job={kind:'sweep',phase:'walk',fig,aim:a,t:sweepTime(cleaning),r:.8+cleaning/250};fig.handL=fig.handR=null;fig.walkTo(route(fig.pos,at),()=>{job.phase='work';fig.setTool('broom');fig.yaw=Math.atan2(a.x-fig.pos.x,a.z-fig.pos.z);});return job;}
-/** Lia with no one to see: a small job at a shelf, a plant, the coffee bar or a mirror, dropped as soon as a client is waiting. */
-const TIDY_AT=['shelf','displayTable','plant','coffeeBar','cafeBar','sideTable','mirror','bookcase','towelStation','kiosk','lamp'];
-function startTidy(st){const f=OWNER.fig,S=siteOf(st.item.x),items=game.layout.items.filter(it=>TIDY_AT.includes(it.id)&&siteOf(it.x)===S);if(!items.length)return null;
-  const it=items[Math.floor(Math.random()*items.length)],c=V(it.x,0,it.z),dir=f.pos.clone().sub(c).setY(0);if(dir.lengthSq()<1e-4)dir.set(0,0,1);dir.normalize();
-  const job={kind:'tidy',phase:'walk',fig:f,aim:c,t:rand(2.5,4.5),site:S};f.handL=f.handR=null;f.setTool(null);f.walkTo(route(f.pos,c.clone().addScaledVector(dir,.7)),()=>{job.phase='work';f.yaw=Math.atan2(c.x-f.pos.x,c.z-f.pos.z);});return job;}
-function updateTidy(job,dt){const f=job.fig;if(queue.some(q=>q.state==='wait'&&(q.site||0)===job.site)){f.handL=f.handR=null;f.path.length=0;return true;}
-  if(job.phase!=='work')return false;job.t-=dt;const k=Math.sin(simT*3.2);f.handR=f.pos.clone().add(V(0,1.0+k*.06,0)).addScaledVector(fwd(f.yaw),.3).addScaledVector(rgt(f.yaw),.12);f.handL=f.handR.clone().addScaledVector(rgt(f.yaw),-.24).add(V(0,-k*.08,0));
-  if(job.t>0)return false;f.handL=f.handR=null;return true;}
+/** What Lia does with time on her hands (see OwnerRoutine): the scene lends her figure, paths, the queue and the floor. */
+const ownerRoutine=new OwnerRoutine({get fig(){return OWNER.fig;},route:(a,b)=>route(a,b),siteOf:x=>siteOf(x),rand:(a,b)=>rand(a,b),fwd:y=>fwd(y),rgt:y=>rgt(y),later:(t,fn)=>later(t,fn),say:(f,t,s)=>say(f,t,s),line:(k,v)=>line(k,v),name:n=>nm(n),time:()=>simT,
+  items:site=>game.layout.items.filter(it=>siteOf(it.x)===site),waiting:site=>queue.filter(q=>q.state==='wait'&&(q.site||0)===site&&q.fig.root.visible),
+  mess:site=>landedClips().filter(c=>siteOf(c.p.x)===site).length,helpersOut:()=>helpers.some(h=>h.fig.root.visible),sweep:{start:fig=>startSweep(fig),update:(job,dt)=>updateSweep(job,dt)}});
 /** An assistant heads out to shovel the snow off the pavement in front of the door. */
 function startShovel(h,s){const D=SITE_DOORS[s],f=h.fig,spot=D.door.clone().add(V(rand(-1.2,1.6),0,rand(.3,1.1)));f.handL=f.handR=null;f.setTool(null);popup(tx('snow.out',nm(h.e.name)),f.head,'');
   const job={kind:'shovel',phase:'walk',site:s,t:game.clock.hourLength*Math.max(.25,.7-h.e.cleaning/250),spot};
@@ -790,8 +788,11 @@ function canSell(it){if(!canModify(it))return false;return !FURNITURE[it.id].cha
 function bestCamK(st){const base=Math.round(camK);let best=base,bd=-2;[0,-1,1,-2,2].forEach(o=>{const k=base+o,a=Math.PI/4+k*Math.PI/2,d=Math.sin(a)*Math.sin(st.yaw)+Math.cos(a)*Math.cos(st.yaw);if(d>bd+1e-6){bd=d;best=k;}});return best;}
 function finishDay(){game.staff.hired.filter(e=>e.quits).forEach(e=>{e.quits=false;fireStaff(e);popup(tx('staff.quit',nm(e.name)),recep.head,'big');});
   game.closeDay();audio.play('dayEnd');paused=true;openMenu('day','day');}
-function dayTick(dt){if(game.report||game.dayOff)return;game.tick(dt);if(!game.clock.isOpen&&queue.length)queue.slice().forEach(c=>{if(c.special)visitNews(c,game.customerGaveUp(c));leave(c);});if(!game.clock.isOpen&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
-game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');queue.slice().forEach(c=>leave(c));});
+/** A waiting client at closing: booked for tomorrow (and told so), or simply sent home. */
+function closingLeave(c){if(c.special){visitNews(c,game.customerGaveUp(c));leave(c);return;}if(game.closingFor(c)==='book'){game.rebook(c);c.rebooked=true;later(.4+Math.random(),()=>say(c.fig,line('rebook.ok'),false));}leave(c);}
+function dayTick(dt){if(game.report||game.dayOff)return;game.tick(dt);if(!game.clock.isOpen&&queue.length&&game.closingPolicy!=='serve')queue.slice().forEach(closingLeave);if(!game.clock.isOpen&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
+game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');const n=queue.filter(c=>c.state==='wait').length;if(!n||game.closingPolicy==='serve'){if(n)popup(tx('close.serve',n),recep.head,'');return;}
+  if(game.closingPolicy==='book'){const dk=game.staff.receptionist.hired?recep:null;if(dk)say(dk,line('desk.rebook'),true);}queue.slice().forEach(closingLeave);if(game.closingPolicy==='book')later(1,()=>popup(tx('close.booked',game.rebooked.length),recep.head,'big'));});
 game.bus.on('mission:done',m=>{popup(tx('ms.done',tx('ms.t.'+m.kind)),recep.head,'big');audio.play('levelUp');renderPanel(true);});
 $('#offday').addEventListener('click',e=>{const b=e.target.closest('[data-off]');if(!b)return;if(b.dataset.off==='week')openMenu('week','game');else{game.save();beginDay();}});
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');if(e.newTalent){const p=e.newTalent;e.newTalent=null;later(1.4,()=>popup(tx('talent.new',nm(e.name),tx('perk.'+p)),e.fig.head,'big'));}renderPanel(true);});
@@ -841,7 +842,9 @@ function decorate(){const th=decorThemeOf(game.clock.day),key=th+'|'+walls.lengt
 /* ================= popups ================= */
 const pops=[];
 /** A floating note. Routine ones (`quiet`, or no class) are skipped while five are already up or when their subject is out of sight. */
-function popup(text,obj,cls,quiet){if((quiet||!cls)&&(pops.length>=5||!inView(obj)))return;const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:cls==='big'?4.2:2.6,w:null,h:null});}
+/** Salon-wide notes in one fixed column at the top (see Toasts). */
+const toasts=new Toasts(document.body);
+function popup(text,obj,cls,quiet){if(obj===recep.head||obj===recep2.head){toasts.show(text,cls==='big'?'':'quiet');return;}if((quiet||!cls)&&(pops.length>=5||!inView(obj)))return;const el=document.createElement('div');el.className='pop '+(cls||'');el.textContent=text;$('#pops').appendChild(el);pops.push({el,obj,t:0,life:cls==='big'?4.2:2.6,w:null,h:null});}
 const _p=V();
 function screenOf(v){_p.copy(v).project(cam);return [(_p.x+1)/2*W*PIX+camOff.x*PIX,(1-_p.y)/2*H*PIX-camOff.y*PIX];}
 /** True when a point is on screen and not under the HUD or the panel. */
@@ -882,14 +885,12 @@ function simStep(dt){simT+=dt;
   // stations
   stations.forEach(st=>{
     if(st.vacant)return;st.sty.workSite=siteOf(st.item.x);
-    if(st.sweep){if(st.sweep.kind==='tidy'?updateTidy(st.sweep,dt):updateSweep(st.sweep,dt))st.sweep=null;}
-    else if(st.state==='free'&&st.sty===OWNER&&!st.filming&&!queue.some(q=>q.state==='wait'&&(q.site||0)===siteOf(st.item.x))){st.idleT=(st.idleT||0)+dt;
-      if(st.idleT>4){st.idleT=-rand(3,8);const S=siteOf(st.item.x),mess=landedClips().filter(c=>siteOf(c.p.x)===S).length;st.sweep=(mess>6&&!helpers.some(h=>h.fig.root.visible)?startSweep(OWNER.fig):null)||startTidy(st);}}
-    else if(st.sty===OWNER)st.idleT=0;
+    if(st.sweep){if(st.sweep.kind==='tidy'?ownerRoutine.advance(st.sweep,dt):updateSweep(st.sweep,dt))st.sweep=null;}
+    else if(st.state==='free'&&st.sty===OWNER&&!st.filming)st.sweep=ownerRoutine.atChair(siteOf(st.item.x),dt);
     if(st.state==='free'){if(st.sty.restUntil>simT||st.sweep||st.filming||pendingMoves.has(st.item)||queuedMoves.has(st.item))return;
       // A client whose colour or perm is done waits at the island for their own stylist; another takes over only if theirs is not at a chair, or after an hour.
       const here=siteOf(st.item.x),done=custs.filter(q=>q.state==='ready'&&(q.site||0)===here),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>!stations.some(s=>s.sty===q.resume.sty)||simT-q.readyAt>game.clock.hourLength);if(back){resumeAt(st,back);return;}
-      if(!game.clock.isOpen||(booths.some(b=>siteOf(b.item.x)===here)&&!freeBooth(here)))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.hasPerk?.('vip'),vipOnDuty=stations.some(s=>!s.vacant&&siteOf(s.item.x)===here&&(s.item.id==='vipRoom'||s.sty.hasPerk?.('vip')));
+      if((!game.clock.isOpen&&game.closingPolicy!=='serve')||(booths.some(b=>siteOf(b.item.x)===here)&&!freeBooth(here)))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.hasPerk?.('vip'),vipOnDuty=stations.some(s=>!s.vacant&&siteOf(s.item.x)===here&&(s.item.id==='vipRoom'||s.sty.hasPerk?.('vip')));
       // VIP clients wait for a VIP chair (the VIP room or a VIP specialist) while one is on duty, unless half their patience is gone.
       // A regular waits for the stylist they like while that stylist is at a chair here, until half their patience is gone.
       const elsewhere=q=>q.preferredStylist&&q.preferredStylist!==st.sty.name&&q.pat>q.maxPat*.5&&stations.some(s=>s!==st&&!s.vacant&&s.sty.name===q.preferredStylist&&siteOf(s.item.x)===here);
@@ -905,7 +906,7 @@ function simStep(dt){simT+=dt;
     if(st.state!=='work'&&st.state!=='reveal'&&!st.washing&&!st.sweep&&!st.filming){const sf=st.sty.fig;sf.handL=sf.handR=null;sf.setTool(st.state==='consult'?'comb':null);
       if(!sf.path.length&&sf.pos.distanceTo(st.stand)>.05)goToChair(sf,st);
       if(st.state==='consult'&&st.cust){const hp=st.cust.fig.head.getWorldPosition(V());sf.handR=hp.clone().add(st.rot(V(Math.sin(simT*2)*.08,.05,.22)));}}});
-  updateWashes(dt);helpersUpdate(dt);idleChat(dt);
+  updateWashes(dt);helpersUpdate(dt);idleChat(dt);ownerRoutine.float(dt,OWNER.floating&&started&&!game.dayOff&&!(filming&&filming.who.fig===OWNER.fig));
   // a robot vacuum picks up a bit of hair at a time at its salon
   updateBots(dt);
   // receptionist watches the latest reveal / door
@@ -1026,7 +1027,10 @@ function hudChairs(list,row){const busy=list.filter(s=>s.cust).length,open=hudOp
   return head+`<table class="foot">${shown.map(row).join('')}</table><div class="dim">${tx('hud.more',list.length-shown.length,list.filter(s=>!s.cust&&!shown.includes(s)).length)}</div>`;}
 $('#hud').addEventListener('pointerdown',e=>{if(!e.target.closest('[data-hud]'))return;e.preventDefault();hudOpen=!(hudOpen??stations.filter(st=>siteOf(st.item.x)===site).length<=10);try{localStorage.setItem('cd.hudOpen',JSON.stringify(hudOpen));}catch{/* the choice just isn't remembered */}updateHud();});
 /** Ruby's opening checklist: the next step under the HUD, a bonus when one is done. */
-function onboardingRow(){const O=game.onboarding,s=O.current,claim=game.missions.claimable,gift=claim?`<div class="obrow" data-ob="prog"><b>${tx('ob.claim',claim)}</b> ▶</div>`:'';if(!s)return gift;return `<div class="obrow" ${s.tab?`data-ob="${s.tab}"`:''}><b>${tx('ob.title',O.step,STEPS.length)}</b> ${tx('ob.'+s.id)}${s.tab?' ▶':''}</div>`+gift;}
+function onboardingRow(){const O=game.onboarding,s=O.current,claim=game.missions.claimable;
+  // two fixed lines: title and count on top, what to do and where below, each pair pushed to the two edges
+  const box=(tab,title,count,text)=>`<div class="obrow" ${tab?`data-ob="${tab}"`:''}><div class="obl"><b>${title}</b><span>${count}</span></div><div class="obl"><span>${text}</span>${tab?`<span class="obgo">${tx('tab.'+tab)} ▶</span>`:''}</div></div>`;
+  return (s?box(s.tab,tx('ob.title'),`${O.step}/${STEPS.length}`,tx('ob.'+s.id)):'')+(claim?box('prog',tx('ob.claimT'),claim,tx('ob.claim')):'');}
 function checkOnboarding(){const s=game.onboarding.check(game);if(!s)return;audio.play('cash');popup(tx('ob.done',tx('ob.'+s.id),s.reward),recep.head,'big');const n=game.onboarding.current;if(n)later(1.8,()=>say(recep,tx('ob.say.'+n.id),true));else later(1.8,()=>say(recep,tx('ob.say.end'),true));renderPanel(true);}
 function updateHud(){game.syncMissions();checkOnboarding();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));
@@ -1290,7 +1294,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
   mbox.innerHTML=h;mbox.scrollTop=top;}
 function openMenu(s,from){menuScreen=s;menuFrom=from;mbox.scrollTop=0;$('#menu').classList.remove('hide');renderMenu();mbox.scrollTop=0;}
 /** Opens the next day; a Sunday opens on the weekly settlement instead of the salon floor. */
-function beginDay(){game.nextDay();spawnTimer=1.5;referrals.length=0;paused=false;closeMenu();alignToWalls();syncRoster();morningSeats();morningNews();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
+function beginDay(){game.nextDay();spawnTimer=1.5;if(!game.dayOff)game.rebookToday.forEach((r,i)=>later(1+i*2.5,()=>spawnCustomer({rebook:r,site:r.site})));referrals.length=0;paused=false;closeMenu();alignToWalls();syncRoster();morningSeats();morningNews();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
 function offdayText(){const o=$('#offday');o.querySelector('.offt').textContent=tx('off.banner');o.querySelector('[data-off="week"]').textContent=tx('off.week');o.querySelector('[data-off="monday"]').textContent=tx('week.monday');}
 function closeMenu(){offdayText();$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
@@ -1322,7 +1326,7 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
   if(started&&!paused){const total=dt*(styling?1:speed),steps=Math.ceil(total/.06);for(let i=0;i<steps;i++)simStep(total/steps);}else figs.forEach(f=>f.pose(0));
   stylingTick(dt);if(started&&!paused)incidents.update(dt);
   updateLights(dt);updatePrecip(dt);decorate();updateCam(dt);
-  {const wet=started&&!game.dayOff&&['rain','storm','snow'].includes(game.weather);custs.forEach(c=>c.fig.setUmbrella(wet&&!indoors(c.fig.pos)));}envStep(dt,realT);updatePops(dt);updateBubbles(dt);
+  {const wet=started&&!game.dayOff&&['rain','storm','snow'].includes(game.weather);custs.forEach(c=>c.fig.setUmbrella(wet&&!indoors(c.fig.pos)));}envStep(dt,realT);updatePops(dt);toasts.update(dt);updateBubbles(dt);
   if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
     // Difficult clients darken the music, more with each one; a busy salon livens it up, evenings calm it down.
     audio.setTension(started?custs.filter(c=>c.villain&&c.state!=='gone').length:0);
@@ -1336,7 +1340,7 @@ checkForUpdate({atStart:true});
 setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update');el.querySelector('span').textContent=tx('upd.ready');el.querySelector('button').textContent=tx('upd.reload');el.classList.add('show');el.querySelector('button').onclick=()=>refreshToLatest(b);}},10*60*1000);
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,bots:()=>[...bots.values()].map(b=>({state:b.state,pos:b.pos?[+b.pos.x.toFixed(2),+b.pos.z.toFixed(2)]:null,n:b.n})),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,owner:()=>({floating:OWNER.floating,job:ownerRoutine.job?ownerRoutine.job.kind:null,pos:[+OWNER.fig.pos.x.toFixed(2),+OWNER.fig.pos.z.toFixed(2)]}),float:()=>{const st=stations.find(s=>s.sty===OWNER);if(st){st.sty=VAC;st.vacant=true;st.state='vacant';}OWNER.floating=true;},toasts:()=>toasts.items.map(t=>t.el.textContent),bots:()=>[...bots.values()].map(b=>({state:b.state,pos:b.pos?[+b.pos.x.toFixed(2),+b.pos.z.toFixed(2)]:null,n:b.n})),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
 
 // Read-only state for browser checks; available only in debug mode.
 if(new URLSearchParams(location.search).has('debug'))window.render_game_to_text=()=>JSON.stringify({day:game.clock.day,open:game.clock.isOpen,dayOff:game.dayOff,metrics:game.metrics.snapshot(),report:game.report&&{profit:game.report.profit,comparison:game.report.comparison,advice:game.report.advice}});
