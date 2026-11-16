@@ -13,7 +13,7 @@ export class OperatingCosts {
 
   /** Full-day cost of each category at the salon's current size. */
   get breakdown() {
-    const h = this.clock.hours, furnitureValue = this.layout.items.reduce((sum, it) => sum + FURNITURE[it.id].price, 0), thrift = this.staff.owner.perk === 'manage' ? THRIFT : 1;
+    const h = this.clock.hours, furnitureValue = this.layout.items.reduce((sum, it) => sum + FURNITURE[it.id].price, 0), thrift = (this.staff.owner.perk === 'manage' ? THRIFT : 1) * (1 - this.staff.mgmt.costs);
     return {
       rent: this.#rent,
       // Wages are paid by the hour, with time and a half past eight hours.

@@ -21,6 +21,7 @@ import { RegularBook, FAVOURITE_SATISFACTION, HEART_LOYAL, LOYAL_PAY, OCCASION_P
 import { rollSpecial, SPECIAL_FAIL_REP, SPECIAL_PRICE, SPECIAL_PATIENCE } from './SpecialClients.js';
 import { StaffManager } from '../employees/StaffManager.js';
 import { TRAITS } from '../employees/Traits.js';
+import { MGMT } from '../employees/Management.js';
 import { CERTS, hasCert, certSatisfaction } from '../employees/Career.js';
 import { CustomerFactory } from '../customers/CustomerFactory.js';
 import { ServiceEvaluator } from '../customers/ServiceEvaluator.js';
@@ -242,6 +243,8 @@ export class TycoonGame {
     Object.assign(c, { site: 0, booked: true, special: s.kind, specialNeed: s.need }); s.state = 'arrived'; s.name = c.name;
     return c;
   }
+  /** Grants a stylist's wish from their last one-to-one. */
+  grantWish(e) { const ok = this.staff.grantWish(e, this.clock.day, () => this.canShiftHours(1, -1) && this.shiftHours(1, -1)); if (ok) this.save(); return ok; }
   /** The grade a stylist's services are priced at. */
   gradeOf(worker) { return worker === this.staff.owner ? 'owner' : GRADE_PAY[worker.rank] ? worker.rank : 'designer'; }
   /** This month's trending styles. */
@@ -431,6 +434,7 @@ export class TycoonGame {
   /** The last day of a month: pays the goal if it was met, then settles the month and sets the next goal. */
   #settleMonth(last) {
     const goal = this.month.goal, hit = !!goal && this.month.revenueSoFar >= goal.revenue;
+    if (hit) this.staff.grow(MGMT.goal);
     if (hit) { this.economy.fund('monthGoal', goal.reward); last.funding = { ...last.funding, monthGoal: goal.reward }; }
     this.month.settle(this.clock.day, this.#monthSnapshot(), hit);
   }
