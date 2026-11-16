@@ -85,6 +85,8 @@ export class ReviewBoard {
     return Math.random() < .2 ? this.#add({ author: customer.name, day, stars: 2, key: 'n.full', visit: { service: customer.requestedService } }) : null;
   }
   /** A one-star review from someone who never came in. */
+  /** A rival's spy, shown the door or not caught, writes a one-star review; it is fake and can be reported. */
+  spy(author, day) { return this.#add({ author, day, stars: 1, key: pick(['spy.0', 'spy.1', 'spy.2']), fake: true }); }
   troll(day) { return this.#add({ author: pick(NAMES), day, stars: 1, key: pick(['t.0', 't.1', 't.2', 't.3']), fake: true }); }
 
   /**
