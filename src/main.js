@@ -46,6 +46,7 @@ import { NavGrid } from './building/NavGrid.js';
 import { paintSign } from './rendering/pixelFont.js';
 import { BRANCH_X, siteOf } from './building/SalonLayout.js';
 import { OutletView } from './scene/OutletView.js';
+import { ExecutiveDirector } from './tycoon/ExecutiveDirector.js';
 import { RESIGN_LEAVE, RAISE_RELIEF, RAISE_LOYALTY, RAISE_CALM, RAISE_MAX_EFFECT, COMMISSION, HOURS_RELIEF } from './employees/StaffManager.js';
 import { FURNITURE } from './building/FurnitureCatalog.js';
 import { CHANNELS } from './tycoon/Marketing.js';
@@ -1241,7 +1242,7 @@ function postOn(channel){const who=filmer();if(!who){popup(tx('mk.busy'),OWNER.f
     popup(r.viral?tx('mk.viralPop',name,r.views.toLocaleString()):tx('mk.postPop',name,r.views.toLocaleString(),r.gained.toLocaleString()),f.head,'big');audio.play(r.viral?'levelUp':'happy');renderPanel(true);});
   renderPanel(true);}
 /** Morning news: what the rival did overnight, and stylists who have had enough. */
-function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):k.startsWith('hq:')?tx('hq.news.'+k.split(':')[1],tx('hq.o.'+(k.split(':')[2]||''))):k.startsWith('spy:')?tx('spy.news.'+k.slice(4),game.rival.name):k.startsWith('win:')?(([,n,rep,fol])=>tx('rival.news.win',n,rep,(+fol).toLocaleString('en-US')))(k.split(':')):k.startsWith('freed:')?tx('rival.news.freed',game.rival.freed?.from||'',k.slice(6).split(',').map(id=>nm(game.staff.find(id)?.name||id)).join(', ')):k.startsWith('brand:')?(([,kind,arg])=>tx('brand.news.'+kind,tx((kind==='done'||kind==='viral'?'pt.':'deal.')+arg)))(k.split(':')):k.startsWith('contest:')?tx('contest.news.'+k.slice(8),tx('contest.kind.'+game.contest.kind),tx('contest.cat.'+game.contest.category)):tx('rival.news.'+k,game.rival.name));
+function morningNews(){const day=game.clock.day,news=game.news.splice(0).map(k=>k.startsWith('fin:')?tx('fin.news.'+k.slice(4)):k.startsWith('hq:')?tx('hq.news.'+k.split(':')[1],tx('hq.o.'+(k.split(':')[2]||''))):k.startsWith('spy:')?tx('spy.news.'+k.slice(4),game.rival.name):k.startsWith('win:')?(([,n,rep,fol])=>tx('rival.news.win',n,rep,(+fol).toLocaleString('en-US')))(k.split(':')):k.startsWith('freed:')?tx('rival.news.freed',game.rival.freed?.from||'',k.slice(6).split(',').map(id=>nm(game.staff.find(id)?.name||id)).join(', ')):k.startsWith('brand:')?(([,kind,arg])=>tx('brand.news.'+kind,tx((kind==='done'||kind==='viral'?'pt.':'deal.')+arg)))(k.split(':')):k.startsWith('net:')?tx('net.news',ExecutiveDirector.describe(k.slice(4).split(';'),tx)):k.startsWith('contest:')?tx('contest.news.'+k.slice(8),tx('contest.kind.'+game.contest.kind),tx('contest.cat.'+game.contest.category)):tx('rival.news.'+k,game.rival.name));
   // a new season, and calendar events on their first day
   if(seasonOf(day)!==seasonOf(day-1))news.unshift(tx('season.start.'+seasonOf(day)));
   eventsOn(day).filter(e=>!eventsOn(day-1).includes(e)).forEach(e=>news.unshift(tx('ev.start',tx('ev.'+e.id),fxText(e))));

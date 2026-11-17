@@ -614,7 +614,8 @@ export class TycoonGame {
     this.snow = this.snow.map(v => ['snow', 'cold'].includes(this.weather) ? v * .7 : 0);
     this.departments.startDay();
     if (this.isSunday) { this.#dayOff(); return; }
-    this.dayOff = false; this.marketing.startDay(); this.network.startDay();
+    this.dayOff = false; this.marketing.startDay();
+    { const did = this.network.director.morning(this.clock.day); if (did.length) this.news.push('net:' + did.join(';')); } this.network.startDay();
     // A neon sign in the window brings in followers every open day.
     { const neon = [0, 1].filter(s => this.layout.countAt('neonSign', s)).length, sets = [0, 1].reduce((n, s) => n + this.layout.setBonus(s, 'followers'), 0); if (neon || sets) this.marketing.addFollowers(neon * FURNITURE.neonSign.dailyFollowers + sets); }
     this.happening = null; this.happeningFx = {};

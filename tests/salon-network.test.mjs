@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appointmentTimes } from '../src/core/ArrivalProcess.js';
-import { SalonNetwork, FORMATS, REST_FIXED_SHARE, REST_SUPPORT, REST_RECOVERY, LOSS_QUALITY } from '../src/tycoon/SalonNetwork.js';
+import { SalonNetwork, FORMATS, COACH_COST, REST_FIXED_SHARE, REST_SUPPORT, REST_RECOVERY, LOSS_QUALITY } from '../src/tycoon/SalonNetwork.js';
 import { Economy } from '../src/tycoon/Economy.js';
 import { NetworkPanel } from '../src/ui/NetworkPanel.js';
 import { outletPlan, phaseAt } from '../src/scene/OutletView.js';
+import { DIRECTOR } from '../src/tycoon/ExecutiveDirector.js';
 import { I18n } from '../src/i18n/I18n.js';
 const seeded = () => { let s=81231; return ()=>((s=(1664525*s+1013904223)>>>0)+.5)/4294967296; };
 function setup() { const g={economy:new Economy(1e6),clock:{day:1},isSunday:false,weather:'cloudy',reputation:{value:85},progression:{level:10},layout:{tier:3},departments:{idolReady:true},staff:{hired:[{rank:'deputy'}, {rank:'designer'}],management:60,owner:{}},hq:{order:null}};g.network=new SalonNetwork(g);return g; }
@@ -51,4 +52,22 @@ test('the morning draw is what the evening settles; a shop serves first come up 
  assert.equal(plan.filter(c=>c.served).length,cap);assert.ok(plan.slice(-2).every(c=>!c.served&&phaseAt(c,1)==='turned'));
  for(let k=0;k<3;k++){const on=plan.filter(c=>c.chair===k).sort((a,b)=>a.start-b.start);for(let i=1;i<on.length;i++)assert.ok(on[i].start>=on[i-1].end-1e-9);}
  assert.deepEqual(['out','wait','chair','leave'].map((_,i)=>phaseAt({a:.1,served:true,start:.2,end:.3},[.05,.15,.25,.35][i])),['out','wait','chair','leave']);
+});
+test('the executive director trains, rests and reopens outlets, and opens new ones at a pace while keeping the reserve',()=>{
+ const g=setup(),n=g.network,D=n.director;n.upgrade();n.open('room');n.open('room');n.open('room');
+ assert.equal(D.appoint(true),false);n.executive=true;assert.equal(D.appoint(true),true);assert.equal(D.target,5);
+ g.clock.day=10;g.economy.startDay();const cash=g.economy.cash;let did=D.morning(10);
+ assert.deepEqual(did.map(k=>k.split(':')[0]),['coached','coached','coached','opened']);assert.equal(n.outlets.length,4);
+ assert.equal(Math.round(cash-g.economy.cash),DIRECTOR.pay+3*COACH_COST+FORMATS.room.cost);
+ g.clock.day=11;g.economy.startDay();did=D.morning(11);assert.ok(!did.some(k=>k.startsWith('opened')));
+ // a run of losses closes an outlet; recovered quality reopens it; one the player closed is left alone
+ const [a,b]=n.outlets;a.lossDays=DIRECTOR.lossDays;n.toggle(b.id);g.clock.day=12;did=D.morning(12);
+ assert.ok(did.includes('rested:CIEL ROOM #1'));assert.equal(a.paused,true);assert.equal(b.paused,true);
+ a.quality=DIRECTOR.reopenAt;a.lossDays=0;g.clock.day=13;did=D.morning(13);assert.ok(did.includes('reopened:CIEL ROOM #1'));assert.equal(a.paused,false);assert.equal(b.paused,true);
+ // the reserve: nothing bought that would leave less than it
+ g.economy.cash=DIRECTOR.reserve+100;n.outlets.forEach(o=>{o.quality=70;o.trained=0;});g.clock.day=30;did=D.morning(30);assert.deepEqual(did,[]);
+ g.economy.cash=1e6;did=D.morning(31);assert.ok(did.some(k=>k.startsWith('opened')));assert.equal(n.outlets.length,5);g.clock.day=40;did=D.morning(40);assert.ok(!did.some(k=>k.startsWith('opened')));
+ const h=setup();h.network.restore(JSON.parse(JSON.stringify(n)));assert.deepEqual(h.network.director.toJSON(),D.toJSON());
+ const old=setup();old.network.restore({flagship:true,outlets:[],executive:true});assert.equal(old.network.director.on,false);assert.deepEqual(old.network.director.morning(5),[]);
+ for(const lang of ['ko','en']) { const html=new NetworkPanel(g,new I18n(lang)).render(true);assert.ok(!/net\.[a-z]|NaN|undefined/.test(html)); assert.ok(html.includes('nettarget')); }
 });
