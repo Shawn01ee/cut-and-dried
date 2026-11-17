@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FURNITURE, seatApproach } from '../building/FurnitureCatalog.js';
+import { REACH, reachKind } from '../building/Surroundings.js';
 import { FURNITURE_MODELS } from './furnitureModels.js';
 import { V } from '../core/math.js';
 
@@ -67,6 +68,13 @@ export class FurnitureView {
     // An arrow on the floor shows which way the piece faces.
     const d = (FURNITURE[id].d || 1) * .25, arrow = new THREE.Mesh(new THREE.ConeGeometry(.16, .34, 3).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd98a }));
     arrow.position.set(0, .06, d + .28); arrow.raycast = noRay; arrow.userData.keep = true; this.#ghost.add(arrow);
+    // A tool or a piece of decoration shows how far it reaches on the floor.
+    const kind = reachKind(id);
+    if (kind) {
+      const r = REACH[kind], color = kind === 'tool' ? 0x8fd3ff : 0xffd98a, flat = (geo, opacity) => { const m = new THREE.Mesh(geo.rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+        m.position.y = .03; m.raycast = noRay; m.userData.keep = true; m.renderOrder = 2; this.#ghost.add(m); };
+      flat(new THREE.CircleGeometry(r, 64), .14); flat(new THREE.RingGeometry(r - .12, r, 64), .85);
+    }
   }
   poseGhost(x, z, rotation, ok) {
     this.#ghost.visible = true; this.#place(this.#ghost, x, z, rotation);

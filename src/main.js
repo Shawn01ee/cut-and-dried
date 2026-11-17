@@ -18,6 +18,7 @@ import { SPECIAL_FAIL_REP } from './tycoon/SpecialClients.js';
 import { WISH_RELIEF, WISH_LOYALTY } from './employees/Management.js';
 import { GRADE_PAY, TREND_PAY } from './hair/StyleMenu.js';
 import { decorThemeOf } from './tycoon/Decor.js';
+import { REACH, DECOR_CAP, DECOR_SAT, reachKind, reachedBy } from './building/Surroundings.js';
 import { LINES } from './i18n/dialogue.js';
 import { shows, featuresAt } from './tycoon/Features.js';
 import { DECOR_MODELS } from './rendering/decorModels.js';
@@ -551,7 +552,7 @@ function leave(c,why){if(!game.accepting&&!c.rebooked)game.metrics.leave(c,'clos
   let pts=inside?[...route(p,D.inn),D.out,D.door,D.street]:[D.door,D.street];
   if(why==='full')pts=[D.out,D.door,D.street];
   f.walkTo(pts,()=>{c.state='gone';c.fadeOut=1;});}
-function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=c;st.state='await';st.touched=false;st.byOwner=false;st.worker=null;const f=c.fig;
+function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=c;c.chairAt={x:st.item.x,z:st.item.z};st.state='await';st.touched=false;st.byOwner=false;st.worker=null;const f=c.fig;
   const start=seat?seat.app[0]:f.pos.clone(),lead=seat?[seat.app[0]]:[],toChair=from=>[...route(from,st.approach),st.chair.clone()];
   // Every client has a shampoo first when the salon has somewhere to do it.
   if(booths.some(b=>siteOf(b.item.x)===siteOf(st.item.x))&&!c.washed)shampoo(c,st,lead,start,()=>f.walkTo(toChair(f.pos),arrive));else f.walkTo([...lead,...toChair(start)],arrive);
@@ -560,7 +561,7 @@ function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=
 const booths=[],washes=[];
 const freeBooth=site=>booths.find(b=>!b.client&&siteOf(b.item.x)===site&&!pendingMoves.has(b.item)&&!queuedMoves.has(b.item)),freeHelper=site=>helpers.find(h=>h.fig.root.visible&&!h.task&&siteOf(h.idle.x)===site);
 /** Shampoo at a free booth: a free assistant washes, otherwise the client's own stylist steps away from the chair to do it. */
-function shampoo(c,st,lead,start,then){const site=siteOf(st.item.x),b=freeBooth(site),h=freeHelper(site),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo',game.speedFor('shampoo',site))*game.clock.hourLength/60};
+function shampoo(c,st,lead,start,then){const site=siteOf(st.item.x),b=freeBooth(site),h=freeHelper(site),washer=h?h.fig:st.sty.fig,T={b,c,st,h,then,ready:false,seated:false,t:(h?h.e:st.sty).serviceMinutes('shampoo',game.speedFor('shampoo',site,b.item))*game.clock.hourLength/60};
   b.client=c;c.inWash=true;if(h)h.task={kind:'wash',T};else st.washing=T;washes.push(T);
   washer.handL=washer.handR=null;washer.setTool(null);washer.walkTo(route(washer.pos,b.washAt),()=>{washer.yaw=b.washYaw;T.ready=true;});
   c.fig.walkTo([...lead,...route(start,b.seatApp),b.seat.clone()],()=>{Object.assign(c.fig,{mode:'sit',yaw:b.seatYaw,seatH:.5,footY:.2,tilt:-.45});c.fig.pos.copy(b.seat);T.seated=true;audio.play('swish');if(Math.random()<.5)chat(washerOf(T),true,[line('wash.ask'),line('wash.ok')],c.fig);});}
@@ -575,11 +576,12 @@ function startWork(st){if(st.state!=='consult')return;const worker=st.byOwner?OW
   if(p.doWave&&Math.abs(p.wave-st.cust.hair.wave)>.05)ops.push({type:'wave'},{type:'process',of:'wave'});
   if(p.doCut)ops.push({type:'cut'});
   // Each step takes the stylist's own time for it, from the standard service times.
-  ops.push({type:'dry'});timeOps(ops,worker,siteOf(st.item.x));game.chargeMaterials(ops,siteOf(st.item.x));if(worker!==st.sty)st.sty.fig.walkTo(route(st.sty.fig.pos,st.at(-.8,1.55)));
+  ops.push({type:'dry'});timeOps(ops,worker,siteOf(st.item.x),st.item);game.chargeMaterials(ops,siteOf(st.item.x));if(worker!==st.sty)st.sty.fig.walkTo(route(st.sty.fig.pos,st.at(-.8,1.55)));
   st.ops=ops;st.opi=0;st.state='work';beginOp(st);renderPanel(true);}
 const TOOLS={colour:'brush',wave:'comb',cut:'scissors',dry:'dryer'};
 /** Minutes and simulated time for each step: the stylist's own times, and the fixed processing times. */
-function timeOps(ops,worker,site=0){ops.forEach(o=>{o.minutes=o.type==='process'?Math.round(PROCESS_MINUTES[o.of]/game.processSpeedFor(o.of)):worker.serviceMinutes(o.type,game.speedFor(o.type,site));o.dur=o.minutes*game.clock.hourLength/60;});}
+/** Each step's minutes for this worker at this chair (`at`: the tools within its reach count). */
+function timeOps(ops,worker,site=0,at=null){ops.forEach(o=>{o.minutes=o.type==='process'?Math.round(PROCESS_MINUTES[o.of]/game.processSpeedFor(o.of)):worker.serviceMinutes(o.type,game.speedFor(o.type,site,at));o.dur=o.minutes*game.clock.hourLength/60;});}
 /**
  * A processing client moves to a free seat at the styling island, so the chair and stylist are free for someone else.
  * They come back to a chair when it is done. Returns false when no island seat is free.
@@ -599,7 +601,7 @@ function islandTreat(c){const desk=game.staff.receptionistAt(c.site||0);if(!desk
 /** A client whose colour or perm has processed comes back to a chair to finish. */
 function resumeAt(st,c){if(c.procSeat)c.procSeat.occ=null;c.procSeat=null;c.state='toStation';st.cust=c;st.state='await';st.touched=true;
   const f=c.fig;f.walkTo([...route(f.pos,st.approach),st.chair.clone()],()=>{Object.assign(f,{mode:'sit',yaw:st.face,seatH:.55,footY:.17});f.pos.copy(st.chair);c.state='chair';
-    const R=c.resume;c.resume=null;Object.assign(st,{plan:R.plan,byOwner:false,worker:st.sty,ops:R.ops,opi:0,state:'work'});timeOps(st.ops,st.sty,siteOf(st.item.x));beginOp(st);if(sel===st.i)renderPanel(true);});
+    const R=c.resume;c.resume=null;Object.assign(st,{plan:R.plan,byOwner:false,worker:st.sty,ops:R.ops,opi:0,state:'work'});timeOps(st.ops,st.sty,siteOf(st.item.x),st.item);beginOp(st);if(sel===st.i)renderPanel(true);});
   if(sel===st.i)renderPanel(true);}
 function beginOp(st){const op=st.ops[st.opi],h=st.cust.hair,s=game.serviceProfileOf(st.worker,siteOf(st.item.x));op.t=0;op.from=cloneHair(h);op.acc=new Array(NS).fill(0);
   if(op.type==='process'){op.to=cloneHair(h);st.worker.fig.setTool(null);toIsland(st);return;}
@@ -832,7 +834,12 @@ function spyCard(c){const S=c.spy,R=game.rival.name;audio.play('bad');later(.8,(
 /** Someone we could not see heads for the rival, and says so. */
 function goesNextDoor(c){later(.6,()=>say(c.fig,line('leave.rival'),false));popup(tx('toRival',game.rival.name),c.fig.head,'',true);}
 function closingLeave(c){if(c.special){visitNews(c,game.customerGaveUp(c));leave(c);return;}if(game.closingFor(c)==='book'){game.rebook(c);c.rebooked=true;later(.4+Math.random(),()=>say(c.fig,line('rebook.ok'),false));}else if(game.customerSentHome())goesNextDoor(c);leave(c);}
-function dayTick(dt){if(game.report||game.dayOff)return;game.tick(dt);departmentStaff.sync();departmentGuests.sync();if(!game.clock.isOpen&&queue.length&&game.closingPolicy!=='serve')queue.slice().forEach(closingLeave);if(!game.clock.isOpen&&!game.departments.busy&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
+/** Past closing: who is still at work. A stylist until their last client is done; the support staff while clients are still in their salon. */
+function noteOvertime(){const t=game.clock.overtime,O=game.overtime;
+  for(const s of stations){const w=s.cust?(s.worker||s.sty):null;if(w&&w!==OWNER&&w!==VAC)O.busy(w.id,t);}
+  for(const c of custs)if((c.state==='process'||c.state==='ready')&&c.resume&&c.resume.sty&&c.resume.sty!==OWNER)O.busy(c.resume.sty.id,t);
+  for(const e of game.staff.support)if(e.hired&&custs.some(c=>(c.site||0)===(e.site||0)&&c.state!=='gone'))O.busy(e.id,t);}
+function dayTick(dt){if(game.report||game.dayOff)return;game.tick(dt);if(game.clock.after)noteOvertime();departmentStaff.sync();departmentGuests.sync();if(!game.clock.isOpen&&queue.length&&game.closingPolicy!=='serve')queue.slice().forEach(closingLeave);if(!game.clock.isOpen&&!game.departments.busy&&!stations.some(x=>x.cust)&&!custs.some(c=>c.state!=='gone'&&c.state!=='leaving'))finishDay();}
 game.bus.on('special:finished',r=>popup(tx(r.ok?'dept.idolSuccess':'dept.idolFailed'),recep.head,'big'));
 game.bus.on('day:closed',()=>{popup(tx('closed'),recep.head,'big');const n=queue.filter(c=>c.state==='wait').length;if(!n||game.closingPolicy==='serve'){if(n)popup(tx('close.serve',n),recep.head,'');return;}
   if(game.closingPolicy==='book'){const dk=game.staff.receptionist.hired?recep:null;if(dk)say(dk,line('desk.rebook'),true);}queue.slice().forEach(closingLeave);if(game.closingPolicy==='book')later(1,()=>popup(tx('close.booked',game.rebooked.length),recep.head,'big'));});
@@ -935,7 +942,10 @@ function simStep(dt){simT+=dt;
     if(st.state==='free'){if(st.sty.restUntil>simT||st.sweep||st.filming||pendingMoves.has(st.item)||queuedMoves.has(st.item))return;
       // A client whose colour or perm is done waits at the island for their own stylist; another takes over only if theirs is not at a chair, or after an hour.
       const here=siteOf(st.item.x),done=custs.filter(q=>q.state==='ready'&&(q.site||0)===here),back=done.find(q=>q.resume.sty===st.sty)||done.find(q=>!stations.some(s=>s.sty===q.resume.sty)||simT-q.readyAt>game.clock.hourLength);if(back){resumeAt(st,back);return;}
-      if((!game.clock.isOpen&&game.closingPolicy!=='serve')||(booths.some(b=>siteOf(b.item.x)===here)&&!freeBooth(here)))return;const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.hasPerk?.('vip'),vipOnDuty=stations.some(s=>!s.vacant&&siteOf(s.item.x)===here&&(s.item.id==='vipRoom'||s.sty.hasPerk?.('vip')));
+      if(!game.clock.isOpen&&game.closingPolicy!=='serve')return;
+      // Every client is washed first: with every booth taken, a free chair waits (shown on the chair and in the day's report).
+      const noBooth=booths.some(b=>siteOf(b.item.x)===here)&&!freeBooth(here);st.boothWait=noBooth&&queue.some(q=>q.state==='wait'&&(q.site||0)===here);
+      if(noBooth){if(st.boothWait)game.metrics.wait('booth',dt/game.clock.hourLength);return;}const vipRoom=st.item.id==='vipRoom',vipChair=vipRoom||st.sty.hasPerk?.('vip'),vipOnDuty=stations.some(s=>!s.vacant&&siteOf(s.item.x)===here&&(s.item.id==='vipRoom'||s.sty.hasPerk?.('vip')));
       // VIP clients wait for a VIP chair (the VIP room or a VIP specialist) while one is on duty, unless half their patience is gone.
       // A regular waits for the stylist they like while that stylist is at a chair here, until half their patience is gone.
       const elsewhere=q=>q.preferredStylist&&q.preferredStylist!==st.sty.name&&q.pat>q.maxPat*.5&&stations.some(s=>s!==st&&!s.vacant&&s.sty.name===q.preferredStylist&&siteOf(s.item.x)===here);
@@ -983,7 +993,10 @@ function envStep(dt,t){
 
 /* ================= UI ================= */
 let sel=0;const tabs=$('#tabs'),pbody=$('#pbody'),panelView=new PanelView($('#panel'),$('#pnav'),pbody);let panelKey='';
-function stLabel(st){if(!st.cust)return`<span class="dim">${tx('st.free')}</span>`;if(st.state==='await')return tx(st.cust.inWash?'st.shampoo':'st.walk');
+/** What a chair has within reach: its decoration points and the tools that serve it. */
+function nearLine(item){const s=game.layout.surroundings(item),tools=s.pieces.filter(it=>reachKind(it.id)==='tool').map(it=>{const f=FURNITURE[it.id];return tx('f.'+it.id)+' '+(f.speedFor?tx('near.speed',tx('op.'+f.speedFor),Math.round(f.speedBonus*100)):tx('near.sat',Math.round(f.satisfaction*100)));});
+  return `<div class="dim">${tx('near.decor',s.decor,DECOR_CAP,(s.decor*DECOR_SAT*100).toFixed(1))}${tools.length?' · '+tools.join(' · '):''}</div>`;}
+function stLabel(st){if(!st.cust)return st.boothWait?`<span class="gold">${tx('st.booth')}</span>`:`<span class="dim">${tx('st.free')}</span>`;if(st.state==='await')return tx(st.cust.inWash?'st.shampoo':'st.walk');
   if(st.state==='consult')return canAuto(st)?tx('st.auto',Math.max(0,st.timer).toFixed(0)):`<span class="gold">${tx('st.wait')}</span>`;
   if(st.state==='work'){const o=st.ops[st.opi];return `${tx('doing.'+o.type)} ${Math.round(clamp(o.t/o.dur)*100)}% · ${tx('st.left',Math.max(0,Math.ceil(o.minutes*(1-clamp(o.t/o.dur)))))}`;}return tx('st.reveal');}
 function renderTabs(){const T=[['salon','tab.salon'],['staff','tab.staff'],['syn','tab.syn'],['build','tab.build'],['biz','tab.biz'],['mkt','tab.mkt'],['rev','tab.rev'],['prog','tab.prog']].filter(([k])=>shows('tab.'+k,game.progression.level)),unread=game.reviews.unread;
@@ -1008,7 +1021,7 @@ function renderPanel(force){if(panelHeldAt&&performance.now()-panelHeldAt<2000){
   if(typeof sel!=='number'){panelView.render(ui.render(sel),sel);return;}
   const st=stations[sel],c=st.cust,chairRow=chairBoard();
   if(st.vacant){panelView.render(chairRow+`<div class="dim">${tx('vac.note')}</div>`,sel);return;}
-  let h=chairRow+`<div class="ph"><b>${tx('chair',st.i+1)}</b> · <span style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</span> <span class="dim">(${tx('style.'+st.sty.style)})</span> · <span id="stl">${stLabel(st)}</span></div>`;
+  let h=chairRow+`<div class="ph"><b>${tx('chair',st.i+1)}</b> · <span style="color:${nameColour(st.sty)}">${rankMark(st.sty)}${nm(st.sty.name)}</span> <span class="dim">(${tx('style.'+st.sty.style)})</span> · <span id="stl">${stLabel(st)}</span></div>${nearLine(st.item)}`;
   if(!c){panelView.render(h+`<div class="dim">${tx('free.next',queue.length?queue.map(q=>nm(q.name)).join(', '):tx('free.nobody'))}</div><div id="help">${tx('free.help')}</div>`,sel);return;}
   h+=`<div class="ord">${c.special?`<span class="gold">✦ ${tx('sp.'+c.special)} · ${tx('sp.need',Math.round(c.specialNeed*100))}</span> `:''}${c.regular?`<span class="gold">${tx('reg.tag')} ${hearts(c.regular.hearts)}</span> `:''}${c.occasion?`<span class="gold">${tx('occ.'+c.occasion)} · ${tx('sp.need',Math.round(OCCASION_NEED*100))}</span> `:''}${c.trending?`<span class="gold">${tx('tr.tag')}</span> `:''}${c.vip?`<span class="gold">${tx('vip')}</span> `:''}${c.influencer?`<span class="gold">${tx('inf.tag',c.influencer.handle)}</span> `:''}<b class="${c.villain?'bad':''}">${tx('order.wants',nm(c.name))}</b> <span class="otext">${orderText(c.order)}</span> <span class="dim">· ${c.influencer?tx('inf.free'):`$${c.price} · ${tx('p.budget',c.budget)} · ${tx('grade.pay',tx('grade.'+game.gradeOf(st.sty)),GRADE_PAY[game.gradeOf(st.sty)])}`}</span>${st.state==='consult'&&!styling?` <button class="go" data-do="style" ${ownerBusy()||game.network.executive?'disabled':''}>${tx('p.direct')}</button>`:''}</div>`;
   if(cutSelector.note(c.order.shape))h+=`<div class="dim">${cutSelector.note(c.order.shape)}</div>`;
@@ -1157,8 +1170,13 @@ const groundPlane=new THREE.Plane(UP,0),_gp=V();
 function groundAt(x,y){const r=canvas.getBoundingClientRect();x-=camOff.x*PIX;y+=camOff.y*PIX;ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);return ray.ray.intersectPlane(groundPlane,_gp)?{x:_gp.x,z:_gp.z}:null;}
 /** A note beside the cursor saying why the piece cannot go where it is held. */
 const tipEl=document.createElement('div');tipEl.className='gtip';$('#pops').appendChild(tipEl);
-function ghostTip(x,y){const r=build.isActive&&build.active.reason;if(!r){tipEl.style.display='none';return;}
-  const [k,id]=r.split(':');tipEl.textContent=tx('build.why.'+k,id?tx('f.'+id):'');tipEl.style.display='block';tipEl.style.left=x+'px';tipEl.style.top=y+'px';}
+function ghostTip(x,y){const a=build.isActive&&build.active,r=a&&a.reason,reach=a&&!r&&reachTip(a);tipEl.classList.toggle('info',!!reach);if(!r&&!reach){tipEl.style.display='none';return;}
+  if(r){const [k,id]=r.split(':');tipEl.textContent=tx('build.why.'+k,id?tx('f.'+id):'');}else tipEl.textContent=reach;tipEl.style.display='block';tipEl.style.left=x+'px';tipEl.style.top=y+'px';
+  // Flipped to the cursor's left when it would run under the panel or off the screen.
+  const pr=$('#panel').getBoundingClientRect(),edge=pr.left>x&&y>=pr.top&&y<=pr.bottom?pr.left:innerWidth;tipEl.classList.toggle('left',x+16+tipEl.offsetWidth>edge-4);}
+/** A tool or decoration being placed: how many chairs (booths, for a wash tool) are within its reach there. */
+function reachTip(a){const kind=reachKind(a.id);if(!kind||!a.at)return '';const f=FURNITURE[a.id],site=siteOf(a.at.x),spots=(f.speedFor==='shampoo'?booths.map(b=>b.item):stations.map(s=>s.item)).filter(it=>siteOf(it.x)===site);
+  return tx(f.speedFor==='shampoo'?'reach.booths':'reach.chairs',reachedBy(a.id,a.at,spots).length,spots.length,REACH[kind]);}
 function pickAt(x,y){if(build.isActive){const q=groundAt(x,y);if(q){build.hover(q);const ok=build.commit(q);audio.play(ok?'place':'deny');ghostTip(x,y);if(ok)renderPanel(true);}return;}if(styling)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-((y-r.top)/r.height)*2+1),cam);
   if(sel==='build'){const it=furnitureView.pick(ray);if(it&&build.start(it.id,it))renderPanel(true);return;}
   const hits=ray.intersectObjects(world.children,true).filter(h=>h.object.visible&&h.object.parent.visible);if(!hits.length)return;
@@ -1368,7 +1386,7 @@ syncCtrl();
 /* ================= main loop ================= */
 resize();addEventListener('resize',resize);
 syncFurniture();syncChairs();renderPanel(true);updateHud();
-let lastT=performance.now(),hudT=0,clockT=0,realT=0;
+let lastT=performance.now(),hudT=0,clockT=0,realT=0,noRender=false;
 function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)/1000);lastT=now;realT+=dt;
   // Fast speeds run the simulation in small steps so walking and services stay smooth.
   if(started&&!paused){const total=dt*(styling?1:speed),steps=Math.ceil(total/.06);for(let i=0;i<steps;i++)simStep(total/steps);}else figs.forEach(f=>f.pose(0));
@@ -1380,15 +1398,16 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
     audio.setTension(started?custs.filter(c=>c.villain&&c.state!=='gone').length:0);
     {const waiting=queue.filter(q=>q.state==='wait').length,busyChairs=stations.filter(s=>s.cust).length;audio.setScene({busy:started&&game.clock.isOpen&&(waiting>=4||(stations.length>2&&busyChairs/stations.length>.8)),evening:started&&game.clock.hour>=18});}}
   if((clockT+=dt)>1){clockT=0;drawClock();if(started){alignToWalls();applyQueuedMoves();}}
-  renderer.setRenderTarget(rt);renderer.render(scene,cam);
-  renderer.setRenderTarget(null);renderer.render(post,postCam);
+  // `?debug` long runs can skip drawing to simulate faster (see __cd.norender)
+  if(!noRender){renderer.setRenderTarget(rt);renderer.render(scene,cam);
+  renderer.setRenderTarget(null);renderer.render(post,postCam);}
   if(!booted){booted=true;boot();}}
 // A newer deploy: at start-up the game updates itself; while playing it offers a button, so the day is not cut short.
 checkForUpdate({atStart:true});
 setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update');el.querySelector('span').textContent=tx('upd.ready');el.querySelector('button').textContent=tx('upd.reload');el.classList.add('show');el.querySelector('button').onclick=()=>refreshToLatest(b);}},10*60*1000);
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,owner:()=>({floating:OWNER.floating,job:ownerRoutine.job?ownerRoutine.job.kind:null,pos:[+OWNER.fig.pos.x.toFixed(2),+OWNER.fig.pos.z.toFixed(2)]}),float:()=>{const st=stations.find(s=>s.sty===OWNER);if(st){st.sty=VAC;st.vacant=true;st.state='vacant';}OWNER.floating=true;},toasts:()=>toasts.items.map(t=>t.el.textContent),bots:()=>[...bots.values()].map(b=>({state:b.state,pos:b.pos?[+b.pos.x.toFixed(2),+b.pos.z.toFixed(2)]:null,n:b.n})),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,owner:()=>({floating:OWNER.floating,job:ownerRoutine.job?ownerRoutine.job.kind:null,pos:[+OWNER.fig.pos.x.toFixed(2),+OWNER.fig.pos.z.toFixed(2)]}),float:()=>{const st=stations.find(s=>s.sty===OWNER);if(st){st.sty=VAC;st.vacant=true;st.state='vacant';}OWNER.floating=true;},toasts:()=>toasts.items.map(t=>t.el.textContent),set norender(v){noRender=!!v;},bots:()=>[...bots.values()].map(b=>({state:b.state,pos:b.pos?[+b.pos.x.toFixed(2),+b.pos.z.toFixed(2)]:null,n:b.n})),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
 
 // Read-only state for browser checks; available only in debug mode.
 if(new URLSearchParams(location.search).has('debug'))window.render_game_to_text=()=>JSON.stringify({day:game.clock.day,open:game.clock.isOpen,dayOff:game.dayOff,company:{stage:game.network.stage,executive:game.network.executive,outlets:game.network.outlets},departments:game.departments.jobs,metrics:game.metrics.snapshot(),report:game.report&&{profit:game.report.profit,comparison:game.report.comparison,advice:game.report.advice}});

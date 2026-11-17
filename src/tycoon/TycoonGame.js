@@ -19,9 +19,9 @@ import { Rival, MATCH_PRICE, POACH_CHANCE, POACH_STRESS, SCOUT_COST, SCOUT_LEVEL
 import { contestFor, runContest, CONTESTS, BOOST_DAYS } from './Contests.js';
 import { Brand, ONLINE } from './Brand.js';
 import { Headquarters, ORDERS, TRUST, HQ_LEVEL, talkOdds } from './Headquarters.js';
-/** Minutes before closing that new clients stop being taken; overtime pays time and a half. */
+/** Minutes before closing that new clients stop being taken (see Overtime for who is paid for staying late). */
 export const LAST_CALLS = [0, 30, 60];
-const OVERTIME_RATE = 1.5;
+import { OvertimeLog } from './Overtime.js';
 import { Missions } from './Missions.js';
 import { MonthlyLedger, MONTH_DAYS, summariseDays } from './MonthlyLedger.js';
 import { seasonOf, SEASONS, eventsOn, rollHappening, combine, HAPPENINGS, dateOf, setCalendarOrigin, originFor } from './Calendar.js';
@@ -84,7 +84,7 @@ export class TycoonGame {
     this.bus = new EventBus();
     this.clock = new GameClock(this.bus);
     this.economy = new Economy(STARTING_CASH);
-    this.metrics = new DailyMetrics(); this.explainer = new PerformanceExplainer(); this.advisor = new DecisionAdvisor();
+    this.metrics = new DailyMetrics(); this.overtime = new OvertimeLog(); this.explainer = new PerformanceExplainer(); this.advisor = new DecisionAdvisor();
     this.reputation = new Reputation();
     this.progression = new Progression(this.bus);
     this.staff = new StaffManager(this.economy);
@@ -204,7 +204,7 @@ export class TycoonGame {
   get synergies() { const T = teamOf([this.staff.owner, ...this.staff.working(this.clock.day)], this.staff.support); return SYNERGIES.filter(s => s.has(T)); }
   /** How much quicker a service of `type` goes: equipment, then the team's synergies. */
   /** How fast a kind of service goes at a salon: its furniture and today's team synergies. */
-  speedFor(type, site = 0) { const fx = this.dayFx; return this.layout.speedBonusAt(site, type) * this.processSpeedFor(type) * (fx.speed ?? 1) * this.staff.pace * (type === 'shampoo' ? fx.wash ?? 1 : type === 'dry' ? fx.dry ?? 1 : 1); }
+  speedFor(type, site = 0, at = null) { const fx = this.dayFx; return this.layout.speedBonusAt(site, type, at) * this.processSpeedFor(type) * (fx.speed ?? 1) * this.staff.pace * (type === 'shampoo' ? fx.wash ?? 1 : type === 'dry' ? fx.dry ?? 1 : 1); }
   /** How much quicker colour or perm processes: only the team's synergies change that. */
   processSpeedFor(type) { return this.synergies.reduce((k, s) => k * ((s.speed && s.speed[type]) || 1), 1); }
   /** Synergy boosts to skills: the base boost from performance pay, plus mentoring for juniors. */
@@ -391,7 +391,7 @@ export class TycoonGame {
   chargeMaterials(ops, site = 0) { const k = (this.layout.countAt('stockroom', site) ? FURNITURE.stockroom.materials : 1) * (this.dayFx.materials ?? 1); ops.forEach(op => { if (MATERIALS[op.type]) this.economy.charge('materials', Math.round(MATERIALS[op.type] * k)); }); }
   completeService(customer, worker, byOwner) {
     const comfort = this.comfortAt(customer.site || 0), syn = this.synergies, result = this.evaluator.evaluate(customer, worker, comfort, {
-      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0) + (this.layout.countAt('sterilizer', customer.site || 0) ? FURNITURE.sterilizer.satisfaction : 0)
+      satisfaction: syn.reduce((n, s) => n + (s.satisfaction || 0) + (customer.requestedService === 'colour' ? s.colourSatisfaction || 0 : 0), 0) + (this.isUnlocked('hallOfFame') ? .02 : 0) + (customer.chairAt ? this.layout.surroundings(customer.chairAt).satisfaction : 0)
         + (customer.regular && customer.regular.stylist === worker.name ? FAVOURITE_SATISFACTION : 0) + (customer.trending && worker.hasPerk('trend') ? TREND_PERK_SATISFACTION : 0)
         + (TRAITS[worker.trait]?.satisfaction || 0) + (customer.requestedService === 'colour' ? TRAITS[worker.trait]?.colourSatisfaction || 0 : 0) + certSatisfaction(worker, customer), calm: syn.some(s => s.calm),
     });
@@ -585,7 +585,7 @@ export class TycoonGame {
   }
   #departmentResults(results) { for (const job of results) if (job.idol) { const result = this.#settleSpecial(job.quality, true); if (result) this.bus.emit('special:finished', result); } }
   startDay() {
-    this.metrics.startDay();
+    this.metrics.startDay(); this.overtime.startDay();
     if (this.hqFx.hours && this.clock.day > this.hqFx.hours.until) { this.nextHours = this.nextHours || this.hqFx.hours.base; delete this.hqFx.hours; }
     if (this.nextHours) { this.clock.setHours(...this.nextHours); this.nextHours = null; }
     this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day); this.staff.welfareMorning(dateOf(this.clock.day));
@@ -666,9 +666,10 @@ export class TycoonGame {
     if (this.isUnlocked('membership') && this.regulars) e.earn('membership', this.regulars * MEMBERSHIP_FEE);
     if (this.isUnlocked('sponsor')) e.earn('sponsor', Math.min(SPONSOR_MAX, Math.round(this.marketing.followers / 200)));
     this.operatingCosts.accrue(1); this.#autoReply();
-    // Overtime: everyone on the payroll stays until the last client leaves, at time and a half, and it wears on the team.
-    const ot = Math.round(this.clock.overtimeHours * 10) / 10, otPay = Math.round(this.staff.payroll * OVERTIME_RATE * ot / 8); if (otPay) e.charge('overtime', otPay);
-    this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours + ot);
+    // Overtime: only those who stayed past closing are paid for it, at time and a half, and it wears on them alone.
+    const ot = Math.round(this.clock.overtimeHours * 10) / 10, late = this.overtime.settle([...this.staff.hired, ...this.staff.support.filter(s => s.hired)], this.clock.hourLength), otPay = late.total;
+    if (otPay) e.charge('overtime', otPay);
+    this.resignations = this.staff.closeDay(this.clock.day, this.layout.staffRestRate, this.clock.hours, e2 => this.overtime.hoursOf(e2.id, this.clock.hourLength));
     const money = this.finance.closeDay(e.dailyProfit, e.dailyRevenue, this.clock.day);
     if (money.news) this.news.push('fin:' + money.news);
     // An academy gives everyone a daily lesson.
@@ -678,7 +679,7 @@ export class TycoonGame {
     this.report = {
       day: this.clock.day, ...e.closeDay(), reputation: this.reputation.value - this.repAtDayStart,
       reviews: { count: reviews.length, average: reviews.length ? reviews.reduce((sum, r) => sum + r.stars, 0) / reviews.length : 0 },
-      followers: { now: this.marketing.followers, change: this.marketing.followers - this.followersAtDayStart }, incidents: { ...this.incidents }, served: this.servedToday, overtime: ot, overtimePay: otPay,
+      followers: { now: this.marketing.followers, change: this.marketing.followers - this.followersAtDayStart }, incidents: { ...this.incidents }, served: this.servedToday, overtime: ot, overtimePay: otPay, overtimeBy: late.by,
     };
     this.report.hours = this.clock.hours; this.report.metrics = this.metrics.snapshot();
     this.report.departments = this.departments.daySummary(); this.report.network = this.network.daySummary();
