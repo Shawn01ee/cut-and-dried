@@ -24,6 +24,7 @@ import { STYLE_BOOK_SIZE } from './tycoon/StyleBook.js';
 import { PlaytestLog, MILESTONES } from './playtest/PlaytestLog.js';
 import { PlaytestProbe } from './playtest/PlaytestProbe.js';
 import { DayQuestions } from './ui/DayQuestions.js';
+import { PlaytestResults } from './ui/PlaytestResults.js';
 import { BUILD } from './version.js';
 import { LINES } from './i18n/dialogue.js';
 import { shows, featuresAt } from './tycoon/Features.js';
@@ -1340,14 +1341,15 @@ function profitChart(days,label){const usd=v=>(v<0?'−$':'$')+Math.abs(Math.rou
 /* ================= start menu ================= */
 let menuScreen='main',menuFrom='main',monthFrom='panel';
 /* ---- Playtest (?playtest): a record of the session for the facilitator; it changes nothing in the game. ---- */
-const playtest=new URLSearchParams(location.search).has('playtest')?new PlaytestLog({build:BUILD,lang:i18n.lang}):null,probe=playtest&&new PlaytestProbe(game,playtest),dayQuestions=new DayQuestions(i18n);
+const playtest=new URLSearchParams(location.search).has('playtest')?new PlaytestLog({build:BUILD,lang:i18n.lang}):null,probe=playtest&&new PlaytestProbe(game,playtest),dayQuestions=new DayQuestions(i18n),ptResults=new PlaytestResults(i18n);
 /** What is on screen, for the record: a menu screen, build mode, the styling close-up, or a panel tab. */
 const viewNow=()=>!$('#menu').classList.contains('hide')?'menu:'+menuScreen:build.isActive?'build:'+build.active.id:styling?'styling':'tab:'+(typeof sel==='number'?'salon':sel);
 if(playtest){['pointerdown','keydown','wheel'].forEach(k=>addEventListener(k,()=>playtest.input(started&&!paused&&game.clock.isOpen),{capture:true}));
   addEventListener('click',e=>{const el=e.target.closest&&e.target.closest('[data-t],[data-do],[data-act],button');if(!el)return;const d=el.dataset;playtest.event('click',{what:d.t?'tab:'+d.t:d.do?'do:'+d.do:d.act?'act:'+d.act:(el.id||el.textContent.trim().slice(0,24)),view:viewNow()});},{capture:true});}
-/** The facilitator's row on the title and options screens: how long, which milestones, and the two buttons. */
-function playtestRow(){if(!playtest)return '';const ms=playtest.data.milestones,n=MILESTONES.filter(k=>ms[k]).length;
-  return `<div class="mrow pt"><label>${tx('pt.rec')}</label><span>${tx('pt.recLine',Math.floor(playtest.t/60),n,MILESTONES.length,playtest.data.answers.length)}</span><button data-act="ptsave">${tx('pt.save')}</button><button data-act="ptnew">${tx('pt.new')}</button></div>`;}
+/** The facilitator's rows on the title, help and options screens: who is playing, how far, and the record's buttons. */
+function playtestRow(){if(!playtest)return '';const S=playtest.data.session,ms=playtest.data.milestones,n=MILESTONES.filter(k=>ms[k]).length;
+  return `<div class="mrow pt"><label>${tx('pt.rec')}</label><span>${tx('pt.recLine',S.label,Math.floor(playtest.t/60),n,MILESTONES.length,playtest.data.answers.length)}</span>${mSeg('ptexp',[['yes',tx('pt.yes')],['no',tx('pt.no')]],S.exp==null?'':S.exp?'yes':'no')}<span class="dim">${tx('pt.exp')}</span></div>
+    <div class="mrow pt"><label></label><button data-act="ptres">${tx('pt.res',playtest.sessions.length)}</button><button data-act="ptsave">${tx('pt.save')}</button><button data-act="ptnew">${tx('pt.new')}</button></div>`;}
 const mbox=$('#mcard');
 /** Tomorrow's opening hours, adjustable from the end-of-day report. */
 function dayHours(){const [o,c]=game.plannedHours,b=(w,s)=>`<button data-act="hrs:${w}${s>0?'+':'-'}" ${game.canShiftHours(w==='o'?0:1,s)?'':'disabled'}>${s>0?'+':'−'}</button>`;
@@ -1360,9 +1362,10 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mrow"><label>${tx('m.mode')}</label>${mSeg('mode',[['auto',tx('m.auto')],['manual',tx('m.manual')]],autoOn?'auto':'manual')}</div>
     <div class="mhint">${tx(autoOn?'m.autoD':'m.manualD')}</div>
     <div class="mbtns">${game.saves.has()?`<button class="go big" data-act="start">${tx('m.continue',game.saves.load().day)}</button><button data-act="new">${tx('m.new')}</button>`:`<button class="go big" data-act="new">${tx('m.start')}</button>`}<button data-act="how">${tx('m.how')}</button><button data-act="opts">${tx('m.opts')}</button></div>${playtestRow()}`;
+  else if(menuScreen==='ptres')h=ptResults.render(playtest.sessions)+`<div class="mbtns side"><button data-act="ptcopy">${tx('pt.copy')}</button><button data-act="ptsave">${tx('pt.save')}</button>${backBtn}</div>`;
   else if(menuScreen==='how')h=`<div class="mhead">${tx('m.how')}</div>${playtestRow()}${HOW[i18n.lang].map(([t,b])=>`<div class="hsec"><h3>${t}</h3>${b}</div>`).join('')}<div class="mbtns side">${backBtn}</div>`;
   else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v,c)).join('');
-    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${dayInsights.render(q)}${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}${playtest?dayQuestions.render(q):''}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
+    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${dayInsights.render(q)}${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}${playtest?(probe.report(q.day),dayQuestions.render(q)):''}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
   else if(menuScreen==='week'){const w=game.weekReport,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v.toLocaleString(),c)).join(''),usd=v=>(v<0?'−$':'$')+Math.abs(v).toLocaleString();
     const bars=profitChart(w.days,d=>tx('wd.'+((d.day-1)%7)));
     h=`<div class="mhead">${tx('week.title',w.week,w.from,w.to)}</div><div class="dim">${tx('week.sub')}</div>${bars}<table style="width:100%;border-collapse:collapse">${ledger(w.revenue,'')}${line(tx('day.totalRev'),usd(w.totalRevenue),'gold')}${ledger(w.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+w.totalOperating.toLocaleString(),'gold')}${line(tx('week.profit'),usd(w.profit),w.profit<0?'bad':'good')}${w.totalInvestment?ledger(w.investment,'−','dim'):''}${Object.keys(w.funding).length?ledger(w.funding,'+','good'):''}${line(tx('week.served'),w.served)}${line(tx('day.reviews'),w.reviews.count?tx('day.reviewsV',w.reviews.count,w.reviews.average.toFixed(1)):'–')}${line(tx('day.rep'),(w.reputation>=0?'+':'')+w.reputation.toFixed(1))}${line(tx('day.followers'),(w.followers>=0?'+':'−')+Math.abs(w.followers).toLocaleString())}</table><div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:''}<button class="${game.monthClosedToday?'':'go big'}" data-act="weekfix">${tx('week.fix')}</button><button data-act="monday">${tx('week.monday')}</button></div>`;}
@@ -1383,7 +1386,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mrow"><label>${tx('m.track')}</label><span>♪ ${tx('mu.'+audio.trackId)}</span><button data-act="track">${tx('m.nextTrack')}</button></div>
     <div class="mrow"><label>${tx('m.sfx')}</label><input type="range" min="0" max="100" value="${Math.round(audio.sfxVolume*100)}" data-vol="sfx"></div>${playtestRow()}
     <div class="mbtns side">${backBtn}</div>`;
-  mbox.innerHTML=h;mbox.scrollTop=top;}
+  mbox.classList.toggle('wide',menuScreen==='ptres');mbox.innerHTML=h;mbox.scrollTop=top;}
 function openMenu(s,from){menuScreen=s;menuFrom=from;mbox.scrollTop=0;$('#menu').classList.remove('hide');renderMenu();mbox.scrollTop=0;}
 /** Opens the next day; a Sunday opens on the weekly settlement instead of the salon floor. */
 function beginDay(){departmentGuests.clear();game.nextDay();spawnTimer=1.5;if(!game.dayOff)game.rebookToday.forEach((r,i)=>later(1+i*2.5,()=>spawnCustomer({rebook:r,site:r.site})));referrals.length=0;paused=false;closeMenu();alignToWalls();syncRoster();morningSeats();morningNews();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
@@ -1394,7 +1397,11 @@ function startGame(fresh){if(fresh){game.saves.clear();game.startCalendarToday()
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
   if(playtest&&menuScreen==='day'&&(a==='nextday'||a==='month'))playtest.answer(game.report.day,dayQuestions.collect(game.report));
   if(a==='ptsave'){playtest.download();return;}
-  if(a==='ptnew'){if(confirm(tx('pt.newConfirm'))){playtest.reset();location.reload();}return;}
+  if(a==='ptnew'){playtest.next();location.reload();return;}
+  if(a==='ptpick'){dayQuestions.pick(v);renderMenu();return;}
+  if(a==='ptexp'){playtest.setExp(v==='yes');renderMenu();return;}
+  if(a==='ptres'){openMenu('ptres',menuFrom);return;}
+  if(a==='ptcopy'){const done=()=>{b.textContent=tx('pt.copied');};navigator.clipboard?.writeText(ptResults.markdown(playtest.sessions)).then(done,()=>{});return;}
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
   else if(a==='nextday'||a==='monday'){if(a==='monday')game.save();beginDay();}
