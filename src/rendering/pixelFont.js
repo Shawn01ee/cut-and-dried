@@ -1,5 +1,24 @@
 // A 5×7 block font for the shop signs, so the letters stay crisp after the pixel-art filter.
 const GLYPHS = {
+  F: ['#####', '#....', '#....', '####.', '#....', '#....', '#....'],
+  H: ['#...#', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  J: ['..###', '...#.', '...#.', '...#.', '...#.', '#..#.', '.##..'],
+  K: ['#...#', '#..#.', '#.#..', '##...', '#.#..', '#..#.', '#...#'],
+  Q: ['.###.', '#...#', '#...#', '#...#', '#.#.#', '#..#.', '.##.#'],
+  V: ['#...#', '#...#', '#...#', '#...#', '#...#', '.#.#.', '..#..'],
+  X: ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
+  Y: ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
+  Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+  '0': ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'],
+  '1': ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  '3': ['####.', '....#', '....#', '.###.', '....#', '....#', '####.'],
+  '4': ['...#.', '..##.', '.#.#.', '#..#.', '#####', '...#.', '...#.'],
+  '5': ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
+  '6': ['.###.', '#....', '#....', '####.', '#...#', '#...#', '.###.'],
+  '7': ['#####', '....#', '...#.', '..#..', '.#...', '.#...', '.#...'],
+  '8': ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'],
+  '9': ['.###.', '#...#', '#...#', '.####', '....#', '....#', '.###.'],
+  '&': ['.##..', '#..#.', '#.#..', '.#...', '#.#.#', '#..#.', '.##.#'],
   A: ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
   B: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
   C: ['.####', '#....', '#....', '#....', '#....', '#....', '.####'],
@@ -20,14 +39,21 @@ const GLYPHS = {
   2: ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
 };
 
-/** Draws text centred at (cx, cy) with each font pixel `scale` canvas pixels wide. */
-export function drawPixelText(g, text, cx, cy, scale, color) {
-  const advance = 6 * scale, width = text.length * advance - scale;
-  let x = Math.round(cx - width / 2); const y = Math.round(cy - 3.5 * scale);
+/**
+ * Draws text centred at (cx, cy) with each font pixel `scale` canvas pixels wide. When `maxWidth` is given and the text
+ * would not fit, the gaps between letters and the spaces narrow first, then the letters drop to half size.
+ */
+export function drawPixelText(g, text, cx, cy, scale, color, maxWidth = Infinity) {
+  const chars = [...text.toUpperCase()], widthAt = (s, gap, space) => chars.reduce((w, ch) => w + (ch === ' ' ? space : 5 * s + gap), 0) - gap;
+  // as drawn when it fits; then tighter letters and a narrow space; then half-size letters
+  const fits = [[scale, scale, 6 * scale], [scale, 1, 3 * scale], [Math.max(1, Math.floor(scale / 2)), 1, 3]].find(([s, gp, sp]) => widthAt(s, gp, sp) <= maxWidth) || [1, 1, 3];
+  const [sc, gap, space] = fits; scale = sc;
+  let x = Math.round(cx - widthAt(scale, gap, space) / 2); const y = Math.round(cy - 3.5 * scale);
   g.fillStyle = color;
-  for (const ch of text.toUpperCase()) {
+  for (const ch of chars) {
+    if (ch === ' ') { x += space; continue; }
     (GLYPHS[ch] || []).forEach((row, r) => [...row].forEach((p, c) => { if (p === '#') g.fillRect(x + c * scale, y + r * scale, scale, scale); }));
-    x += advance;
+    x += 5 * scale + gap;
   }
 }
 
@@ -36,5 +62,5 @@ export function paintSign(g, w, h, text) {
   // White sign with black lettering, like the shop front.
   g.fillStyle = '#f6f3ee'; g.fillRect(0, 0, w, h);
   g.fillStyle = '#9c98a2'; g.fillRect(0, h - 1, w, 1);
-  drawPixelText(g, text, w / 2, h / 2, 2, '#1d1a26');
+  drawPixelText(g, text, w / 2, h / 2, 2, '#1d1a26', w - 2);
 }
