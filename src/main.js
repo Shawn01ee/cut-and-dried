@@ -20,6 +20,7 @@ import { GRADE_PAY, TREND_PAY } from './hair/StyleMenu.js';
 import { decorThemeOf } from './tycoon/Decor.js';
 import { REACH, DECOR_CAP, DECOR_SAT, reachKind, reachedBy } from './building/Surroundings.js';
 import { INTERIOR_SETS } from './building/InteriorSets.js';
+import { STYLE_BOOK_SIZE } from './tycoon/StyleBook.js';
 import { LINES } from './i18n/dialogue.js';
 import { shows, featuresAt } from './tycoon/Features.js';
 import { DECOR_MODELS } from './rendering/decorModels.js';
@@ -852,6 +853,13 @@ game.bus.on('mission:done',m=>{popup(tx('ms.done',tx('ms.t.'+m.kind)),recep.head
 $('#offday').addEventListener('click',e=>{const b=e.target.closest('[data-off]');if(!b)return;if(b.dataset.off==='week')openMenu('week','game');else{game.save();beginDay();}});
 game.bus.on('staff:levelup',e=>{popup(tx('staffLevelUp',nm(e.name),e.level),e.fig.head,'big');audio.play('levelUp');if(e.newTalent){const p=e.newTalent;e.newTalent=null;later(1.4,()=>popup(tx('talent.new',nm(e.name),tx('perk.'+p)),e.fig.head,'big'));}renderPanel(true);});
 game.bus.on('level:up',l=>{popup(tx('levelUp',l,tx('lv.'+l)),recep.head,'big');const f=featuresAt(l);if(f.length)later(1.6,()=>popup(tx('feat.opened',f.map(k=>tx('feat.'+k)).join(' · ')),recep.head,'big'));renderPanel(true);});
+/** A style's name in the book: a cut, a perm or a colour. */
+const bookName=key=>{const [k,id]=key.split(':');return k==='col'?wantName(+id):tx(k+'.'+id);};
+// The style book: a new entry quietly, a first star, a new signature or a milestone out loud.
+game.bus.on('book:entry',b=>{const H=recep.head;
+  if(b.fresh.length)popup(tx('book.new',b.fresh.map(bookName).join(' · '),game.book.size,STYLE_BOOK_SIZE),H,'');
+  b.stars.forEach(k=>popup(tx('book.star',bookName(k)),H,'big'));b.signatures.forEach(k=>{audio.play('clap');popup(tx('book.sig',bookName(k)),H,'big');});
+  b.milestones.forEach(m=>{audio.play('cash');popup(tx('book.milestone',m.at,m.cash.toLocaleString(),m.followers),H,'big');});});
 game.bus.on('review:bonus',b=>{popup(b.kind==='streak'?tx('rv.bonusStreak',b.streak,b.amount.toLocaleString()):tx('rv.bonusMilestone',b.at,b.amount.toLocaleString(),b.rating.toFixed(1),b.mult.toFixed(2)),recep.head,'big');audio.play('cash');renderPanel(true);});
 game.bus.on('review:new',r=>{if(sel==='rev')game.reviews.markRead();if(r.stars<=2){popup(tx('rv.newLow','★'.repeat(r.stars)),recep.head,'');audio.play('bad');}});
 function openStyling(st){if(game.network.executive)return;if(site!==siteOf(st.item.x))focusSite(siteOf(st.item.x));if(styling||st.state!=='consult'||!st.cust||ownerBusy())return;styling=new StylingSession(st,st.cust);if(!st.playerPlan){st.plan=blankPlan(st.cust.hair);st.playerPlan=true;}st.byOwner=true;st.touched=true;st.sty.fig.root.visible=false;savedCamK=camK;camK=bestCamK(st);document.body.classList.add('closeup');pixScale=.5;resize();const hp=st.cust.fig.head.getWorldPosition(V());camClose.set(hp.x,hp.y-(W/H<1?.62:.2),hp.z);audio.play('swish');renderPanel(true);}
