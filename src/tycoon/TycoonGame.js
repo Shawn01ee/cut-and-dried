@@ -19,7 +19,7 @@ import { Hospitality } from './Hospitality.js';
 import { Finance } from './Finance.js';
 import { Rival, MATCH_PRICE, POACH_CHANCE, POACH_STRESS, SCOUT_COST, SCOUT_LEVEL, RIVAL_WIN } from './Rival.js';
 import { contestFor, runContest, CONTESTS, BOOST_DAYS } from './Contests.js';
-import { Brand, ONLINE } from './Brand.js';
+import { Brand, ONLINE, AUTO as BRAND_AUTO } from './Brand.js';
 import { Headquarters, ORDERS, TRUST, HQ_LEVEL, talkOdds } from './Headquarters.js';
 /** Minutes before closing that new clients stop being taken (see Overtime for who is paid for staying late). */
 export const LAST_CALLS = [0, 30, 60];
@@ -623,6 +623,7 @@ export class TycoonGame {
     // A surprise later in the day, but never on top of a morning happening.
     if (!this.happening && this.progression.level >= 2) this.surprise = rollSurprise(this.weather, this.clock.openHour, this.clock.closeHour);
     this.brand.startDay(this.clock.day).forEach(k => this.news.push('brand:' + k)); this.brand.rollOffer(this.clock.day);
+    { const d = this.brand.decideOffer(this.economy, this.marketing, this.clock.day); if (d) this.news.push('brand:' + d); }
     this.#hqMorning(); this.rebookToday = this.rebooked.splice(0); this.#agencyMorning();
     const move = shows('mkt.rival', this.progression.level) ? this.rival.startDay(this.clock.day, this.standing) : null;
     if (shows('mkt.rival', this.progression.level)) this.spy.startDay(this.rival, this.clock.openHour, this.clock.closeHour); else this.spy.plan = null;
@@ -677,6 +678,9 @@ export class TycoonGame {
     // The brand: deliveries and shop sales, online orders and the shipping they cost.
     this.brand.closeDay(this.clock.day, this.economy).forEach(k => this.news.push('brand:' + k));
     { const orders = this.brand.onlineOrders(this.marketing.followers), units = orders.reduce((n, o) => n + o.units, 0); if (units) { this.economy.earn('online', orders.reduce((n, o) => n + o.revenue, 0)); this.economy.charge('shipping', units * ONLINE.shipping); } this.brandOrders = orders; }
+    // Running the line on its own: the fee on the day's brand takings, then tomorrow's stock.
+    if (this.brand.auto) { const takings = ['brand', 'online', 'wholesale', 'retail'].reduce((n, k) => n + (this.economy.today.revenue[k] || 0), 0), fee = Math.round(takings * BRAND_AUTO.fee); if (fee) this.economy.charge('brandAgency', fee); }
+    this.brand.evening(this.economy);
     const e = this.economy, sales = this.layout.dailySales * (this.isUnlocked('brandLine') ? 2 : 1);
     if (sales) e.earn('products', sales);
     if (this.isUnlocked('membership') && this.regulars) e.earn('membership', this.regulars * MEMBERSHIP_FEE);
