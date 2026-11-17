@@ -11,7 +11,7 @@ test('departures count once and completed services are not closing losses', () =
   for (const c of [served, waiting, full]) { m.arrive(c); m.arrive(c); }
   m.service(served, { satisfaction: .9 }); m.service(served, { satisfaction: .1 }); m.leave(served, 'closing');
   m.leave(waiting, 'patience'); m.leave(waiting, 'closing'); m.leave(full, 'seats'); m.leave(full, 'closing');
-  assert.deepEqual(m.snapshot(), { arrivals: 3, served: 1, happy: 1, satisfaction: .9, lost: { seats: 1, patience: 1, closing: 0 } });
+  assert.deepEqual(m.snapshot(), { arrivals: 3, served: 1, happy: 1, satisfaction: .9, lost: { seats: 1, patience: 1, closing: 0 }, waits: { booth: 0 }, referred: { branch: 0, outlet: 0 } });
   const old = m.snapshot(); m.startDay(); m.arrive(served); m.leave(served, 'closing');
   assert.equal(old.lost.closing, 0); assert.equal(m.snapshot().satisfaction, null); assert.equal(m.arrivals, 1);
 });

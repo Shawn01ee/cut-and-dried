@@ -4,6 +4,7 @@ import { appointmentTimes } from '../src/core/ArrivalProcess.js';
 import { SalonNetwork, FORMATS, REST_FIXED_SHARE, REST_SUPPORT, REST_RECOVERY, LOSS_QUALITY } from '../src/tycoon/SalonNetwork.js';
 import { Economy } from '../src/tycoon/Economy.js';
 import { NetworkPanel } from '../src/ui/NetworkPanel.js';
+import { outletPlan, phaseAt } from '../src/scene/OutletView.js';
 import { I18n } from '../src/i18n/I18n.js';
 const seeded = () => { let s=81231; return ()=>((s=(1664525*s+1013904223)>>>0)+.5)/4294967296; };
 function setup() { const g={economy:new Economy(1e6),clock:{day:1},isSunday:false,weather:'cloudy',reputation:{value:85},progression:{level:10},layout:{tier:3},departments:{idolReady:true},staff:{hired:[{rank:'deputy'}, {rank:'designer'}],management:60,owner:{}},hq:{order:null}};g.network=new SalonNetwork(g);return g; }
@@ -41,4 +42,13 @@ test('an unprofitable outlet loses quality, while a closed outlet recovers at a 
 test('weather is a shared demand input and bilingual UI has complete labels',()=>{
  const g=setup(),n=g.network;n.upgrade();n.open('flagship');const mean=n.forecast(n.outlets[0]);g.weather='storm';assert.equal(n.forecast(n.outlets[0]),mean*.75);
  for(const lang of ['ko','en']) { const html=new NetworkPanel(g,new I18n(lang)).render(true);assert.ok(!/net\.[a-z]|NaN|undefined/.test(html)); }
+});
+test('the morning draw is what the evening settles; a shop serves first come up to its capacity, one client a chair at a time',()=>{
+ const g=setup(),n=g.network;n.upgrade();n.open('room');const o=n.outlets[0];g.clock.day++;Object.assign(g.clock,{elapsed:30,dayLength:150});g.economy.startDay();
+ n.startDay(()=>.5);const drawn=o.today.times.length;assert.ok(drawn>0);n.refer(o);assert.deepEqual(o.referred.at,[.2]);
+ n.settle(()=>.99);assert.equal(o.last.arrivals,drawn+1);assert.equal(o.last.referred,1);
+ const cap=FORMATS.room.capacity,plan=outletPlan(Array.from({length:cap+2},(_,i)=>({id:i,a:i/(cap+2)})),3,cap);
+ assert.equal(plan.filter(c=>c.served).length,cap);assert.ok(plan.slice(-2).every(c=>!c.served&&phaseAt(c,1)==='turned'));
+ for(let k=0;k<3;k++){const on=plan.filter(c=>c.chair===k).sort((a,b)=>a.start-b.start);for(let i=1;i<on.length;i++)assert.ok(on[i].start>=on[i-1].end-1e-9);}
+ assert.deepEqual(['out','wait','chair','leave'].map((_,i)=>phaseAt({a:.1,served:true,start:.2,end:.3},[.05,.15,.25,.35][i])),['out','wait','chair','leave']);
 });
