@@ -461,13 +461,17 @@ function spawnCustomer(o={}){
   c.fig=fig;c.hm=new Hair(fig.head,fig);fig.pos.copy(D.street);fig.yaw=-Math.PI/2;c.fadeIn=0;setFade(fig,.01);
   c.tag=document.createElement('div');c.tag.className='tag'+(c.villain?' villain':'');c.tag.innerHTML='<i></i>';c.tag.style.display='none';$('#pops').appendChild(c.tag);
   custs.push(c);game.metrics.arrive(c);if(c.vip)popup(tx('vipArrive',nm(c.name)),recep.head,'big');if(c.influencer)popup(tx('inf.arrive',c.influencer.handle,c.influencer.followers.toLocaleString()),recep.head,'big');arrivalNews(c,o);
-  fig.walkTo([D.door,D.out,D.inn],()=>{if(!game.accepting){if(game.lateArrival(c)==='book'){game.rebook(c);c.rebooked=true;const dk=game.staff.receptionistAt(site).hired?deskFig(site):null;if(dk)say(dk,line('desk.rebook'),true);later(1.2,()=>say(fig,line('rebook.ok'),false));leave(c);}else{if(game.customerSentHome())goesNextDoor(c);leave(c,'full');}return;}audio.play('chime');
+  fig.walkTo([D.door,D.out,D.inn],()=>enterSalon(c,site));
+}
+/** A client just inside a salon's door: taken in, sent on, booked for tomorrow or turned away. */
+function enterSalon(c,site){const fig=c.fig;
+  if(!game.accepting){if(game.lateArrival(c)==='book'){game.rebook(c);c.rebooked=true;const dk=game.staff.receptionistAt(site).hired?deskFig(site):null;if(dk)say(dk,line('desk.rebook'),true);later(1.2,()=>say(fig,line('rebook.ok'),false));leave(c);}else{if(game.customerSentHome())goesNextDoor(c);leave(c,'full');}return;}audio.play('chime');
     {const L=deskLoad(site);if(game.deskFull(site,L.ahead,L.chairs)){declineAtDesk(c,site);return;}}
     if(game.snow[site]>=SLIP_DEPTH&&Math.random()<SLIP_CHANCE){popup(tx('snow.slip',nm(c.name)),fig.head,'big');audio.play('bad');game.reputation.add(SLIP_REP);c.pat*=.8;}greetAt(c,site);const mine=s=>!s.occ&&siteOf(s.pos.x)===site,seat=bench.find(mine)||terr.find(mine);
     if(!seat){if(game.staff.receptionistAt(site).hired){declineAtDesk(c,site);return;}popup(tx('noSeats'),fig.head,'');audio.play('bad');if(game.customerTurnedAway(c))goesNextDoor(c);leave(c,'full');return;}
     seat.occ=c;c.seat=seat;fig.walkTo([...route(fig.pos,seat.app[0]),seat.pos],()=>{if(!game.clock.isOpen&&game.closingPolicy!=='serve'){closingLeave(c);return;}fig.mode='sit';fig.yaw=seat.yaw;fig.seatH=seat.h;fig.footY=.06;c.state='wait';queue.push(c);if(game.spotSpy(c))spyCard(c);
       // Drinks and snacks are served as soon as the client sits down.
-      const drink=game.dayFx.drinks===0?null:game.hospitality.serve(c);if(drink){fig.setTool(drink==='juice'?'juice':'cup');if(Math.random()<.35)later(.6,()=>say(fig,line('drink.thanks'),false));}});});
+      const drink=game.dayFx.drinks===0?null:game.hospitality.serve(c);if(drink){fig.setTool(drink==='juice'?'juice':'cup');if(Math.random()<.35)later(.6,()=>say(fig,line('drink.thanks'),false));}});
 }
 function arrivalNews(c,o){const desk=deskFig(c.site||0).head;
   if(c.special){audio.play('levelUp');popup(tx('sp.arrive',tx('sp.'+c.special),Math.round(c.specialNeed*100)),desk,'big');}
@@ -829,8 +833,21 @@ function finishDay(){game.staff.hired.filter(e=>e.quits).forEach(e=>{e.quits=fal
 const deskLoad=site=>({ahead:queue.filter(q=>(q.site||0)===site).length+stations.filter(s=>s.cust&&siteOf(s.item.x)===site).length,chairs:stations.filter(s=>!s.vacant&&siteOf(s.item.x)===site).length});
 const deskClosedOn=[0,0];
 /** The desk turns a walk-in away kindly: a booking for tomorrow, or a polite no (they may go next door). Said once a day: the desk is closed. */
-function declineAtDesk(c,site){const r=game.declineAtDesk(c),dk=deskFig(site);say(dk,line(r==='book'?'desk.fullBook':'desk.full'),true);
-  if(deskClosedOn[site]!==game.clock.day){deskClosedOn[site]=game.clock.day;popup(tx('desk.closed',nm(game.staff.receptionistAt(site).name)),recep.head,'big');}
+/** Whether a salon can still take a walk-in today: staffed chairs, a free waiting seat, and time left for one more. */
+function roomAt(site){if(site===1&&!game.layout.branchOpen)return false;const L=deskLoad(site),coming=custs.filter(q=>q.referred==='branch'&&q.site===site&&q.state==='arrive').length,free=[...bench,...terr].filter(s=>!s.occ&&siteOf(s.pos.x)===site).length;
+  return game.accepting&&L.chairs>0&&free>coming&&game.roomLeft(L.ahead+coming,L.chairs)>0;}
+/** Somewhere else a walk-in the desk cannot fit can be seen today: the other salon when it has room, else a franchise. Once only. */
+function otherRoom(c,site){if(c.referred)return null;if(roomAt(1-site))return {kind:'branch',site:1-site};const o=game.network.referralOutlet();return o?{kind:'outlet',outlet:o}:null;}
+const referNoted={};
+/** Sent on by the desk: down the street to the other salon, or to a franchise (they leave here). Said once a day per salon. */
+function sendOn(c,site,alt){const dk=deskFig(site),key=game.clock.day+':'+site+':'+alt.kind;c.referred=alt.kind;game.metrics.refer(alt.kind);
+  say(dk,line(alt.kind==='branch'?(site?'desk.toMain':'desk.toBranch'):'desk.toOutlet'),true);later(1.2,()=>say(c.fig,line('refer.ok'),false));
+  if(!referNoted[key]){referNoted[key]=1;popup(tx(alt.kind==='branch'?(site?'desk.referMain':'desk.referBranch'):'desk.referOutlet',nm(game.staff.receptionistAt(site).name)),site?recep2.head:recep.head,'big');}
+  if(alt.kind==='outlet'){game.network.refer(alt.outlet);leave(c);return;}
+  const A=SITE_DOORS[site],B=SITE_DOORS[alt.site];c.site=alt.site;c.fig.walkTo([A.out,A.door,B.door,B.out,B.inn],()=>enterSalon(c,alt.site));}
+function declineAtDesk(c,site){{const alt=otherRoom(c,site);if(alt){sendOn(c,site,alt);return;}}
+  const r=game.declineAtDesk(c),dk=deskFig(site);say(dk,line(r==='book'?'desk.fullBook':'desk.full'),true);
+  if(deskClosedOn[site]!==game.clock.day){deskClosedOn[site]=game.clock.day;popup(tx('desk.closed',nm(game.staff.receptionistAt(site).name)),site?recep2.head:recep.head,'big');}
   if(r==='book'){c.rebooked=true;later(1.2,()=>say(c.fig,line('rebook.ok'),false));}else if(r==='rival')goesNextDoor(c);leave(c);}
 /** A spy seen through at the desk: show them the door, feed them false information, or let them be. */
 function spyCard(c){const S=c.spy,R=game.rival.name;audio.play('bad');later(.8,()=>incidents.show({title:tx('spy.t',nm(c.name)),text:tx('spy.text',R,tx('spy.aim.'+S.aim)),fallback:2,options:[

@@ -31,7 +31,7 @@ export class SalonNetwork {
     const g=this.game; if (g.isSunday) return;
     for (const o of this.outlets) {
       if (o.opened>=g.clock.day || o.last?.day===g.clock.day) continue;
-      const f=FORMATS[o.format], expected=o.paused?0:this.forecast(o), arrivals=appointmentTimes(0,1,expected,random).length;
+      const f=FORMATS[o.format], expected=o.paused?0:this.forecast(o), referred=this.referredToday(o), arrivals=appointmentTimes(0,1,expected,random).length+referred;
       const served=Math.min(arrivals,f.capacity), revenue=served*f.ticket, royalty=Math.round(revenue*f.royalty);
       // Temporary closure still pays local fixed costs and HQ support. No guaranteed revenue.
       const fixed=o.paused?Math.round(f.dailyCost*REST_FIXED_SHARE):f.dailyCost, support=o.paused?REST_SUPPORT:f.support;
@@ -39,11 +39,23 @@ export class SalonNetwork {
       const qualityBefore=o.quality;
       if(o.paused)o.quality=Math.min(100,o.quality+REST_RECOVERY);
       else if(profit<0)o.quality=Math.max(30,o.quality-LOSS_QUALITY);
-      o.last={ day:g.clock.day, paused:o.paused, expected, arrivals, served, lost:arrivals-served, revenue, expenses, profit, royalty, support, qualityBefore, qualityAfter:o.quality };
+      o.last={ day:g.clock.day, paused:o.paused, expected, referred, arrivals, served, lost:arrivals-served, revenue, expenses, profit, royalty, support, qualityBefore, qualityAfter:o.quality };
       g.economy.earn('royalties',royalty); g.economy.charge('network',support);
     }
     this.version++;
   }
+  /** Clients our salons' desks sent to this outlet today. */
+  referredToday(o) { return o.referred && o.referred.day===this.game.clock.day ? o.referred.n : 0; }
+  /**
+   * The open outlet with the most room left today for a client our desk cannot fit in, or null. Room = capacity less what
+   * it expects, a margin of one standard deviation of its own (Poisson) arrivals, and those we already sent.
+   */
+  referralOutlet() {
+    const g=this.game, room=o=>{ const e=this.forecast(o); return FORMATS[o.format].capacity-e-Math.ceil(Math.sqrt(e))-this.referredToday(o); };
+    return this.outlets.filter(o=>!o.paused && o.opened<g.clock.day && room(o)>=1).sort((a,b)=>room(b)-room(a))[0] || null;
+  }
+  /** One client sent to an outlet by our desk: counted in its arrivals when the day is settled. */
+  refer(o) { o.referred={ day:this.game.clock.day, n:this.referredToday(o)+1 }; this.version++; }
   /** Today's settled accounts only; opening fees and training purchases stay in the main ledger. */
   daySummary() {
     const rows=this.outlets.map(o=>o.last).filter(r=>r?.day===this.game.clock.day);
