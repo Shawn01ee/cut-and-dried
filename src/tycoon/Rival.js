@@ -36,8 +36,14 @@ export const RIVALS = [
   { name: 'GLOSS LAB', rating: 4.55, stylists: [] },
   { name: 'NOVA HAIR', rating: 4.6, stylists: [] },
 ];
-/** Dominating the street for this many days in a row (our share at or above `DOMINANT`) closes the rival. */
-export const DOMINANT = .88, DOMINANT_DAYS = 21, REOPEN_DAYS = [4, 7];
+/**
+ * How long a rival holds out. Each morning our share of the street above `hold` wears its footing down by `wear` per
+ * unit of share (a share of 0.76 against a 0.6 hold: -16); below `hold` it recovers at `mend` per unit. At zero it closes
+ * and a stronger salon opens `REOPEN_DAYS` later, with `base` + `perTier` footing for each rival already beaten.
+ * Beating one is worth `win` (reputation and followers, more for a stronger one).
+ */
+export const FOOTING = { base: 100, perTier: 30, hold: .6, wear: 100, mend: 50 }, REOPEN_DAYS = [4, 7];
+export const RIVAL_WIN = { rep: 3, followers: 150 };
 /** Matching a price war: our prices drop for its duration and most of the rival's discount stops working. */
 export const MATCH_PRICE = .85, MATCH_BLUNTS = .7;
 /** The chance on an ordinary day that the rival tries to poach one of our stylists, and what scouting theirs costs. */
@@ -51,12 +57,16 @@ export class Rival {
   constructor() {
     this.tier = 0; this.name = RIVALS[0].name; this.open = false; this.price = 1; this.baseRating = RIVALS[0].rating;
     this.move = null; this.daysLeft = 0; this.version = 0;
-    // Days in a row we have dominated, the day the next rival opens after a closure, closures so far, and stylists we took.
-    this.streak = 0; this.reopenDay = 0; this.closed = 0; this.lost = []; this.rest = 0; this.history = [];
+    // How much fight it has left (and yesterday's change and share), the day the next rival opens after a closure, closures so far, and stylists we took.
+    this.footing = this.maxFooting; this.lastChange = 0; this.lastShare = null; this.reopenDay = 0; this.closed = 0; this.lost = []; this.rest = 0; this.history = [];
     // Stylists left without a salon when theirs closed: they can be hired like anyone else. `freed` is the last closure's.
     this.released = []; this.freed = null;
   }
   get def() { return RIVALS[Math.min(this.tier, RIVALS.length - 1)]; }
+  /** Full footing for this rival: more for each one already beaten. */
+  get maxFooting() { return FOOTING.base + FOOTING.perTier * this.tier; }
+  /** Mornings left at yesterday's pace, or null when it is not wearing down. */
+  get closesIn() { return this.lastChange < 0 ? Math.ceil(this.footing / -this.lastChange) : null; }
   get effect() { return this.move ? MOVES[this.move] : {}; }
   get discount() { return this.effect.discount || 0; }
   get priceLevel() { return this.effect.price ?? this.price; }
@@ -70,12 +80,13 @@ export class Rival {
   startDay(day, you) {
     if (!this.open) {
       if (this.reopenDay ? day < this.reopenDay : day < OPENS_ON_DAY) return null;
-      this.open = true; this.reopenDay = 0; this.version++; return 'open';
+      this.open = true; this.reopenDay = 0; this.footing = this.maxFooting; this.lastChange = 0; this.lastShare = null; this.version++; return 'open';
     }
-    // Every day we hold most of the street counts; enough in a row and they give up.
-    const share = 1 - this.pull(you) - (you.lost || 0);
-    this.streak = share >= DOMINANT ? this.streak + 1 : 0;
-    if (this.streak >= DOMINANT_DAYS) { this.#close(day); return 'closed'; }
+    // Holding more of the street than `hold` wears them down; less lets them recover. At zero they give up.
+    const share = 1 - this.pull(you) - (you.lost || 0), F = FOOTING;
+    this.lastShare = share; this.lastChange = share > F.hold ? -(share - F.hold) * F.wear : (F.hold - share) * F.mend;
+    this.footing = clamp(this.footing + this.lastChange, 0, this.maxFooting);
+    if (this.footing <= 0) { this.#close(day); return 'closed'; }
     this.baseRating = clamp(this.baseRating + rand(-.05, .06), this.def.rating - .6, this.def.rating + .5);
     if (this.move && --this.daysLeft > 0) return null;
     // After a move, a few quiet days.
@@ -94,7 +105,7 @@ export class Rival {
   }
   #close(day) {
     const left = this.stylists; this.released.push(...left.filter(id => !this.released.includes(id))); this.freed = { from: this.name, ids: left };
-    this.open = false; this.closed++; this.streak = 0; this.move = null; this.daysLeft = 0; this.price = 1; this.lost = [];
+    this.beaten = this.name; this.open = false; this.closed++; this.move = null; this.daysLeft = 0; this.price = 1; this.lost = [];
     this.tier = Math.min(RIVALS.length - 1, this.tier + 1); this.name = this.def.name; this.baseRating = this.def.rating; this.reopenDay = day + Math.round(rand(...REOPEN_DAYS)); this.version++;
   }
   /** The name of the rival that will open next (while one is closed). */
@@ -115,10 +126,13 @@ export class Rival {
   lose(id) { if (!this.lost.includes(id)) this.lost.push(id); this.baseRating = Math.max(1, this.baseRating - .2); this.version++; }
   /** One of ours went to them. */
   gain() { this.baseRating = Math.min(5, this.baseRating + .15); this.version++; }
-  toJSON() { return { tier: this.tier, open: this.open, price: this.price, baseRating: this.baseRating, move: this.move, daysLeft: this.daysLeft, streak: this.streak, reopenDay: this.reopenDay, closed: this.closed, lost: this.lost, released: this.released, rest: this.rest, history: this.history }; }
+  toJSON() { return { tier: this.tier, open: this.open, price: this.price, baseRating: this.baseRating, move: this.move, daysLeft: this.daysLeft, footing: this.footing, lastChange: this.lastChange, lastShare: this.lastShare, reopenDay: this.reopenDay, closed: this.closed, lost: this.lost, released: this.released, rest: this.rest, history: this.history }; }
   restore(d) {
     if (!d) return;
-    Object.assign(this, { tier: d.tier || 0, open: !!d.open, price: d.price ?? 1, baseRating: d.baseRating ?? 3.9, move: d.move || null, daysLeft: d.daysLeft || 0, streak: d.streak || 0, reopenDay: d.reopenDay || 0, closed: d.closed || 0, lost: d.lost || [], released: d.released || [], rest: d.rest || 0, history: d.history || [] }); if (this.move && !MOVES[this.move]) this.move = null;
-    this.name = this.def.name; this.version++;
+    Object.assign(this, { tier: d.tier || 0, open: !!d.open, price: d.price ?? 1, baseRating: d.baseRating ?? 3.9, move: d.move || null, daysLeft: d.daysLeft || 0, reopenDay: d.reopenDay || 0, closed: d.closed || 0, lost: d.lost || [], released: d.released || [], rest: d.rest || 0, history: d.history || [] }); if (this.move && !MOVES[this.move]) this.move = null;
+    this.name = this.def.name;
+    // Older saves kept a run of dominant days instead: that run, out of 21, has worn the same share off.
+    this.footing = d.footing ?? Math.round(this.maxFooting * (1 - Math.min(1, (d.streak || 0) / 21)));
+    this.lastChange = d.lastChange || 0; this.lastShare = d.lastShare ?? null; this.version++;
   }
 }

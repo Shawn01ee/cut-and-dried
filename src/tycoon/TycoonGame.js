@@ -17,7 +17,7 @@ import { ReviewBoard } from './ReviewBoard.js';
 import { ReviewRewards } from './ReviewRewards.js';
 import { Hospitality } from './Hospitality.js';
 import { Finance } from './Finance.js';
-import { Rival, MATCH_PRICE, POACH_CHANCE, POACH_STRESS, SCOUT_COST, SCOUT_LEVEL } from './Rival.js';
+import { Rival, MATCH_PRICE, POACH_CHANCE, POACH_STRESS, SCOUT_COST, SCOUT_LEVEL, RIVAL_WIN } from './Rival.js';
 import { contestFor, runContest, CONTESTS, BOOST_DAYS } from './Contests.js';
 import { Brand, ONLINE } from './Brand.js';
 import { Headquarters, ORDERS, TRUST, HQ_LEVEL, talkOdds } from './Headquarters.js';
@@ -624,7 +624,9 @@ export class TycoonGame {
     this.#hqMorning(); this.rebookToday = this.rebooked.splice(0); this.#agencyMorning();
     const move = shows('mkt.rival', this.progression.level) ? this.rival.startDay(this.clock.day, this.standing) : null;
     if (shows('mkt.rival', this.progression.level)) this.spy.startDay(this.rival, this.clock.openHour, this.clock.closeHour); else this.spy.plan = null;
-    if (move) this.news.push(move);
+    if (move && move !== 'closed') this.news.push(move);
+    // Beating a rival: the street notices (more for a stronger one).
+    if (move === 'closed') { const k = this.rival.closed, rep = RIVAL_WIN.rep * k, fol = RIVAL_WIN.followers * k; this.reputation.add(rep); this.marketing.addFollowers(fol); this.news.push(`win:${this.rival.beaten}:${rep}:${fol}`); }
     if (move === 'closed' && this.rival.freed?.ids.length) this.news.push('freed:' + this.rival.freed.ids.join(','));
     if (this.rival.open && !this.poach && this.staff.hired.length >= 2 && Math.random() < POACH_CHANCE) { const t = this.staff.hired.filter(e => e.level >= 3 && e.stress >= POACH_STRESS).sort((a, b) => b.stress - a.stress)[0]; if (t) this.poach = { id: t.id }; }
     // A discounting rival tempts a few regulars away.

@@ -32,7 +32,7 @@ import { CONTESTS, CONCEPTS, baseScore } from '../tycoon/Contests.js';
 import { ORDERS, TRUST, HQ_GAP, HQ_GAP_INVESTED } from '../tycoon/Headquarters.js';
 import { SPY } from '../tycoon/RivalSpy.js';
 import { PRODUCT_TYPES, LINES, QUALITY, DESK, ONLINE, BATCHES, DEALS } from '../tycoon/Brand.js';
-import { DOMINANT, DOMINANT_DAYS, MATCH_PRICE, MATCH_BLUNTS, SCOUT_LEVEL, REOPEN_DAYS } from '../tycoon/Rival.js';
+import { FOOTING, MATCH_PRICE, MATCH_BLUNTS, SCOUT_LEVEL, REOPEN_DAYS } from '../tycoon/Rival.js';
 import { CUTS, PERMS, TREND_COLOURS, GRADE_PAY, TREND_PAY, TREND_PERK_SATISFACTION, COLOUR_PRICE, TREND_COLOUR_PRICE, BLEACH_PRICE, isHot } from '../hair/StyleMenu.js';
 import { WANT } from '../customers/catalog.js';
 import { WANT_KO } from '../i18n/strings.js';
@@ -426,7 +426,7 @@ export class TycoonUI {
     const scouts = r.stylists.map(id => { const e = g.staff.find(id), cost = g.scoutCost(id); return `<div class="frow"><div class="fx"><b>${name(e.name)}</b> <span class="dim">${t('role.' + e.role)} · ${t('sk.cut')} ${e.skills.cutting} · ${t('sk.colour')} ${e.skills.colouring} · ${t('sk.perm')} ${e.skills.perming}</span></div><button class="go" data-do="scout:${id}" ${cost && g.economy.canAfford(cost) && this.hooks.hasOpenChair() ? '' : 'disabled'}>${cost ? t('rv2.scout', cost.toLocaleString()) : t('rv2.scoutLv', SCOUT_LEVEL)}</button></div>`; }).join('');
     return `<div class="bsec"><h4>${t('rv2.title')}</h4><div class="brow"><b>${r.name}</b><span class="dim">${t('rv2.tier', r.tier + 1)} · ${t('price.' + r.priceLevel)} · ★ ${r.rating.toFixed(1)}</span></div><div class="dim">${t('rv2.style.' + r.tier % 3)}</div>${r.move ? `<div class="${['mishap', 'scandal'].includes(r.move) ? 'good' : 'gold'}">${t('rival.now.' + r.move, r.daysLeft)}</div>` : `<div class="dim">${r.rest ? t('rv2.rest', r.rest) : t('rival.quiet')}</div>`}${war}`
       + `${r.history.length ? `<div class="dim">${t('rv2.history')}: ${r.history.map(h => t('rv2.h', h.day, t('rv2.m.' + h.id))).join(' · ')}</div>` : ''}</div>`
-      + `<div class="bsec"><h4>${t('rv2.share')}</h4><div class="brow"><span>Ciel Ground ${pct(share)}%</span><span class="sp"></span><span>${r.name} ${pct(1 - share)}%</span></div><div class="meter"><i style="width:${pct(share)}%"></i></div>${g.toRival.yesterday ? `<div class="bad">${t('rv2.lost', g.toRival.yesterday, r.name, (g.rivalCatch * 100).toFixed(1))}</div>` : ''}<div class="dim">${t('rv2.lostNote', Math.round(TO_RIVAL.share * 100), Math.round(TO_RIVAL.cap * 100))}</div><div class="dim">${t('rv2.streak', r.streak, DOMINANT_DAYS, pct(DOMINANT), REOPEN_DAYS[0], REOPEN_DAYS[1])}</div></div>`
+      + `<div class="bsec"><h4>${t('rv2.share')}</h4><div class="brow"><span>Ciel Ground ${pct(share)}%</span><span class="sp"></span><span>${r.name} ${pct(1 - share)}%</span></div><div class="meter"><i style="width:${pct(share)}%"></i></div>${g.toRival.yesterday ? `<div class="bad">${t('rv2.lost', g.toRival.yesterday, r.name, (g.rivalCatch * 100).toFixed(1))}</div>` : ''}<div class="dim">${t('rv2.lostNote', Math.round(TO_RIVAL.share * 100), Math.round(TO_RIVAL.cap * 100))}</div>${this.#footing(r, t, pct)}</div>`
       + `<div class="bsec"><h4>${t('rv2.spyT')}</h4><div class="brow"><span>${t('rv2.spy', g.spy.caught, g.spy.missed)}</span><span class="sp"></span><b>${t('rv2.spyOdds', Math.round(g.spyOdds(0) * 100))}</b></div><div class="dim">${t('rv2.spyNote', Math.round(SPY.spot.cctv * 100), Math.round(SPY.spite * 100), SPY.feed)}</div></div>`
       + `<div class="bsec"><h4>${t('rv2.staff')}</h4><div class="dim">${t('rv2.scoutNote')}</div>${scouts || `<div class="dim">${t('rv2.noStaff')}</div>`}</div>`;
   }
@@ -545,6 +545,13 @@ export class TycoonUI {
     const t = (k, ...a) => this.#t(k, ...a), b = this.game.book;
     const tabs = `<div class="seg stabs">${[['grow', t('pg.grow')], ['book', t('pg.book', b.size, STYLE_BOOK_SIZE)]].map(([k, v]) => `<button data-do="pgp:${k}" class="${this.progPage === k ? 'sel' : ''}">${v}</button>`).join('')}</div>`;
     return tabs + (this.progPage === 'book' ? this.#book() : this.#growth());
+  }
+  /** How much fight the rival has left: a bar, yesterday's change and why, and when it closes at that pace. */
+  #footing(r, t, pct) {
+    const F = FOOTING, ch = Math.round(r.lastChange), left = Math.round(r.footing), when = r.closesIn;
+    return `<div class="brow"><span>${t('rv2.footing', r.name)}</span><span class="sp"></span><b>${left} / ${r.maxFooting}</b></div><div class="meter rival"><i style="width:${Math.round(left / r.maxFooting * 100)}%"></i></div>`
+      + (r.lastShare == null ? '' : `<div class="${ch < 0 ? 'good' : 'bad'}">${t(ch < 0 ? 'rv2.wore' : 'rv2.mended', pct(r.lastShare), Math.abs(ch), pct(F.hold))}${when ? ' · ' + t('rv2.closesIn', when) : ''}</div>`)
+      + `<div class="dim">${t('rv2.footingNote', pct(F.hold), F.wear / 100, F.mend / 100, REOPEN_DAYS[0], REOPEN_DAYS[1], F.perTier)}</div>`;
   }
   /** The style book: how full it is, the next reward, then every section's styles (??? until first done). */
   #book() {
