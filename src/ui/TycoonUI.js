@@ -539,7 +539,8 @@ export class TycoonUI {
     return `<div class="bsec"><h4>${t('ms.title')}</h4><div class="dim">${t('ms.note')}</div>${cards}<div class="dim">${t('ms.total', M.earned.toLocaleString(), M.done)}</div></div>`;
   }
   /** How high reputation can go on today's reviews, once there are enough of them. */
-  #repCeiling(t) { const g = this.game, top = g.reputation.ceiling; return top < 100 ? `<div class="dim">${t('prog.repCeiling', Math.floor(top), g.reviews.rating.toFixed(2), REP_CEILING.base, REP_CEILING.perStar)}</div>` : ''; }
+  #repCeiling(t) { const g = this.game, top = g.reputation.ceiling; return (top < 100 ? `<div class="dim">${t('prog.repCeiling', Math.floor(top), g.reviews.rating.toFixed(2), REP_CEILING.base, REP_CEILING.perStar)}</div>` : '')
+    + `<div class="dim">${t('prog.repGain', Math.round(g.reputation.gainShare * 100))}</div>`; }
   /** The growth tab: levels and missions, or the style book. */
   #progress() {
     const t = (k, ...a) => this.#t(k, ...a), b = this.game.book;
