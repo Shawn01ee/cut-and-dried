@@ -1,6 +1,8 @@
 /** Presents the report's observations and explanations; all decisions live in the simulation objects. */
 export class DayInsights {
   constructor(i18n) { this.i18n = i18n; }
+  /** Walk-ins the desk sent to the other salon or a franchise instead of turning them away. */
+  #referred(m, t) { const r = m.referred; return r && (r.branch || r.outlet) ? `<div>${t('referred', r.branch, r.outlet)}</div>` : ''; }
   /** Chairs that sat free while clients waited for a shampoo booth, in chair-hours. */
   #waits(m, t) { const h = m.waits?.booth || 0; return h >= .1 ? `<div>${t('boothWait', h.toFixed(1))}</div>` : ''; }
   /** Who stayed past closing and what it cost. */
@@ -22,7 +24,7 @@ export class DayInsights {
     const departments=report.departments||{}, partRows=['makeup','nails','idol'].filter(k=>departments[k]?.booked).map(k=>`<div>${t('part',this.i18n.t(k==='idol'?'sp.idol':'dept.'+k),departments[k].booked,departments[k].completed,departments[k].missed)}</div>`).join('');
     const network=report.network, networkRow=network?.outlets?`<div>${t('network',network.outlets,network.closed,network.operatingLosses,usd(network.localProfit),usd(network.hqContribution))}</div>`:'';
     return `<div class="hsec"><h3>${t('title')}</h3>${comparison}<div class="dim">${t('ledgerNote')}</div>
-      <div>${t('visits', m.arrivals, m.served, m.lost.seats, m.lost.patience, m.lost.closing)}</div>${this.#waits(m, t)}${this.#overtime(report, t, usd)}${m.satisfaction == null ? '' : `<div>${t('satisfaction', m.served, Math.round(m.satisfaction * 100))}</div>`}
+      <div>${t('visits', m.arrivals, m.served, m.lost.seats, m.lost.patience, m.lost.closing)}</div>${this.#referred(m, t)}${this.#waits(m, t)}${this.#overtime(report, t, usd)}${m.satisfaction == null ? '' : `<div>${t('satisfaction', m.served, Math.round(m.satisfaction * 100))}</div>`}
       ${partRows}${networkRow}
       <h3>${t('next')}</h3>${(report.advice || []).map(a => `<p>${t('advice.' + a.id, ...a.args)}</p>`).join('')}<div class="dim">${t('uncertainty')}</div></div>`;
   }

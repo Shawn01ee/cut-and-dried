@@ -20,6 +20,11 @@ export const LINES = {
     // the desk is full for today
     'desk.full': ['죄송해요, 오늘은 예약이 다 찼어요.', '오늘은 마감이에요. 다음에 꼭 와 주세요!'],
     'desk.fullBook': ['오늘은 꽉 찼어요. 내일 첫 타임으로 잡아 드릴게요!', '죄송해요, 내일로 예약 잡아 드릴까요?'],
+    // the desk is full, but another of our salons has room
+    'desk.toBranch': ['지금 여긴 꽉 찼는데, 2호점은 바로 가능해요! 길 따라 조금만 가시면 돼요.', '2호점에 자리가 있어요. 그쪽으로 안내해 드릴게요!'],
+    'desk.toMain': ['여긴 꽉 찼어요. 본점은 바로 가능하니 그쪽으로 가시면 돼요!', '본점에 자리가 있어요. 안내해 드릴게요!'],
+    'desk.toOutlet': ['오늘은 꽉 찼어요. 가까운 저희 가맹점으로 예약해 드릴게요!', '저희 다른 지점에 바로 잡아 드릴게요.'],
+    'refer.ok': ['아 그래요? 그리로 갈게요!', '좋아요, 거기로 가 볼게요.'],
     'regularHello.long': ['오랜만이에요!', '그동안 바빠서 못 왔어요.'],
     'src.walk': ['지나가다 들렀어요.', '지금 바로 되나요?', '예약 안 했는데 괜찮을까요?'],
     'src.rep': ['여기 잘한다고 해서요.', '동네에서 평이 좋더라고요.'],
@@ -103,6 +108,10 @@ export const LINES = {
     'leave.rival': ['Guess I\'ll try next door…', 'I\'ll go somewhere else.'],
     'desk.full': ['Sorry, we are fully booked today.', 'We are full for today. Do come again!'],
     'desk.fullBook': ['We are full today. First thing tomorrow?', 'Sorry! Can I book you in for tomorrow?'],
+    'desk.toBranch': ['We are full here, but our second salon can see you now. Just down the street!', 'Our second salon has room. Let me send you over.'],
+    'desk.toMain': ['We are full here. The main salon can see you now!', 'The main salon has room. Let me send you over.'],
+    'desk.toOutlet': ['We are full today. Let me book you in at one of our other salons.', 'I can get you in at another of our salons right away.'],
+    'refer.ok': ['Oh, great, I\'ll go there.', 'Sure, I\'ll head over.'],
     'greetRegular.long': ['{n}! Long time no see!', 'Oh, {n}! It\'s been ages.'],
     'regularHello.long': ['It\'s been a while!', 'Sorry, I\'ve been so busy!'],
     regularHello: ['Back again!', 'Hi! The usual place, the usual chair?', 'Hello hello!'],

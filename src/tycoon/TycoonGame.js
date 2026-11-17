@@ -513,9 +513,10 @@ export class TycoonGame {
    */
   deskFull(site, ahead, chairs) {
     if (!this.staff.receptionistAt(site).hired || !this.accepting || !chairs) return false;
-    const left = (this.clock.closeHour - this.lastCall / 60 - this.clock.hour) * 60;
-    return ahead >= Math.floor(chairs * Math.max(0, left) / DESK_PLAN.minutesPerClient);
+    return this.roomLeft(ahead, chairs) <= 0;
   }
+  /** How many more clients `chairs` staffed chairs can start before last call, beyond the `ahead` already there. */
+  roomLeft(ahead, chairs) { const left = (this.clock.closeHour - this.lastCall / 60 - this.clock.hour) * 60; return Math.floor(chairs * Math.max(0, left) / DESK_PLAN.minutesPerClient) - ahead; }
   /** A walk-in the desk cannot fit in: booked for tomorrow when they agree, otherwise next door or home. Never a review. */
   declineAtDesk(c) { if (this.closingPolicy !== 'send' && !c.villain && Math.random() < REBOOK_ACCEPT) { this.rebook(c); return 'book'; } this.metrics.leave(c, 'seats'); return this.#toRival() ? 'rival' : 'home'; }
   /** The desk's odds of seeing through a spy at this salon right now. */
