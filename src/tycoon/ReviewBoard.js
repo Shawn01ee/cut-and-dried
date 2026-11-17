@@ -3,6 +3,8 @@ import { NAMES } from '../customers/catalog.js';
 
 // Every review is kept, and the rating is worked out over all of them.
 const MIN_FOR_DEMAND = 5;
+/** The rating reads the latest reviews only, so a salon that gets better sees it: an all-time average of hundreds barely moves. */
+export const RATING_WINDOW = 100;
 export const starsFor = s => s >= .86 ? 5 : s >= .72 ? 4 : s >= .58 ? 3 : s >= .42 ? 2 : 1;
 
 /**
@@ -16,9 +18,9 @@ export class ReviewBoard {
   get count() { return this.visible.length; }
   /** How much a review counts towards the rating: a thank-you makes praise count in full, an apology takes the sting out of a complaint. */
   static weight(r) { return r.replied ? 1 : r.stars >= 4 ? .5 : 1.5; }
-  /** Average stars of recent reviews, weighted by whether they have been answered. */
+  /** Average stars of the latest `RATING_WINDOW` reviews (the list is newest first), weighted by whether they have been answered. */
   get rating() {
-    const recent = this.visible; if (!recent.length) return 0;
+    const recent = this.visible.slice(0, RATING_WINDOW); if (!recent.length) return 0;
     const w = recent.reduce((sum, r) => sum + ReviewBoard.weight(r), 0);
     return recent.reduce((sum, r) => sum + r.stars * ReviewBoard.weight(r), 0) / w;
   }
