@@ -577,6 +577,7 @@ export class TycoonUI {
     const run = {
       hire: () => this.hooks.hire(e), fire: () => this.hooks.fire(e),
       netflagship: () => { if(g.network.upgrade())this.hooks.networkChanged?.(); }, netopen: () => g.network.open(value), netcoach: () => g.network.coach(value), netpause: () => g.network.toggle(value), netlead: () => this.hooks.lead?.(),
+      netdir: () => g.network.director.appoint(value === '1'), nettarget: () => g.network.director.setTarget(g.network.director.target + +value), netformat: () => g.network.director.setFormat(value),
       depthire: () => g.departments.hire(value), deptfire: () => g.departments.fire(value), depttrain: () => g.departments.train(value), deptpromote: () => g.departments.promote(value),
       shire: () => { if (g.staff.hire(e)) this.hooks.syncSupport(); }, sfire: () => { if (g.staff.fire(e)) this.hooks.syncSupport(); }, train: () => { if (g.trainStaff(e)) g.bus.emit('staff:levelup', e); }, claim: () => { if (g.claimMission(+value)) this.hooks.spent(); },
       rest: () => { e.restUntil = this.hooks.now() + 20; e.rest(50); },

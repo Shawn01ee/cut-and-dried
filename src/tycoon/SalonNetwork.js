@@ -1,5 +1,6 @@
 import { appointmentTimes } from '../core/ArrivalProcess.js';
 import { WEATHER } from './Weather.js';
+import { ExecutiveDirector } from './ExecutiveDirector.js';
 
 /** Explicit simulation assumptions, not estimates of a real salon business. Each franchise pays its own local costs. */
 export const FORMATS = {
@@ -10,7 +11,7 @@ export const FLAGSHIP_COST = 20000, COACH_COST = 500, COACH_GAIN = 5, REST_FIXED
 
 /** Lia's company: the original salon, franchised outlets and an optional transition out of chair work. */
 export class SalonNetwork {
-  constructor(game) { this.game = game; this.flagship = false; this.outlets = []; this.executive = false; this.version = 0; }
+  constructor(game) { this.game = game; this.flagship = false; this.outlets = []; this.executive = false; this.version = 0; this.director = new ExecutiveDirector(this, { formats: FORMATS, coachCost: COACH_COST }); }
   get stage() { return this.executive ? 'ceo' : this.outlets.length ? 'franchise' : this.flagship ? 'flagship' : this.game.staff.hired.length ? 'room' : 'solo'; }
   get flagshipChecks() { const g=this.game; return { level:g.progression.level>=6, space:g.layout.tier>=3, parts:g.departments.idolReady, reputation:g.reputation.value>=70, cash:g.economy.canAfford(FLAGSHIP_COST) }; }
   get canFlagship() { return !this.flagship && Object.values(this.flagshipChecks).every(Boolean); }
@@ -21,7 +22,8 @@ export class SalonNetwork {
     this.outlets.push({ id:this.outlets.length+1, format, quality:70, paused:false, opened:this.game.clock.day, trained:0, last:null }); this.version++; return true;
   }
   coach(id) { const o=this.outlets.find(o=>o.id===Number(id)), g=this.game; if (!o || o.quality>=100 || o.trained===g.clock.day || !g.economy.spend('networkTraining',COACH_COST)) return false; o.quality=Math.min(100,o.quality+COACH_GAIN); o.trained=g.clock.day; this.version++; return true; }
-  toggle(id) { const o=this.outlets.find(o=>o.id===Number(id)); if (!o) return false; o.paused=!o.paused; this.version++; return true; }
+  /** Closes or reopens an outlet; a closing the executive director made becomes the player's once toggled by hand (the director marks its own after). */
+  toggle(id) { const o=this.outlets.find(o=>o.id===Number(id)); if (!o) return false; o.paused=!o.paused; o.rested=false; this.version++; return true; }
   get ceoChecks() { const g=this.game; return { level:g.progression.level>=10, flagship:this.flagship, network:this.outlets.length>=3, manager:g.staff.hired.some(e=>e.rank==='deputy'), team:g.staff.hired.length>=2, management:g.staff.management>=60, reputation:g.reputation.value>=85, hq:!g.hq.order }; }
   get canLead() { return !this.executive && Object.values(this.ceoChecks).every(Boolean); }
   lead() { if (!this.canLead) return false; this.executive=true; this.game.staff.owner.role='CEO'; this.version++; return true; }
@@ -48,6 +50,8 @@ export class SalonNetwork {
       const fixed=o.paused?Math.round(f.dailyCost*REST_FIXED_SHARE):f.dailyCost, support=o.paused?REST_SUPPORT:f.support;
       const expenses=fixed+served*f.materials+royalty, profit=revenue-expenses;
       const qualityBefore=o.quality;
+      // losing days in a row (the executive director closes an outlet after a run of them)
+      o.lossDays=!o.paused&&profit<0?(o.lossDays||0)+1:0;
       if(o.paused)o.quality=Math.min(100,o.quality+REST_RECOVERY);
       else if(profit<0)o.quality=Math.max(30,o.quality-LOSS_QUALITY);
       o.last={ day:g.clock.day, paused:o.paused, expected, referred, arrivals, served, lost:arrivals-served, revenue, expenses, profit, royalty, support, qualityBefore, qualityAfter:o.quality };
@@ -73,6 +77,6 @@ export class SalonNetwork {
     return { outlets:rows.length, closed:rows.filter(r=>r.paused).length, operatingLosses:rows.filter(r=>!r.paused&&r.profit<0).length,
       served:rows.reduce((n,r)=>n+r.served,0), localProfit:rows.reduce((n,r)=>n+r.profit,0), hqContribution:rows.reduce((n,r)=>n+r.royalty-r.support,0) };
   }
-  toJSON() { return { flagship:this.flagship, outlets:this.outlets, executive:this.executive }; }
-  restore(d) { this.flagship=!!d?.flagship; this.outlets=(d?.outlets||[]).filter(o=>FORMATS[o.format]); this.executive=!!d?.executive; if(this.executive)this.game.staff.owner.role='CEO'; this.version++; }
+  toJSON() { return { flagship:this.flagship, outlets:this.outlets, executive:this.executive, director:this.director.toJSON() }; }
+  restore(d) { this.flagship=!!d?.flagship; this.outlets=(d?.outlets||[]).filter(o=>FORMATS[o.format]); this.executive=!!d?.executive; if(this.executive)this.game.staff.owner.role='CEO'; this.director.restore(d?.director); this.version++; }
 }
