@@ -15,6 +15,10 @@ export const DEPARTMENT_LEVEL = 3;
 const GUEST_NAMES = ['Ari','Yuna','Hana','Mia','Sora','Leah','June','Min'];
 /** Homogeneous Poisson appointment process per open hour: expected count and variance are rate × hours. */
 export const appointmentRate = reputation => (2 + Math.max(0, reputation) * .02) / 8;
+/** Each further station with someone to work it draws this much more of the part's bookings (one station: ×1, two: ×1.6). */
+export const LANE_DEMAND = .6;
+/** A part's booking rate: the base rate, more for every staffed station beyond the first. */
+export const partRate = (reputation, lanes) => appointmentRate(reputation) * (1 + LANE_DEMAND * Math.max(0, lanes - 1));
 
 /** Owns the specialist roster and sequential appointments. Staff/equipment constrain simultaneous service. */
 export class Departments {
@@ -43,7 +47,8 @@ export class Departments {
     const g = this.game; this.jobs = [];
     for (const e of this.hired) { e.stamina = 100; e.today = { served:0, earn:0 }; e.addStress(g.isSunday ? -20 : -8); }
     if (!g.isSunday) for (const part of Object.keys(DEPARTMENTS)) if (this.ready(part)) {
-      for (const hour of appointmentTimes(g.clock.openHour, g.clock.closeHour, appointmentRate(g.reputation.value))) this.book([part], hour);
+      const lanes = Math.min(this.capacity(part), this.team(part).length);
+      for (const hour of appointmentTimes(g.clock.openHour, g.clock.closeHour, partRate(g.reputation.value, lanes))) this.book([part], hour);
     }
     this.version++;
   }
