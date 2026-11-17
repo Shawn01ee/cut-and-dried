@@ -10,9 +10,15 @@ export const TALENTS = ['speed', 'consult', 'vip', 'mentor', 'trend', 'calm'], T
 /** Skill gained per level: their specialty, the other crafts, speed and service. */
 export const LEVEL_GAIN = { specialty: 6, craft: 3, speed: 2, customerService: 3 };
 /** Standard service times in minutes, for an average stylist. */
-export const BASE_MINUTES = { shampoo: 10, cut: 30, colour: 60, wave: 55, dry: 12 };
+export const BASE_MINUTES = { shampoo: 10, cut: 30, colour: 50, wave: 46, dry: 12 };
 /** Of those, the minutes colour and perm are left to process: the same for everyone, and no stylist is needed. */
-export const PROCESS_MINUTES = { colour: 40, wave: 35 };
+export const PROCESS_MINUTES = { colour: 30, wave: 26 };
+/**
+ * Every service a stylist does runs at this share of its standard minutes: a calibration so that a cut holds a chair
+ * about an hour and colour or perm about two (walking and the reveal included), and a day's last clients finish soon
+ * after closing. Grades and skills still differ by the same proportions.
+ */
+export const SERVICE_PACE = .65;
 // Assistants wash by their shampoo skill; stylists, who have none, by their speed.
 const SERVICE_SKILL = { cut: 'cutting', colour: 'colouring', wave: 'perming', dry: 'speed', shampoo: 'shampoo' };
 // New starters take a few days to settle into the team.
@@ -74,7 +80,7 @@ export class Employee {
    */
   serviceMinutes(type, speedBonus = 1) {
     const s = this.effectiveSkills, skill = s[SERVICE_SKILL[type]] ?? s.speed;
-    const minutes = (BASE_MINUTES[type] - (PROCESS_MINUTES[type] || 0)) * (1.6 - s.speed / 100) * (1.2 - skill / 250) * (1 + this.fatigue / 250) / speedBonus / (this.hasPerk('speed') ? 1.2 : 1);
+    const minutes = (BASE_MINUTES[type] - (PROCESS_MINUTES[type] || 0)) * (1.6 - s.speed / 100) * (1.2 - skill / 250) * (1 + this.fatigue / 250) / speedBonus / (this.hasPerk('speed') ? 1.2 : 1) * SERVICE_PACE;
     return Math.max(3, Math.round(minutes / (TRAITS[this.trait]?.speed || 1)));
   }
   /** How good a wash this person gives, 0 to 1: assistants by their shampoo skill, stylists an ordinary .6. */

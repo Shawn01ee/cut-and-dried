@@ -293,6 +293,12 @@ function ik(a,t,l1,l2,pole){const d=t.clone().sub(a);let L=d.length();const mx=l
   return [a.clone().addScaledVector(dir,l1*c).addScaledVector(p,l1*sn),a.clone().addScaledVector(dir,L)];}
 const figs=[];
 function setFade(f,s){f.root.scale.setScalar(s);f.root.position.copy(f.pos).multiplyScalar(1-s);}
+/**
+ * The pace of the salon floor. A game hour passes in about 19 real seconds, so every real second of walking or show costs
+ * about three game minutes of a chair's time: `walk` is metres a second; `reply` and `done` are the seconds after the
+ * reveal when the stylist answers and the chair is free; `consult` is how long an automatic consultation takes.
+ */
+const PACE={walk:2,reply:1.2,done:2,consult:1.5};
 class Fig{
   constructor(o){this.o=o;this.root=new THREE.Group();world.add(this.root);
     const add=h=>{const m=new THREE.Mesh(BOX,M(h));m.castShadow=true;m.receiveShadow=true;m.userData.fig=this;this.root.add(m);return m;};
@@ -313,7 +319,7 @@ class Fig{
     if(o.shades){hb(.21,.05,.02,0x0d0b14,0,.015,.132);hb(.02,.02,.14,0x0d0b14,-.115,.025,.06);hb(.02,.02,.14,0x0d0b14,.115,.025,.06);}
     this.tool=new THREE.Group();this.root.add(this.tool);this.toolKind=null;
     this.pos=V();this.yaw=0;this.mode='stand';this.path=[];this.cb=null;this.phase=rand(0,6);this.seatH=.5;this.footY=.06;this.tilt=0;this.look=0;
-    this.handL=null;this.handR=null;this.clapT=0;this.toolAim=null;this.spd=1.25;figs.push(this);}
+    this.handL=null;this.handR=null;this.clapT=0;this.toolAim=null;this.spd=PACE.walk;figs.push(this);}
   setTool(k){if(this.toolKind===k)return;this.toolKind=k;this.tool.clear();if(!k)return;
     const b=(w,h,d,c,x,y,z)=>{const m=new THREE.Mesh(BOX,M(c));m.scale.set(w,h,d);m.position.set(x,y,z);m.castShadow=true;this.tool.add(m);};
     if(k==='scissors'){b(.014,.14,.01,0xdcd9dc,-.012,.08,0);b(.014,.14,.01,0xdcd9dc,.012,.08,0);b(.055,.03,.016,0xd8314a,0,.01,0);}
@@ -562,7 +568,7 @@ function assign(st,c){const seat=c.seat;freeSeat(c);c.state='toStation';st.cust=
   const start=seat?seat.app[0]:f.pos.clone(),lead=seat?[seat.app[0]]:[],toChair=from=>[...route(from,st.approach),st.chair.clone()];
   // Every client has a shampoo first when the salon has somewhere to do it.
   if(booths.some(b=>siteOf(b.item.x)===siteOf(st.item.x))&&!c.washed)shampoo(c,st,lead,start,()=>f.walkTo(toChair(f.pos),arrive));else f.walkTo([...lead,...toChair(start)],arrive);
-  function arrive(){f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';later(.8,()=>consultTalk(st,c));st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:2;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);}
+  function arrive(){f.mode='sit';f.pos.copy(st.chair);f.yaw=st.face;f.seatH=.55;f.footY=.17;c.state='chair';c.tStart=simT;st.state='consult';later(.8,()=>consultTalk(st,c));st.playerPlan=st.sty===OWNER&&!autoOn;st.plan=st.playerPlan?blankPlan(c.hair):aiPlan(c,st.sty);st.timer=c.vip?10:PACE.consult;if(st.playerPlan&&!styling&&typeof sel==='number')sel=lastChair=st.i;if(sel===st.i)renderPanel(true);}
   if(sel===st.i)renderPanel(true);}
 const booths=[],washes=[];
 const freeBooth=site=>booths.find(b=>!b.client&&siteOf(b.item.x)===site&&!pendingMoves.has(b.item)&&!queuedMoves.has(b.item)),freeHelper=site=>helpers.find(h=>h.fig.root.visible&&!h.task&&siteOf(h.idle.x)===site);
@@ -640,9 +646,9 @@ function reveal(st){const c=st.cust,s=st.worker,sf=s.fig;st.state='reveal';sf.se
   sf.walkTo([st.at(-.55,1.15)],()=>{sf.yaw=st.face-Math.PI*.2;});
   c.fig.walkTo([st.at(.55,1.2)],()=>{c.fig.yaw=st.face;audio.play(sc.all>=.6?'happy':'sad');
     popup(chatOn&&!c.villain?`${Math.round(sc.all*100)}%`:`${Math.round(sc.all*100)}% · ${tx(WORDS.find(w=>sc.all>=w[0])[1])}`,c.fig.head,'big',true);
-    if(!c.villain)later(.4,()=>{say(c.fig,reaction(c,sc),false);later(1.7,()=>say(sf,line(sc.all>=.6?'reply.thanks':'reply.sorry'),true));});
+    if(!c.villain)later(.4,()=>{say(c.fig,reaction(c,sc),false);later(PACE.reply,()=>say(sf,line(sc.all>=.6?'reply.thanks':'reply.sorry'),true));});
     later(.6,()=>{c.fig.yaw=st.face-Math.PI*.85;clapAll(sc.all);});
-    later(2.8,()=>{st.state='free';st.cust=null;{const home=s===st.sty?st:ownerStation();goTo(sf,home?home.stand:OWNER_IDLE,home?home.face:Math.PI);}if(sel===st.i)renderPanel(true);
+    later(PACE.done,()=>{st.state='free';st.cust=null;{const home=s===st.sty?st:ownerStation();goTo(sf,home?home.stand:OWNER_IDLE,home?home.face:Math.PI);}if(sel===st.i)renderPanel(true);
       const dk=deskAt[c.site||0]||deskAt[0];c.fig.walkTo(route(c.fig.pos,dk.pay),()=>{c.fig.yaw=dk.payYaw;later(1.3,()=>checkout(c,sc));});});});
   if(sel===st.i)renderPanel(true);}
 /** Paying at the desk. Difficult clients may haggle, demand a refund or run off without paying. */
@@ -1120,7 +1126,9 @@ function onboardingRow(){const O=game.onboarding,s=O.current,claim=game.missions
   const box=(tab,title,count,text)=>`<div class="obrow" ${tab?`data-ob="${tab}"`:''}><div class="obl"><b>${title}</b><span>${count}</span></div><div class="obl"><span>${text}</span>${tab?`<span class="obgo">${tx('tab.'+tab)} ▶</span>`:''}</div></div>`;
   return (s?box(s.tab,tx('ob.title'),`${O.step}/${STEPS.length}`,tx('ob.'+s.id)):'')+(claim?box('prog',tx('ob.claimT'),claim,tx('ob.claim')):'');}
 function checkOnboarding(){const s=game.onboarding.check(game);if(!s)return;audio.play('cash');popup(tx('ob.done',tx('ob.'+s.id),s.reward),recep.head,'big');const n=game.onboarding.current;if(n)later(1.8,()=>say(recep,tx('ob.say.'+n.id),true));else later(1.8,()=>say(recep,tx('ob.say.end'),true));renderPanel(true);}
-function updateHud(){game.syncMissions();checkOnboarding();const g=game,e=g.economy,money=n=>(n<0?'−$':'$')+Math.abs(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
+/** Dollars as players read them: whole, with thousands separated (percentages leave cents in the books). */
+const usdText=(n,plus='')=>(n<0?'−$':plus+'$')+Math.round(Math.abs(n)).toLocaleString('en-US');
+function updateHud(){game.syncMissions();checkOnboarding();const g=game,e=g.economy,money=n=>usdText(n);$('#offday').classList.toggle('show',started&&g.dayOff&&$('#menu').classList.contains('hide'));
   const stage=st=>!st.cust?`<span class="dim">${tx('stage.free')}</span>`:st.state==='work'?tx('stage.'+st.ops[st.opi].type):tx('stage.'+(st.state==='consult'?'consult':st.state==='await'?(st.cust.inWash?'shampoo':'seating'):'reveal'));
   const m=st=>st.cust?Math.round(score(st.cust.hair,st.cust.order).all*100)+'%':'',row=(k,v)=>`<tr><td>${tx(k)}</td><td style="text-align:right">${v}</td></tr>`;
   $('#hud').innerHTML=`<h1><span>CIEL GROUND</span><span>${tx('hud.day',g.clock.day)}(${tx('wd.'+g.weekday)}) ${(d=>d.month+'/'+d.date)(dateOf(g.clock.day))} ${tx('season.'+seasonOf(g.clock.day))} ${tx('wx.'+g.weather)} ${g.dayOff?tx('hud.off'):g.clock.timeText+(g.clock.after?' · '+tx('hud.overtime'):!g.accepting&&g.clock.isOpen?' · '+tx('hud.lastCall'):'')}</span></h1>
@@ -1365,8 +1373,8 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mhint">${tx(autoOn?'m.autoD':'m.manualD')}</div>
     <div class="mbtns">${game.saves.has()?`<button class="go big" data-act="start">${tx('m.continue',game.saves.load().day)}</button><button data-act="new">${tx('m.new')}</button>`:`<button class="go big" data-act="new">${tx('m.start')}</button>`}<button data-act="how">${tx('m.how')}</button><button data-act="opts">${tx('m.opts')}</button></div>`;
   else if(menuScreen==='how')h=`<div class="mhead">${tx('m.how')}</div>${HOW[i18n.lang].map(([t,b])=>`<div class="hsec"><h3>${t}</h3>${b}</div>`).join('')}<div class="mbtns side">${backBtn}</div>`;
-  else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v,c)).join('');
-    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${dayInsights.render(q)}${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
+  else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+usdText(v).replace('−',''),c)).join('');
+    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),usdText(q.totalRevenue),'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−'+usdText(q.totalOperating),'gold')}${line(tx('day.profit'),usdText(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−'+usdText(q.totalInvestment),'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${dayInsights.render(q)}${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
   else if(menuScreen==='week'){const w=game.weekReport,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v.toLocaleString(),c)).join(''),usd=v=>(v<0?'−$':'$')+Math.abs(v).toLocaleString();
     const bars=profitChart(w.days,d=>tx('wd.'+((d.day-1)%7)));
     h=`<div class="mhead">${tx('week.title',w.week,w.from,w.to)}</div><div class="dim">${tx('week.sub')}</div>${bars}<table style="width:100%;border-collapse:collapse">${ledger(w.revenue,'')}${line(tx('day.totalRev'),usd(w.totalRevenue),'gold')}${ledger(w.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+w.totalOperating.toLocaleString(),'gold')}${line(tx('week.profit'),usd(w.profit),w.profit<0?'bad':'good')}${w.totalInvestment?ledger(w.investment,'−','dim'):''}${Object.keys(w.funding).length?ledger(w.funding,'+','good'):''}${line(tx('week.served'),w.served)}${line(tx('day.reviews'),w.reviews.count?tx('day.reviewsV',w.reviews.count,w.reviews.average.toFixed(1)):'–')}${line(tx('day.rep'),(w.reputation>=0?'+':'')+w.reputation.toFixed(1))}${line(tx('day.followers'),(w.followers>=0?'+':'−')+Math.abs(w.followers).toLocaleString())}</table><div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:''}<button class="${game.monthClosedToday?'':'go big'}" data-act="weekfix">${tx('week.fix')}</button><button data-act="monday">${tx('week.monday')}</button></div>`;}
