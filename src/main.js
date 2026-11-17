@@ -21,6 +21,10 @@ import { decorThemeOf } from './tycoon/Decor.js';
 import { REACH, DECOR_CAP, DECOR_SAT, reachKind, reachedBy } from './building/Surroundings.js';
 import { INTERIOR_SETS } from './building/InteriorSets.js';
 import { STYLE_BOOK_SIZE } from './tycoon/StyleBook.js';
+import { PlaytestLog, MILESTONES } from './playtest/PlaytestLog.js';
+import { PlaytestProbe } from './playtest/PlaytestProbe.js';
+import { DayQuestions } from './ui/DayQuestions.js';
+import { BUILD } from './version.js';
 import { LINES } from './i18n/dialogue.js';
 import { shows, featuresAt } from './tycoon/Features.js';
 import { DECOR_MODELS } from './rendering/decorModels.js';
@@ -1116,7 +1120,7 @@ $('#hud').addEventListener('click',ev=>{const b=ev.target.closest('[data-ob]');i
 /* controls */
 $('#bRotL').onclick=()=>camK--;$('#bRotR').onclick=()=>camK++;
 // Keys are read by position so they work with a Korean keyboard layout too.
-addEventListener('keydown',e=>{const K={KeyQ:'q',KeyE:'e',KeyR:'r',Escape:'escape'}[e.code]||e.key.toLowerCase();
+addEventListener('keydown',e=>{if(e.target.closest&&e.target.closest('input,textarea'))return;const K={KeyQ:'q',KeyE:'e',KeyR:'r',Escape:'escape'}[e.code]||e.key.toLowerCase();
   if(styling){if(K==='q')styling.turn(-1);if(K==='e')styling.turn(1);return;}
   if(build.isActive){if(K==='r'){build.rotate();renderPanel(true);}if(K==='escape'){build.cancel();renderPanel(true);}return;}
   if(K==='q')camK--;if(K==='e')camK++;});
@@ -1335,6 +1339,15 @@ function profitChart(days,label){const usd=v=>(v<0?'−$':'$')+Math.abs(Math.rou
 
 /* ================= start menu ================= */
 let menuScreen='main',menuFrom='main',monthFrom='panel';
+/* ---- Playtest (?playtest): a record of the session for the facilitator; it changes nothing in the game. ---- */
+const playtest=new URLSearchParams(location.search).has('playtest')?new PlaytestLog({build:BUILD,lang:i18n.lang}):null,probe=playtest&&new PlaytestProbe(game,playtest),dayQuestions=new DayQuestions(i18n);
+/** What is on screen, for the record: a menu screen, build mode, the styling close-up, or a panel tab. */
+const viewNow=()=>!$('#menu').classList.contains('hide')?'menu:'+menuScreen:build.isActive?'build:'+build.active.id:styling?'styling':'tab:'+(typeof sel==='number'?'salon':sel);
+if(playtest){['pointerdown','keydown','wheel'].forEach(k=>addEventListener(k,()=>playtest.input(started&&!paused&&game.clock.isOpen),{capture:true}));
+  addEventListener('click',e=>{const el=e.target.closest&&e.target.closest('[data-t],[data-do],[data-act],button');if(!el)return;const d=el.dataset;playtest.event('click',{what:d.t?'tab:'+d.t:d.do?'do:'+d.do:d.act?'act:'+d.act:(el.id||el.textContent.trim().slice(0,24)),view:viewNow()});},{capture:true});}
+/** The facilitator's row on the title and options screens: how long, which milestones, and the two buttons. */
+function playtestRow(){if(!playtest)return '';const ms=playtest.data.milestones,n=MILESTONES.filter(k=>ms[k]).length;
+  return `<div class="mrow pt"><label>${tx('pt.rec')}</label><span>${tx('pt.recLine',Math.floor(playtest.t/60),n,MILESTONES.length,playtest.data.answers.length)}</span><button data-act="ptsave">${tx('pt.save')}</button><button data-act="ptnew">${tx('pt.new')}</button></div>`;}
 const mbox=$('#mcard');
 /** Tomorrow's opening hours, adjustable from the end-of-day report. */
 function dayHours(){const [o,c]=game.plannedHours,b=(w,s)=>`<button data-act="hrs:${w}${s>0?'+':'-'}" ${game.canShiftHours(w==='o'?0:1,s)?'':'disabled'}>${s>0?'+':'−'}</button>`;
@@ -1346,10 +1359,10 @@ function renderMenu(){const top=mbox.scrollTop;let h;
   if(menuScreen==='main')h=`<div class="mtitle">CUT &amp; DRIED</div><div class="msub">${tx('m.sub')}</div>${langRow()}
     <div class="mrow"><label>${tx('m.mode')}</label>${mSeg('mode',[['auto',tx('m.auto')],['manual',tx('m.manual')]],autoOn?'auto':'manual')}</div>
     <div class="mhint">${tx(autoOn?'m.autoD':'m.manualD')}</div>
-    <div class="mbtns">${game.saves.has()?`<button class="go big" data-act="start">${tx('m.continue',game.saves.load().day)}</button><button data-act="new">${tx('m.new')}</button>`:`<button class="go big" data-act="new">${tx('m.start')}</button>`}<button data-act="how">${tx('m.how')}</button><button data-act="opts">${tx('m.opts')}</button></div>`;
-  else if(menuScreen==='how')h=`<div class="mhead">${tx('m.how')}</div>${HOW[i18n.lang].map(([t,b])=>`<div class="hsec"><h3>${t}</h3>${b}</div>`).join('')}<div class="mbtns side">${backBtn}</div>`;
+    <div class="mbtns">${game.saves.has()?`<button class="go big" data-act="start">${tx('m.continue',game.saves.load().day)}</button><button data-act="new">${tx('m.new')}</button>`:`<button class="go big" data-act="new">${tx('m.start')}</button>`}<button data-act="how">${tx('m.how')}</button><button data-act="opts">${tx('m.opts')}</button></div>${playtestRow()}`;
+  else if(menuScreen==='how')h=`<div class="mhead">${tx('m.how')}</div>${playtestRow()}${HOW[i18n.lang].map(([t,b])=>`<div class="hsec"><h3>${t}</h3>${b}</div>`).join('')}<div class="mbtns side">${backBtn}</div>`;
   else if(menuScreen==='day'){const q=game.report,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v,c)).join('');
-    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${dayInsights.render(q)}${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
+    h=`<div class="mhead">${tx('day.title',q.day)}</div><table style="width:100%;border-collapse:collapse">${ledger(q.revenue,'')}${line(tx('day.totalRev'),'$'+q.totalRevenue,'gold')}${ledger(q.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+q.totalOperating,'gold')}${line(tx('day.profit'),(q.profit<0?'−$':'$')+Math.abs(q.profit),q.profit<0?'bad':'good')}${q.totalInvestment?ledger(q.investment,'−','dim')+line(tx('day.invest'),'−$'+q.totalInvestment,'dim'):''}${Object.keys(q.funding||{}).length?ledger(q.funding,'+','good'):''}${q.overtime?line(tx('hud.overtime'),tx('day.overtime',q.overtime,q.overtimePay),'bad'):''}${line(tx('day.rep'),(q.reputation>=0?'+':'')+q.reputation.toFixed(1))}${line(tx('day.reviews'),q.reviews.count?tx('day.reviewsV',q.reviews.count,q.reviews.average.toFixed(1)):'–')}${line(tx('day.followers'),`${q.followers.now.toLocaleString()} (${q.followers.change>=0?'+':'−'}${Math.abs(q.followers.change).toLocaleString()})`)}${['dashed','refunds','discounts'].map(k=>q.incidents[k]?line(tx('day.'+k),'−$'+q.incidents[k],'dim'):'').join('')}</table>${dayInsights.render(q)}${game.forecast?`<div class="dim">${tx('wx.tomorrow',tx('wx.'+game.forecast),fxText(WEATHER[game.forecast])||tx('cal.plain'))}</div>`:''}${dayHours()}${playtest?dayQuestions.render(q):''}<div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:`<button class="go big" data-act="nextday">${tx(game.weekday===5?'day.toSunday':'day.next')}</button>`}</div>`;}
   else if(menuScreen==='week'){const w=game.weekReport,line=(k,v,c)=>`<tr><td>${k}</td><td style="text-align:right" class="${c||''}">${v}</td></tr>`,ledger=(o,sign,c)=>Object.entries(o).map(([k,v])=>line(tx('led.'+k),sign+'$'+v.toLocaleString(),c)).join(''),usd=v=>(v<0?'−$':'$')+Math.abs(v).toLocaleString();
     const bars=profitChart(w.days,d=>tx('wd.'+((d.day-1)%7)));
     h=`<div class="mhead">${tx('week.title',w.week,w.from,w.to)}</div><div class="dim">${tx('week.sub')}</div>${bars}<table style="width:100%;border-collapse:collapse">${ledger(w.revenue,'')}${line(tx('day.totalRev'),usd(w.totalRevenue),'gold')}${ledger(w.operating,'−','bad')}${line(tx('day.totalOp'),'−$'+w.totalOperating.toLocaleString(),'gold')}${line(tx('week.profit'),usd(w.profit),w.profit<0?'bad':'good')}${w.totalInvestment?ledger(w.investment,'−','dim'):''}${Object.keys(w.funding).length?ledger(w.funding,'+','good'):''}${line(tx('week.served'),w.served)}${line(tx('day.reviews'),w.reviews.count?tx('day.reviewsV',w.reviews.count,w.reviews.average.toFixed(1)):'–')}${line(tx('day.rep'),(w.reputation>=0?'+':'')+w.reputation.toFixed(1))}${line(tx('day.followers'),(w.followers>=0?'+':'−')+Math.abs(w.followers).toLocaleString())}</table><div class="mbtns">${game.monthClosedToday?`<button class="go big" data-act="month">${tx('month.view')}</button>`:''}<button class="${game.monthClosedToday?'':'go big'}" data-act="weekfix">${tx('week.fix')}</button><button data-act="monday">${tx('week.monday')}</button></div>`;}
@@ -1368,7 +1381,7 @@ function renderMenu(){const top=mbox.scrollTop;let h;
     <div class="mrow"><label>${tx('m.speed')}</label>${mSeg('spd',[[1,'×1'],[3,'×3'],[5,'×5']],speed)}</div>
     <div class="mrow"><label>${tx('m.music')}</label><input type="range" min="0" max="100" value="${Math.round(audio.musicVolume*100)}" data-vol="music"></div>
     <div class="mrow"><label>${tx('m.track')}</label><span>♪ ${tx('mu.'+audio.trackId)}</span><button data-act="track">${tx('m.nextTrack')}</button></div>
-    <div class="mrow"><label>${tx('m.sfx')}</label><input type="range" min="0" max="100" value="${Math.round(audio.sfxVolume*100)}" data-vol="sfx"></div>
+    <div class="mrow"><label>${tx('m.sfx')}</label><input type="range" min="0" max="100" value="${Math.round(audio.sfxVolume*100)}" data-vol="sfx"></div>${playtestRow()}
     <div class="mbtns side">${backBtn}</div>`;
   mbox.innerHTML=h;mbox.scrollTop=top;}
 function openMenu(s,from){menuScreen=s;menuFrom=from;mbox.scrollTop=0;$('#menu').classList.remove('hide');renderMenu();mbox.scrollTop=0;}
@@ -1379,6 +1392,9 @@ function closeMenu(){offdayText();$('#menu').classList.add('hide');}
 function openDay(){game.startDay();spawnTimer=1.5;paused=false;}
 function startGame(fresh){if(fresh){game.saves.clear();game.startCalendarToday();}else restoreGame();started=true;closeMenu();document.body.classList.remove('inmenu');syncChairs();syncSupport();buildBranchShell();renderSites();openDay();alignToWalls();syncRoster();morningSeats();morningNews();game.updateProgress();updateHud();renderPanel(true);if(game.dayOff)openMenu('week','game');}
 mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const [a,v]=b.dataset.act.split(':');
+  if(playtest&&menuScreen==='day'&&(a==='nextday'||a==='month'))playtest.answer(game.report.day,dayQuestions.collect(game.report));
+  if(a==='ptsave'){playtest.download();return;}
+  if(a==='ptnew'){if(confirm(tx('pt.newConfirm'))){playtest.reset();location.reload();}return;}
   if(a==='start')startGame(false);
   else if(a==='new')startGame(true);
   else if(a==='nextday'||a==='monday'){if(a==='monday')game.save();beginDay();}
@@ -1390,7 +1406,7 @@ mbox.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)r
   else if(a==='lang')setLang(v);
   else if(a==='hrs'){game.shiftHours(v[0]==='o'?0:1,v[1]==='+'?1:-1);renderMenu();}
   else{if(a==='mode')setAuto(v==='auto');if(a==='time')timeMode=v;if(a==='spd')speed=+v;if(a==='chat')notify.set('chat',v==='1');syncCtrl();renderMenu();}});
-mbox.addEventListener('input',e=>{const k=e.target.dataset.vol;if(k)audio.setVolume(k,+e.target.value/100);});
+mbox.addEventListener('input',e=>{if(dayQuestions.input(e.target))return;const k=e.target.dataset.vol;if(k)audio.setVolume(k,+e.target.value/100);});
 addEventListener('click',e=>{if(e.target.closest('button'))audio.play('click');});
 function boot(){const fonts=document.fonts?Promise.all([document.fonts.load('16px VT323'),document.fonts.load('14px Silkscreen'),document.fonts.load('13px Galmuri11','가')]):Promise.resolve();
   Promise.race([fonts,new Promise(r=>setTimeout(r,2500))]).catch(()=>{}).then(()=>LOADER.ready(()=>openMenu('main','main')));}
@@ -1410,7 +1426,7 @@ function frame(now){requestAnimationFrame(frame);let dt=Math.min(.05,(now-lastT)
     // Difficult clients darken the music, more with each one; a busy salon livens it up, evenings calm it down.
     audio.setTension(started?custs.filter(c=>c.villain&&c.state!=='gone').length:0);
     {const waiting=queue.filter(q=>q.state==='wait').length,busyChairs=stations.filter(s=>s.cust).length;audio.setScene({busy:started&&game.clock.isOpen&&(waiting>=4||(stations.length>2&&busyChairs/stations.length>.8)),evening:started&&game.clock.hour>=18});}}
-  if((clockT+=dt)>1){clockT=0;drawClock();if(started){alignToWalls();applyQueuedMoves();}}
+  if((clockT+=dt)>1){clockT=0;drawClock();if(started){alignToWalls();applyQueuedMoves();}if(playtest&&started){probe.check({reportOpen:menuScreen==='day'&&!$('#menu').classList.contains('hide')});playtest.setView(viewNow());}}
   // `?debug` long runs can skip drawing to simulate faster (see __cd.norender)
   if(!noRender){renderer.setRenderTarget(rt);renderer.render(scene,cam);
   renderer.setRenderTarget(null);renderer.render(post,postCam);}

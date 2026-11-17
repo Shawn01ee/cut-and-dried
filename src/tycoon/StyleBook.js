@@ -8,9 +8,10 @@ import { WANT } from '../customers/catalog.js';
  * to each of `MILESTONES` pays its reward once.
  */
 export const PERFECT = .97, SIGNATURE = 8, SIGNATURE_PAY = 1.05;
+// The first comes on day two or so: kept about the size of an opening-checklist bonus, so it does not swamp a day's profit.
 export const MILESTONES = [
-  { at: 10, cash: 500, followers: 50 }, { at: 20, cash: 1000, followers: 100 }, { at: 35, cash: 2000, followers: 200 },
-  { at: 50, cash: 4000, followers: 400 }, { at: 65, cash: 7000, followers: 700 }, { at: 83, cash: 15000, followers: 1500 },
+  { at: 10, cash: 100, followers: 20 }, { at: 20, cash: 300, followers: 50 }, { at: 35, cash: 800, followers: 120 },
+  { at: 50, cash: 2000, followers: 300 }, { at: 65, cash: 4000, followers: 600 }, { at: 83, cash: 10000, followers: 1200 },
 ];
 /** The book's sections and their entries, as 'cut:id', 'perm:id' and 'col:index'. */
 export const BOOK_GROUPS = {
