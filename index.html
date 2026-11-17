@@ -78,7 +78,7 @@ table.lad th.on{color:#ffd98a}table.lad tr.top1 td:first-child{color:#ffd98a}tab
 .chairs .ch.work{background:#24552e;border-color:#3f6a3a;color:#f6f3ee}.chairs .ch.busy{background:#3a2f1d;border-color:#8a6040;color:#ffd98a}.chairs .ch.vac{background:#15121d;border-style:dashed;color:#5f5a68}
 .chairs .ch.sel{border-color:#ffd98a;box-shadow:inset 0 0 0 1px #ffd98a;color:#fff}.chairs .ch.nav{color:#dcd9dc}
 .chkey{font-size:11px;margin-bottom:4px}
-#hud,#panel,#ctrl,#sites{z-index:5}
+#hud,#panel,#ctrl{z-index:5}
 #c.grabbing{cursor:grabbing}
 #nowPlaying{position:fixed;right:8px;top:80px;z-index:3;padding:3px 8px;font-size:12px;color:#ffd98a;background:rgba(13,11,20,.85);border:1px solid #45404f;opacity:0;transition:opacity .4s;pointer-events:none}#nowPlaying.show{opacity:1}
 body.inmenu #nowPlaying{display:none}
@@ -154,8 +154,8 @@ html[lang=ko] .hsec li,html[lang=ko] .hsec p{font-size:13px}
 @media (min-width:880px){html[lang=ko] #hud{font-size:13px}html[lang=ko] #hud h1{font-size:13px}}
 @media (max-width:420px){#hud{font-size:14px;min-width:0;max-width:calc(100vw - 172px);box-sizing:border-box}#hud h1{font-size:12px;flex-wrap:wrap;gap:0 8px}#ctrl{width:176px}.cgrp button{font-size:13px;height:26px}}
 body.closeup #hud,body.closeup #ctrl{display:none}
-#sites{position:fixed;left:50%;top:8px;transform:translateX(-50%);display:none;gap:3px;padding:3px}
-#sites.show{display:flex}
+#sites{display:none}
+#sites.show{display:grid}
 #sites button.sel{background:#45404f;border-color:#ffd98a;color:#ffd98a}
 #branchCard{position:fixed;left:50%;top:54px;transform:translateX(-50%);display:none;padding:6px 10px;font-size:17px;text-align:center;white-space:nowrap}
 #branchCard.show{display:block}
@@ -175,8 +175,8 @@ html[lang=ko] #incident{font-size:13px;line-height:1.5}
 .rv{padding:4px 0;border-bottom:1px solid #2a2633}
 .rv:last-child{border-bottom:0}
 .rv .reply{color:#9c98a2;margin:2px 0 0 10px}
-body.inmenu #sites,body.closeup #sites,body.inmenu #branchCard,body.closeup #branchCard{display:none}
-@media (max-width:760px){#sites{left:auto;right:8px;top:96px;transform:none;flex-direction:column}#branchCard{left:auto;right:8px;top:auto;bottom:calc(47vh + 20px);transform:none;white-space:normal;max-width:60vw}}
+body.inmenu #branchCard,body.closeup #branchCard{display:none}
+@media (max-width:760px){#branchCard{left:auto;right:8px;top:auto;bottom:calc(47vh + 20px);transform:none;white-space:normal;max-width:60vw}}
 html[lang=ko] #branchCard{font-size:13px;line-height:1.5}
 .bsec{margin:0 0 9px;padding-bottom:7px;border-bottom:1px solid #45404f}
 .bsec:last-child{border-bottom:0}
@@ -369,9 +369,10 @@ button.on:hover:not(:disabled){background:#a3384a}
   <div class="cgrp"><button id="bSpd" title="Speed">×1</button><button id="bAuto" class="on" title="Stylists plan and start on their own">Auto</button><button id="bTime" title="Time of day">☀ Auto</button></div>
   <div class="cgrp"><button id="bRotL" title="Rotate left (Q)">⟲</button><button id="bRotR" title="Rotate right (E)">⟳</button><button id="bZo">−</button><button id="bZi">+</button><button id="bCenter" title="">⌖</button></div>
   <div class="cgrp"><button id="bNotify" title="Notifications">Alerts</button><button id="bTrack">♪</button><button id="bSound"></button><button id="bLang"></button><button id="bHelp">?</button></div>
+  <div id="sites" class="cgrp"></div>
 </div>
 <div id="notify" class="card"></div>
-<div id="sites" class="card"></div><div id="branchCard" class="card"></div><div id="incident" class="card"></div>
+<div id="branchCard" class="card"></div><div id="incident" class="card"></div>
 <div id="panel" class="card"><div id="tabs"></div><div id="pnav" hidden></div><div id="pbody"></div></div>
 
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
