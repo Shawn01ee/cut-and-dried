@@ -2,6 +2,8 @@ import { NetworkPanel } from './NetworkPanel.js';
 import { DepartmentsPanel } from './DepartmentsPanel.js';
 import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS, CATEGORIES, categoryOf } from '../building/FurnitureCatalog.js';
 import { REACH, reachKind } from '../building/Surroundings.js';
+import { REP_CEILING } from '../tycoon/Reputation.js';
+import { INTERIOR_SETS, SET_SPAN } from '../building/InteriorSets.js';
 import { siteOf } from '../building/SalonLayout.js';
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
 import { portraitURL, crownURL } from './Portrait.js';
@@ -226,7 +228,18 @@ export class TycoonUI {
     }
     return `${tabs}<div class="bsec"><h4>${t('build.chairs')}</h4><div class="brow"><span>${l.branchOpen ? t('build.chairLine2', l.chairsAt(0), l.maxChairsAt(0), l.chairsAt(1), l.maxChairsAt(1)) : t('build.chairLine', l.chairsAt(0), l.maxChairsAt(0))}</span><span class="sp"></span><button class="go" data-do="buy:station" ${!g.isUnlocked('chairs') || !l.chairRoom || !g.economy.canAfford(CHAIR_PRICE) ? 'disabled' : ''}>${g.isUnlocked('chairs') ? t('build.chairBuy', CHAIR_PRICE) : t('build.lockedAt')}</button></div><div class="dim">${t('build.chairHint')}</div></div>
     ${shows('build.expand', g.progression.level) ? `<div class="bsec"><h4>${t('build.expand')}</h4><div class="brow"><span>${t('build.expandLine', l.tier + 1, EXPANSIONS.length + 1)}</span><span class="sp"></span>${expand}</div>${next ? `<div class="dim">${t('build.next.' + l.tier)}</div>` : ''}</div>` : ''}
-    ${shows('build.branch', g.progression.level) || l.branchOpen ? this.#branch() : ''}`;
+    ${shows('build.branch', g.progression.level) || l.branchOpen ? this.#branch() : ''}${this.#sets()}`;
+  }
+  /** Interior sets: found ones by name, pieces and bonus, with where they stand complete; the rest as ???. */
+  #sets() {
+    const t = (k, ...a) => this.#t(k, ...a), g = this.game, done = g.layout.completeSets, found = g.sets.found;
+    const fx = s => Object.entries(s.fx).map(([k, v]) => t('setfx.' + k, k === 'comfort' || k === 'followers' ? v : Math.round(v * 100))).join(' · ');
+    const pieces = s => Object.entries(s.needs).map(([id, n]) => t('f.' + id) + (n > 1 ? ' ×' + n : '')).join(' · ');
+    const row = s => { const where = done.filter(c => c.id === s.id).map(c => t('build.site' + c.site)), n = Object.values(s.needs).reduce((a, b) => a + b, 0);
+      return found.includes(s.id)
+        ? `<div class="brow"><span class="${where.length ? 'good' : 'dim'}">${where.length ? '✓' : '·'} <b>${t('set.' + s.id)}</b> · ${fx(s)}</span><span class="sp"></span><span class="dim">${where.length ? where.join(' · ') : t('set.apart')}</span></div><div class="dim">${pieces(s)}</div>`
+        : `<div class="brow"><span class="dim">· ??? · ${t('set.unknown', n)}</span></div>`; };
+    return `<div class="bsec"><h4>${t('set.title', found.length, INTERIOR_SETS.length)}</h4><div class="dim">${t('set.note', SET_SPAN)}</div>${INTERIOR_SETS.map(row).join('')}</div>`;
   }
   /** The second salon: what it takes to open, then that it is open. */
   #branch() {
@@ -524,9 +537,11 @@ export class TycoonUI {
     }).join('');
     return `<div class="bsec"><h4>${t('ms.title')}</h4><div class="dim">${t('ms.note')}</div>${cards}<div class="dim">${t('ms.total', M.earned.toLocaleString(), M.done)}</div></div>`;
   }
+  /** How high reputation can go on today's reviews, once there are enough of them. */
+  #repCeiling(t) { const g = this.game, top = g.reputation.ceiling; return top < 100 ? `<div class="dim">${t('prog.repCeiling', Math.floor(top), g.reviews.rating.toFixed(2), REP_CEILING.base, REP_CEILING.perStar)}</div>` : ''; }
   #growth() {
     const t = (k, ...a) => this.#t(k, ...a), p = this.game.progression, next = p.next, ctx = this.game.context;
-    return this.#missions() + `<div class="bsec"><h4>${t('prog.current', p.level, t('lv.' + p.level))}</h4><div>${next ? t('prog.next', t('goal.' + next.level, ...next.goal(ctx))) : t('prog.max')}</div></div><div class="bsec"><h4>${t('prog.unlocks')}</h4>${p.all.map(l => `<div class="brow"><span class="${l.level <= p.level ? 'good' : 'dim'}">${l.level <= p.level ? '✓' : '·'} ${l.level}. ${t('lv.' + l.level)}</span><span class="sp"></span><span class="dim">${[...l.unlocks.map(u => t('u.' + u)), ...featuresAt(l.level).map(k => t('feat.' + k))].join(', ')}</span></div>`).join('')}</div>`;
+    return this.#missions() + `<div class="bsec"><h4>${t('prog.current', p.level, t('lv.' + p.level))}</h4><div>${next ? t('prog.next', t('goal.' + next.level, ...next.goal(ctx))) : t('prog.max')}</div>${this.#repCeiling(t)}</div><div class="bsec"><h4>${t('prog.unlocks')}</h4>${p.all.map(l => `<div class="brow"><span class="${l.level <= p.level ? 'good' : 'dim'}">${l.level <= p.level ? '✓' : '·'} ${l.level}. ${t('lv.' + l.level)}</span><span class="sp"></span><span class="dim">${[...l.unlocks.map(u => t('u.' + u)), ...featuresAt(l.level).map(k => t('feat.' + k))].join(', ')}</span></div>`).join('')}</div>`;
   }
 
   handle(action, value) {

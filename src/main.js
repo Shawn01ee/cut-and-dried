@@ -19,6 +19,7 @@ import { WISH_RELIEF, WISH_LOYALTY } from './employees/Management.js';
 import { GRADE_PAY, TREND_PAY } from './hair/StyleMenu.js';
 import { decorThemeOf } from './tycoon/Decor.js';
 import { REACH, DECOR_CAP, DECOR_SAT, reachKind, reachedBy } from './building/Surroundings.js';
+import { INTERIOR_SETS } from './building/InteriorSets.js';
 import { LINES } from './i18n/dialogue.js';
 import { shows, featuresAt } from './tycoon/Features.js';
 import { DECOR_MODELS } from './rendering/decorModels.js';
@@ -430,7 +431,7 @@ const DOOR_IN=V(-2,0,2.45);
 /** Each salon's way in from the street: where clients appear, the street door, just outside and just inside. */
 const SITE_DOORS=[0,BRANCH_X].map(x=>({street:V(x+4.1,0,4.7),door:V(x-2,0,4.4),out:V(x-2,0,3.6),inn:V(x-2,0,2.45)}));
 const furnitureView=new FurnitureView(world,SB,terr,game.layout,LAMP,procSeats),nav=new NavGrid(game.layout);
-const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex)=>nav.wouldConnect(c,ex),blockedBy:(c,ex)=>nav.blockedBy(c,ex),canModify:it=>canModify(it),canMove:it=>canMove(it),queueMove:(it,x,z,r)=>queueMove(it,x,z,r),canSell:it=>canSell(it),onChange:()=>{syncFurniture();renderPanel(true);}});
+const build=new BuildMode(game.layout,game.economy,furnitureView,{validate:(c,ex)=>nav.wouldConnect(c,ex),blockedBy:(c,ex)=>nav.blockedBy(c,ex),canModify:it=>canModify(it),canMove:it=>canMove(it),queueMove:(it,x,z,r)=>queueMove(it,x,z,r),canSell:it=>canSell(it),onChange:()=>{syncFurniture();celebrateSets();renderPanel(true);}});
 /** A walk to `to` that goes around the furniture. */
 function route(from,to){return [...nav.path(from,to).map(p=>V(p.x,0,p.z)),to.clone()];}
 const custs=[],queue=[];
@@ -722,6 +723,10 @@ function syncSupport(){restyleDesks();if(deskInfo)syncAnchors();recep.root.visib
 const CAM_BY_SIZE=[[0,1.2,1],[0,.2,1.15],[2,.2,1.38],[2,-.8,1.55],[4,-.8,1.8],[4,-1.8,1.95]];
 function syncChairs(){const t=game.layout.tier;backGroup.visible=t>=1;annexGroup.visible=t>=2;rearGroup.visible=t>=3;annex2Group.visible=t>=4;rear2Group.visible=t>=5;walls.forEach(w=>{if(w.show&&!w.branch)w.off=!w.show(t);});syncBranchSize();if(site===0){const [x,z,k]=CAM_BY_SIZE[t];camHome.set(x,.55,z);viewScale=k;}}
 function placeStaff(e,st){const wasOwner=st.sty===OWNER;st.sty=e;st.vacant=false;st.state='free';e.fig.root.visible=true;e.fig.pos.copy(st.stand);e.fig.yaw=st.face;if(wasOwner){OWNER.floating=true;OWNER.fig.walkTo(route(OWNER.fig.pos,OWNER_IDLE),()=>OWNER.fig.yaw=Math.PI);}}
+/** An interior set completed for the first time: named on the spot, with what it does. */
+function celebrateSets(){for(const id of game.noteSets()){const c=game.layout.completeSets.find(x=>x.id===id);audio.play('clap');popup(tx('set.found',tx('set.'+id),setFx(id)),c.site?recep2.head:recep.head,'big');}}
+/** What a set does, in words. */
+function setFx(id){const fx=INTERIOR_SETS.find(s=>s.id===id).fx;return Object.entries(fx).map(([k,v])=>tx('setfx.'+k,k==='comfort'||k==='followers'?v:Math.round(v*100))).join(' · ');}
 function hireStaff(e){const st=openChair();if(st&&game.staff.hire(e)){audio.play('cash');placeStaff(e,st);game.updateProgress();}}
 function fireStaff(e){const st=stations.find(x=>x.sty===e);if(st&&st.state!=='free')return;if(!game.staff.fire(e))return;e.fig.root.visible=false;if(st)vacate(st);}
 /** A stylist leaves their chair: Lia takes it if she has none, otherwise it stands empty. */

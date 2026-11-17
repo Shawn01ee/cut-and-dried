@@ -7,7 +7,8 @@ import { Departments } from './Departments.js';
 import { DailyMetrics } from './DailyMetrics.js';
 import { PerformanceExplainer } from './PerformanceExplainer.js';
 import { DecisionAdvisor } from './DecisionAdvisor.js';
-import { Reputation } from './Reputation.js';
+import { Reputation, repCeiling } from './Reputation.js';
+import { SetBook } from '../building/InteriorSets.js';
 import { Progression } from './Progression.js';
 import { OperatingCosts } from './OperatingCosts.js';
 import { Marketing, HAIR_SHOW, AGENCY, CAMPAIGNS, CHANNELS } from './Marketing.js';
@@ -85,7 +86,7 @@ export class TycoonGame {
     this.clock = new GameClock(this.bus);
     this.economy = new Economy(STARTING_CASH);
     this.metrics = new DailyMetrics(); this.overtime = new OvertimeLog(); this.explainer = new PerformanceExplainer(); this.advisor = new DecisionAdvisor();
-    this.reputation = new Reputation();
+    this.reputation = new Reputation(() => repCeiling(this.reviews.rating, this.reviews.count));
     this.progression = new Progression(this.bus);
     this.staff = new StaffManager(this.economy);
     this.layout = new SalonLayout(); this.layout.resetToDefault();
@@ -110,7 +111,7 @@ export class TycoonGame {
     this.rival = new Rival();
     // Matching a price war until this day, a poaching attempt waiting for the morning, this month's contest, past results and a podium's lift in demand.
     this.brand = new Brand();
-    this.onboarding = new Onboarding(); this.spy = new RivalSpy();
+    this.onboarding = new Onboarding(); this.spy = new RivalSpy(); this.sets = new SetBook();
     // Shawn's orders and what they have set going: price lock, promotion, longer hours, commission, a product due.
     this.hq = new Headquarters(); this.hqFx = {};
     this.matchUntil = 0; this.poach = null; this.contest = null; this.contestLog = []; this.contestBoost = null; this.contestResult = null; this.storyBoost = null; this.storyPerks = { hospitality: 0, contest: 0 };
@@ -356,7 +357,7 @@ export class TycoonGame {
     const influencer = walkIn && !reg ? this.marketing.takeInfluencer() : null;
     const c = this.customers.create(usedNames, {
       colour: this.isUnlocked('colour'), perm: this.isUnlocked('perm'), advancedCuts: this.isUnlocked('chairs'),
-      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel] * (this.matching ? MATCH_PRICE : 1) * (this.promoOn ? ORDERS.promo.price : 1), patienceMultiplier: (1 + this.comfortAt(site) * .03) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1) * (this.layout.countAt('kiosk', site) ? FURNITURE.kiosk.patience : 1) * (this.layout.countAt('chargingStation', site) ? FURNITURE.chargingStation.patience : 1) * (fx.patience ?? 1),
+      vipChance: this.isUnlocked('vip') ? .18 : 0, priceMultiplier: PRICE_MULTIPLIER[this.priceLevel] * (this.matching ? MATCH_PRICE : 1) * (this.promoOn ? ORDERS.promo.price : 1), patienceMultiplier: (1 + this.comfortAt(site) * .03) * (1 + this.layout.setBonus(site, 'patience')) * (this.staff.hasSupport('reception', site) ? 1.15 : 1) * (booked ? BOOKED_PATIENCE : 1) * (this.layout.countAt('kiosk', site) ? FURNITURE.kiosk.patience : 1) * (this.layout.countAt('chargingStation', site) ? FURNITURE.chargingStation.patience : 1) * (fx.patience ?? 1),
       villain: walkIn && !influencer && !reg ? rollVillain(this.progression.level) : null, influencer, budgetFactor: this.rival.budgetFactor(this.matching) * (fx.budget ?? 1),
       colourBias: (fx.colour ?? 1) / (fx.cut ?? 1), permBias: (fx.perm ?? 1) / (fx.cut ?? 1), as: reg || as, trends: this.trends,
     });
@@ -403,6 +404,7 @@ export class TycoonGame {
     if (customer.vip && worker.hasPerk('vip')) result.payment = Math.round(result.payment * 1.2);
     if (customer.vip && customer.vipRoom) result.payment = Math.round(result.payment * 1.25);
     if (customer.vip && this.layout.countAt('champagneFridge', customer.site || 0)) result.payment = Math.round(result.payment * FURNITURE.champagneFridge.vipPay);
+    if (customer.vip) result.payment = Math.round(result.payment * (1 + this.layout.setBonus(customer.site || 0, 'vipPay')));
     // A head spa is an add-on the client pays for.
     { const fx = this.dayFx, k = (fx.pay ?? 1) * (customer.requestedService === 'haircut' ? fx.cutPay ?? 1 : 1); if (k !== 1 && !customer.influencer) result.payment = Math.round(result.payment * k); }
     if (customer.spa && !customer.influencer) result.payment += SPA_FEE;
@@ -560,6 +562,8 @@ export class TycoonGame {
   #missionState(kind) {
     return { comfort: Math.round(this.comfort), hire: this.staff.hired.length, assistant: this.staff.support.filter(e => e.effect === 'tidy' && e.hired).length, regulars: this.regulars }[kind] ?? 0;
   }
+  /** Interior sets standing complete for the first time: noted, and returned so the scene can celebrate them. */
+  noteSets() { return this.sets.note(this.layout.completeSets); }
   syncMissions() { this.missions.sync(k => this.#missionState(k)); }
   claimMission(i) { return this.missions.claim(i, this.progression.level, f => this.isUnlocked(f), k => this.#missionState(k)); }
   /** Hosts a hair show: costs money, brings followers, reputation and a week of extra clients. Once a week. */
@@ -585,7 +589,7 @@ export class TycoonGame {
   }
   #departmentResults(results) { for (const job of results) if (job.idol) { const result = this.#settleSpecial(job.quality, true); if (result) this.bus.emit('special:finished', result); } }
   startDay() {
-    this.metrics.startDay(); this.overtime.startDay();
+    this.metrics.startDay(); this.overtime.startDay(); this.reputation.settle();
     if (this.hqFx.hours && this.clock.day > this.hqFx.hours.until) { this.nextHours = this.nextHours || this.hqFx.hours.base; delete this.hqFx.hours; }
     if (this.nextHours) { this.clock.setHours(...this.nextHours); this.nextHours = null; }
     this.economy.startDay(); this.operatingCosts.startDay(); this.staff.startDay(this.clock.day); this.staff.welfareMorning(dateOf(this.clock.day));
@@ -602,7 +606,7 @@ export class TycoonGame {
     if (this.isSunday) { this.#dayOff(); return; }
     this.dayOff = false; this.marketing.startDay();
     // A neon sign in the window brings in followers every open day.
-    { const neon = [0, 1].filter(s => this.layout.countAt('neonSign', s)).length; if (neon) this.marketing.addFollowers(neon * FURNITURE.neonSign.dailyFollowers); }
+    { const neon = [0, 1].filter(s => this.layout.countAt('neonSign', s)).length, sets = [0, 1].reduce((n, s) => n + this.layout.setBonus(s, 'followers'), 0); if (neon || sets) this.marketing.addFollowers(neon * FURNITURE.neonSign.dailyFollowers + sets); }
     this.happening = null; this.happeningFx = {};
     if (this.progression.level >= 2) { const h = rollHappening(); if (h) this.#startHappening(h); }
     this.special = rollSpecial(this.progression.level, this.clock.openHour, this.clock.closeHour, this.departments.idolReady);
@@ -692,7 +696,7 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, spy: this.spy, toRival: this.toRival, closingPolicy: this.closingPolicy, rebooked: this.rebooked, performance: this.explainer, departments: this.departments, network: this.network, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, onboarding: this.onboarding, hq: this.hq, hqFx: this.hqFx, storyBoost: this.storyBoost, storyPerks: this.storyPerks, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, spy: this.spy, sets: this.sets, toRival: this.toRival, closingPolicy: this.closingPolicy, rebooked: this.rebooked, performance: this.explainer, departments: this.departments, network: this.network, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, onboarding: this.onboarding, hq: this.hq, hqFx: this.hqFx, storyBoost: this.storyBoost, storyPerks: this.storyPerks, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.departments.restore(d.departments);
@@ -712,6 +716,6 @@ export class TycoonGame {
     this.regularBook.restore(d.regularBook); this.regularBook.trim(this.regulars); this.specialLog = d.specialLog || [];
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
-    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.onboarding.restore(d.onboarding, this); this.hq.restore(d.hq); this.hqFx = d.hqFx || {}; this.storyBoost = d.storyBoost || null; this.storyPerks = { hospitality: 0, contest: 0, ...d.storyPerks }; this.hospitality.extra = this.storyPerks.hospitality; this.lastCall = d.lastCall || 0; this.spy.restore(d.spy); this.toRival = { today: 0, yesterday: 0, served: 0, ...d.toRival }; this.closingPolicy = CLOSING.includes(d.closingPolicy) ? d.closingPolicy : 'book'; this.rebooked = d.rebooked || []; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
+    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.onboarding.restore(d.onboarding, this); this.hq.restore(d.hq); this.hqFx = d.hqFx || {}; this.storyBoost = d.storyBoost || null; this.storyPerks = { hospitality: 0, contest: 0, ...d.storyPerks }; this.hospitality.extra = this.storyPerks.hospitality; this.lastCall = d.lastCall || 0; this.spy.restore(d.spy); this.sets.restore(d.sets); this.toRival = { today: 0, yesterday: 0, served: 0, ...d.toRival }; this.closingPolicy = CLOSING.includes(d.closingPolicy) ? d.closingPolicy : 'book'; this.rebooked = d.rebooked || []; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
   }
 }
