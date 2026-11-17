@@ -9,6 +9,7 @@ import { PerformanceExplainer } from './PerformanceExplainer.js';
 import { DecisionAdvisor } from './DecisionAdvisor.js';
 import { Reputation, repCeiling } from './Reputation.js';
 import { SetBook } from '../building/InteriorSets.js';
+import { StyleBook, SIGNATURE_PAY } from './StyleBook.js';
 import { Progression } from './Progression.js';
 import { OperatingCosts } from './OperatingCosts.js';
 import { Marketing, HAIR_SHOW, AGENCY, CAMPAIGNS, CHANNELS } from './Marketing.js';
@@ -111,7 +112,7 @@ export class TycoonGame {
     this.rival = new Rival();
     // Matching a price war until this day, a poaching attempt waiting for the morning, this month's contest, past results and a podium's lift in demand.
     this.brand = new Brand();
-    this.onboarding = new Onboarding(); this.spy = new RivalSpy(); this.sets = new SetBook();
+    this.onboarding = new Onboarding(); this.spy = new RivalSpy(); this.sets = new SetBook(); this.book = new StyleBook();
     // Shawn's orders and what they have set going: price lock, promotion, longer hours, commission, a product due.
     this.hq = new Headquarters(); this.hqFx = {};
     this.matchUntil = 0; this.poach = null; this.contest = null; this.contestLog = []; this.contestBoost = null; this.contestResult = null; this.storyBoost = null; this.storyPerks = { hospitality: 0, contest: 0 };
@@ -399,6 +400,8 @@ export class TycoonGame {
     // Priced by the grade of whoever did it, and a month's trend pays more.
     result.payment = Math.round(result.payment * GRADE_PAY[this.gradeOf(worker)] * (customer.trending ? TREND_PAY : 1));
     if (customer.regular && customer.regular.hearts >= HEART_LOYAL) result.payment = Math.round(result.payment * LOYAL_PAY);
+    // One of the salon's signature styles (see StyleBook) pays a little more.
+    if (!customer.influencer && this.book.signatureIn(customer.order)) result.payment = Math.round(result.payment * SIGNATURE_PAY);
     if (customer.vip) result.payment = Math.round(result.payment * syn.reduce((k, s) => k * (s.vipPay || 1), 1));
     if (customer.vip && byOwner) result.payment = Math.round(result.payment * 1.2);
     if (customer.vip && worker.hasPerk('vip')) result.payment = Math.round(result.payment * 1.2);
@@ -414,6 +417,10 @@ export class TycoonGame {
     }
     const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + comfort * .03 : 1);
     this.reputation.add(gain); worker.recordService(result.satisfaction, result.payment);
+    // The style book: new styles, first stars, new signatures and milestone rewards.
+    { const b = this.book.record(customer.order, result.hairScore, worker.name, this.clock.day);
+      b.milestones.forEach(m => { this.economy.earn('styleBook', m.cash); this.marketing.addFollowers(m.followers); });
+      if (b.fresh.length || b.stars.length || b.signatures.length || b.milestones.length) this.bus.emit('book:entry', b); }
     if (worker !== this.staff.owner) worker.tire(14 / this.layout.staffRestRate * (this.layout.countAt('massageChair', customer.site || 0) ? FURNITURE.massageChair.staffTire : 1) * (TRAITS[worker.trait]?.tire || 1));
     // A mentor on the team helps everyone else learn faster.
     const learning = this.staff.hasPerk('mentor') && !worker.hasPerk('mentor') ? 1.5 : 1;
@@ -696,7 +703,7 @@ export class TycoonGame {
   }
   save() { this.saves.save(this.serialize()); }
   serialize() {
-    return { day: this.clock.day + 1, spy: this.spy, sets: this.sets, toRival: this.toRival, closingPolicy: this.closingPolicy, rebooked: this.rebooked, performance: this.explainer, departments: this.departments, network: this.network, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, onboarding: this.onboarding, hq: this.hq, hqFx: this.hqFx, storyBoost: this.storyBoost, storyPerks: this.storyPerks, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
+    return { day: this.clock.day + 1, spy: this.spy, sets: this.sets, book: this.book, toRival: this.toRival, closingPolicy: this.closingPolicy, rebooked: this.rebooked, performance: this.explainer, departments: this.departments, network: this.network, lastCall: this.lastCall, economy: this.economy, reputation: this.reputation.value, level: this.progression.level, served: this.served, satisfactionSum: this.satisfactionSum, priceLevel: this.priceLevel, staff: this.staff.all, support: this.staff.support, layout: this.layout, marketing: this.marketing, reviews: this.reviews, reviewRewards: this.reviewRewards, hospitality: this.hospitality, finance: this.finance, rival: this.rival, regulars: this.regulars, regularBook: this.regularBook, specialLog: this.specialLog, staffPolicy: this.staff, hours: this.nextHours || [this.clock.openHour, this.clock.closeHour] , missions: this.missions, weekLog: this.weekLog, month: this.month, trendUntil: this.trendUntil, matchUntil: this.matchUntil, contest: this.contest, contestLog: this.contestLog, contestBoost: this.contestBoost, brand: this.brand, onboarding: this.onboarding, hq: this.hq, hqFx: this.hqFx, storyBoost: this.storyBoost, storyPerks: this.storyPerks, forecast: this.forecast, calendarOrigin: this.calendarOrigin, recentRevenue: this.recentRevenue };
   }
   restore(d) {
     this.departments.restore(d.departments);
@@ -716,6 +723,6 @@ export class TycoonGame {
     this.regularBook.restore(d.regularBook); this.regularBook.trim(this.regulars); this.specialLog = d.specialLog || [];
     if (d.hours) this.clock.setHours(...d.hours);
     this.missions.restore(d.missions); this.weekLog = d.weekLog || [];
-    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.onboarding.restore(d.onboarding, this); this.hq.restore(d.hq); this.hqFx = d.hqFx || {}; this.storyBoost = d.storyBoost || null; this.storyPerks = { hospitality: 0, contest: 0, ...d.storyPerks }; this.hospitality.extra = this.storyPerks.hospitality; this.lastCall = d.lastCall || 0; this.spy.restore(d.spy); this.sets.restore(d.sets); this.toRival = { today: 0, yesterday: 0, served: 0, ...d.toRival }; this.closingPolicy = CLOSING.includes(d.closingPolicy) ? d.closingPolicy : 'book'; this.rebooked = d.rebooked || []; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
+    this.month.restore(d.month, this.#monthSnapshot()); this.trendUntil = d.trendUntil || 0; this.matchUntil = d.matchUntil || 0; this.contest = d.contest || null; this.contestLog = d.contestLog || []; this.contestBoost = d.contestBoost || null; this.brand.restore(d.brand); this.onboarding.restore(d.onboarding, this); this.hq.restore(d.hq); this.hqFx = d.hqFx || {}; this.storyBoost = d.storyBoost || null; this.storyPerks = { hospitality: 0, contest: 0, ...d.storyPerks }; this.hospitality.extra = this.storyPerks.hospitality; this.lastCall = d.lastCall || 0; this.spy.restore(d.spy); this.sets.restore(d.sets); this.book.restore(d.book); this.toRival = { today: 0, yesterday: 0, served: 0, ...d.toRival }; this.closingPolicy = CLOSING.includes(d.closingPolicy) ? d.closingPolicy : 'book'; this.rebooked = d.rebooked || []; this.forecast = WEATHER[d.forecast] ? d.forecast : null;
   }
 }
