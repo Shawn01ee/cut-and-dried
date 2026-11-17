@@ -27,11 +27,22 @@ export class SalonNetwork {
   lead() { if (!this.canLead) return false; this.executive=true; this.game.staff.owner.role='CEO'; this.version++; return true; }
   /** Conditional Poisson arrivals; all outlets share today's weather. Capacity caps actual service, not raw arrivals. */
   forecast(o) { const g=this.game, f=FORMATS[o.format]; return f.arrivals*(.5+g.reputation.value/200)*(.5+o.quality/200)*(WEATHER[g.weather]?.demand ?? 1); }
+  /**
+   * Today's clients at an outlet, drawn once (in the morning, or when first needed): arrival times as fractions of the
+   * open day. The street shows these clients walking in, and the evening settles exactly these.
+   */
+  todayOf(o, random=Math.random) {
+    const g=this.game, day=g.clock.day;
+    if (o.today?.day!==day) o.today={ day, times:g.isSunday||o.opened>=day ? [] : appointmentTimes(0,1,this.forecast(o),random) };
+    return o.today;
+  }
+  /** The morning: every outlet's clients for the day. */
+  startDay(random=Math.random) { this.outlets.forEach(o=>this.todayOf(o,random)); this.version++; }
   settle(random=Math.random) {
     const g=this.game; if (g.isSunday) return;
     for (const o of this.outlets) {
       if (o.opened>=g.clock.day || o.last?.day===g.clock.day) continue;
-      const f=FORMATS[o.format], expected=o.paused?0:this.forecast(o), referred=this.referredToday(o), arrivals=appointmentTimes(0,1,expected,random).length+referred;
+      const f=FORMATS[o.format], expected=o.paused?0:this.forecast(o), referred=this.referredToday(o), arrivals=(o.paused?0:this.todayOf(o,random).times.length)+referred;
       const served=Math.min(arrivals,f.capacity), revenue=served*f.ticket, royalty=Math.round(revenue*f.royalty);
       // Temporary closure still pays local fixed costs and HQ support. No guaranteed revenue.
       const fixed=o.paused?Math.round(f.dailyCost*REST_FIXED_SHARE):f.dailyCost, support=o.paused?REST_SUPPORT:f.support;
@@ -55,7 +66,7 @@ export class SalonNetwork {
     return this.outlets.filter(o=>!o.paused && o.opened<g.clock.day && room(o)>=1).sort((a,b)=>room(b)-room(a))[0] || null;
   }
   /** One client sent to an outlet by our desk: counted in its arrivals when the day is settled. */
-  refer(o) { o.referred={ day:this.game.clock.day, n:this.referredToday(o)+1 }; this.version++; }
+  refer(o) { const c=this.game.clock, at=o.referred?.day===c.day&&o.referred.at||[]; o.referred={ day:c.day, n:this.referredToday(o)+1, at:[...at, c.elapsed/c.dayLength] }; this.version++; }
   /** Today's settled accounts only; opening fees and training purchases stay in the main ledger. */
   daySummary() {
     const rows=this.outlets.map(o=>o.last).filter(r=>r?.day===this.game.clock.day);
