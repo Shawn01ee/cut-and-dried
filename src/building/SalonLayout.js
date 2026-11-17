@@ -1,5 +1,6 @@
 import { FURNITURE, EXPANSIONS, BRANCH_EXPANSIONS, chairsOn } from './FurnitureCatalog.js';
 import { surroundingsOf } from './Surroundings.js';
+import { completeSets, setBonus } from './InteriorSets.js';
 
 /** The second salon (2호점) stands further down the street; this is its centre. */
 /** The most furniture can speed up any one kind of service. */
@@ -82,7 +83,11 @@ export class SalonLayout {
   get chairRoom() { return [0, 1].some(s => this.chairsAt(s) < this.maxChairsAt(s)); }
   countAt(id, site) { return this.#inSite(site).filter(it => it.id === id).length; }
   /** Comfort of one salon's furniture. */
-  comfortAt(site) { return Math.min(25, this.#inSite(site).reduce((a, it) => a + (FURNITURE[it.id].comfort || 0), 0)); }
+  comfortAt(site) { return Math.min(25, this.#inSite(site).reduce((a, it) => a + (FURNITURE[it.id].comfort || 0), 0)) + this.setBonus(site, 'comfort'); }
+  /** The interior sets complete at both salons (see InteriorSets). */
+  get completeSets() { return completeSets(this.items, siteOf); }
+  /** One kind of bonus from the sets complete at a salon. */
+  setBonus(site, key) { return setBonus(this.completeSets, site, key); }
   /** How many of a piece the salon has room for at its current size. */
   maxOf(id, site = 0) { const m = FURNITURE[id].max; return m == null ? Infinity : Array.isArray(m) ? m[site ? 1 : this.tier] : m; }
   get nextExpansion() { return EXPANSIONS[this.tier] || null; }
@@ -140,8 +145,8 @@ export class SalonLayout {
   addAnnexPlants() { ANNEX_PLANTS.forEach(([x, z]) => { const cells = this.footprint('plant', x, z, 0); if (cells && this.canOccupy('plant', cells)) this.add('plant', x, z, 0); }); }
   #sum(fn) { return this.items.reduce((a, it) => a + (fn(FURNITURE[it.id]) || 0), 0); }
   get comfort() { return this.comfortAt(0); }
-  get dailySales() { return this.#sum(f => f.dailySales); }
-  /** How much faster one kind of service goes at a salon thanks to its furniture: each piece adds its share, up to +15%. */
+  /** Product sales a day at both salons, each lifted by its interior sets. */
+  get dailySales() { return [0, 1].reduce((n, s) => n + this.#inSite(s).reduce((a, it) => a + (FURNITURE[it.id].dailySales || 0), 0) * (1 + this.setBonus(s, 'sales')), 0); }
   /** How much faster `type` goes: at a spot ({x, z}), from the tools within reach; without one, the best a salon's tools can do. */
   speedBonusAt(site, type, at = null) { return 1 + Math.min(SPEED_CAP, at ? this.surroundings(at).speed[type] || 0 : this.#inSite(site).reduce((a, it) => { const f = FURNITURE[it.id]; return a + (f.speedFor === type ? f.speedBonus : 0); }, 0)); }
   /** What a chair or booth standing at `at` has within reach (see Surroundings). */

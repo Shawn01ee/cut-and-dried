@@ -47,7 +47,8 @@ export class Employee {
   get fatigue() { return 100 - this.stamina; }
   get trainingCost() { return 250 * this.level; }
   get canTrain() { return this.level < MAX_LEVEL; }
-  get experienceToNext() { return this.level * 50; }
+  /** Early levels come quickly, later ones take longer: 50 points to level 2, 1,170 from 9 to 10. */
+  get experienceToNext() { return 40 * this.level + 10 * this.level ** 2; }
   get settling() { return this.hired && this.daysEmployed < SETTLING_DAYS; }
   onLeave(day) { return day >= this.leaveFrom && day <= this.leaveTo; }
   leaveBooked(day) { return this.leaveTo >= day; }
