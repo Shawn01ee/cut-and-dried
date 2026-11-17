@@ -416,7 +416,7 @@ export class TycoonGame {
       customer.treatment = true; this.economy.earn('treatment', TREATMENT_FEE); result.satisfaction = Math.min(1, result.satisfaction + .04);
     }
     const gain = (result.satisfaction - .55) * 3 * (customer.vip ? 2 : 1) * (result.satisfaction > .55 ? 1 + comfort * .03 : 1);
-    this.reputation.add(gain); worker.recordService(result.satisfaction, result.payment);
+    this.reputation.earn(gain); worker.recordService(result.satisfaction, result.payment);
     // The style book: new styles, first stars, new signatures and milestone rewards.
     { const b = this.book.record(customer.order, result.hairScore, worker.name, this.clock.day);
       b.milestones.forEach(m => { this.economy.earn('styleBook', m.cash); this.marketing.addFollowers(m.followers); });
@@ -544,7 +544,7 @@ export class TycoonGame {
   #post(review) {
     if (review) {
       if (review.stars === 5 && !review.fake) this.missions.record('five');
-      review.rep = REVIEW_REP[review.stars] ?? 0; this.reputation.add(review.rep); this.bus.emit('review:new', review);
+      review.rep = REVIEW_REP[review.stars] ?? 0; this.reputation.earn(review.rep); this.bus.emit('review:new', review);
       for (const bonus of this.reviewRewards.onReview(review, this.reviews)) { this.economy.fund('reviewBonus', bonus.amount); this.bus.emit('review:bonus', bonus); }
     }
     return review;
@@ -555,10 +555,12 @@ export class TycoonGame {
   replyToReview(id, kind) {
     const r = this.reviews.reply(id, kind, this.reviewManager); if (!r) return r;
     this.missions.record('reply');
-    let rep = r.rep || 0;
-    if (r.review.removed) rep -= r.review.rep || 0;
-    else if (r.edited) { const now = REVIEW_REP[r.review.stars] ?? 0; rep += now - (r.review.rep || 0); r.review.rep = now; }
-    if (rep) this.reputation.add(rep);
+    // A thank-you is word of mouth (it builds slowly, see Reputation.earn); an apology, or a review taken down or improved, repairs in full.
+    const bonus = r.rep || 0; let fix = 0;
+    if (r.review.removed) fix -= r.review.rep || 0;
+    else if (r.edited) { const now = REVIEW_REP[r.review.stars] ?? 0; fix += now - (r.review.rep || 0); r.review.rep = now; }
+    if (bonus) { if (kind === 'thanks') this.reputation.earn(bonus); else this.reputation.add(bonus); }
+    if (fix) this.reputation.add(fix);
     return r;
   }
   /** With auto-replies on, the receptionist answers the day's unanswered reviews at closing. */
