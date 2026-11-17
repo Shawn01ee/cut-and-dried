@@ -43,12 +43,18 @@ export const DEALS = {
 };
 /** The chance of an offer on a working day, the rating a product needs for one, and what a short delivery costs (× its value). */
 export const DEAL_CHANCE = .12, DEAL_RATING = 3.5, SUPPLY_PENALTY = .5;
+/**
+ * Running the line on its own, for `fee` of the brand's takings each day: every evening it makes stock for about
+ * `cover` days of recent sales plus the week's deliveries (at least `least` units on the shelf), keeping `floor` in cash;
+ * and it takes an offer whose upfront cost is at most `upfront` of the cash, passing over the rest.
+ */
+export const AUTO = { fee: .1, cover: 2, least: 10, upfront: .1, floor: 1000 };
 const between = ([a, b]) => Math.round(rand(a, b));
 
 const ratingOf = (quality, line) => clamp(3 + (quality - LINES[line].expect) / 12, 1, 5);
 
 export class Brand {
-  constructor() { this.products = []; this.research = null; this.version = 0; this.sold = { desk: 0, online: 0 }; this.viral = null; this.offer = null; this.contracts = []; this.listings = []; this.boost = null; }
+  constructor() { this.products = []; this.research = null; this.version = 0; this.sold = { desk: 0, online: 0 }; this.viral = null; this.offer = null; this.contracts = []; this.listings = []; this.auto = false; this.made = 0; this.boost = null; }
   get(type) { return this.products.find(p => p.type === type) || null; }
   unitPrice(p) { return Math.round(PRODUCT_TYPES[p.type].price * LINES[p.line].price); }
   unitCost(p) { return Math.round(PRODUCT_TYPES[p.type].cost * LINES[p.line].cost * 10) / 10; }
@@ -71,7 +77,7 @@ export class Brand {
   }
   /** The morning: research done? A viral moment? Returns news keys. */
   startDay(day) {
-    const news = []; this.viral = null; this.day = day;
+    const news = []; this.viral = null; this.day = day; this.made = 0; this.products.forEach(p => { p.dayStart = p.sold; });
     if (this.research && day >= this.research.ready) { const r = this.research; this.products.push({ type: r.type, line: r.line, quality: r.quality, stock: 0, sold: 0, since: day }); this.research = null; news.push('done:' + r.type); }
     const hit = this.products.filter(p => p.stock > 0 && this.rating(p) >= ONLINE.viralRating);
     if (hit.length && Math.random() < ONLINE.viralChance) { this.viral = hit[Math.floor(Math.random() * hit.length)].type; news.push('viral:' + this.viral); }
@@ -141,8 +147,26 @@ export class Brand {
     }
     this.version++; return news;
   }
+  /** The evening, after every sale: each product's sales rate is updated and, when running on its own, stock is made. */
+  evening(economy) {
+    for (const p of this.products) { const today = p.sold - (p.dayStart ?? p.sold); p.rate = p.rate == null ? today : p.rate * .7 + today * .3; }
+    if (!this.auto) return 0;
+    let made = 0;
+    for (const p of this.products) {
+      const target = Math.max(AUTO.least, Math.ceil((p.rate || 0) * AUTO.cover) + this.weeklyNeed(p.type)), want = Math.ceil(Math.max(0, target - p.stock) / 10) * 10;
+      if (want && economy.cash - this.unitCost(p) * want >= AUTO.floor && this.restock(p.type, want, economy)) made += want;
+    }
+    this.made = made; return made;
+  }
+  /** Running on its own: the waiting offer is taken when its upfront cost is small enough, else passed over. Returns the news key. */
+  decideOffer(economy, marketing, day) {
+    const o = this.offer; if (!this.auto || !o) return null;
+    const upfront = o.fee || o.cost || 0;
+    if (upfront <= economy.cash * AUTO.upfront && this.accept(economy, marketing, day)) return 'took:' + o.deal;
+    this.decline(); return 'passed:' + o.deal;
+  }
   /** Units a week the supply contracts take, by product. */
   weeklyNeed(type) { return this.contracts.filter(c => c.type === type).reduce((n, c) => n + c.units, 0); }
-  toJSON() { return { products: this.products, research: this.research, sold: this.sold, offer: this.offer, contracts: this.contracts, listings: this.listings, boost: this.boost }; }
-  restore(d) { if (!d) return; this.products = (d.products || []).filter(p => PRODUCT_TYPES[p.type] && LINES[p.line]); this.research = d.research || null; this.sold = d.sold || { desk: 0, online: 0 }; this.offer = d.offer || null; this.contracts = d.contracts || []; this.listings = d.listings || []; this.boost = d.boost || null; this.version++; }
+  toJSON() { return { auto: this.auto, products: this.products, research: this.research, sold: this.sold, offer: this.offer, contracts: this.contracts, listings: this.listings, boost: this.boost }; }
+  restore(d) { if (!d) return; this.auto = !!d.auto; this.products = (d.products || []).filter(p => PRODUCT_TYPES[p.type] && LINES[p.line]); this.research = d.research || null; this.sold = d.sold || { desk: 0, online: 0 }; this.offer = d.offer || null; this.contracts = d.contracts || []; this.listings = d.listings || []; this.boost = d.boost || null; this.version++; }
 }
