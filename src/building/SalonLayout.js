@@ -1,4 +1,5 @@
 import { FURNITURE, EXPANSIONS, BRANCH_EXPANSIONS, chairsOn } from './FurnitureCatalog.js';
+import { surroundingsOf } from './Surroundings.js';
 
 /** The second salon (2호점) stands further down the street; this is its centre. */
 /** The most furniture can speed up any one kind of service. */
@@ -141,7 +142,10 @@ export class SalonLayout {
   get comfort() { return this.comfortAt(0); }
   get dailySales() { return this.#sum(f => f.dailySales); }
   /** How much faster one kind of service goes at a salon thanks to its furniture: each piece adds its share, up to +15%. */
-  speedBonusAt(site, type) { return 1 + Math.min(SPEED_CAP, this.#inSite(site).reduce((a, it) => { const f = FURNITURE[it.id]; return a + (f.speedFor === type ? f.speedBonus : 0); }, 0)); }
+  /** How much faster `type` goes: at a spot ({x, z}), from the tools within reach; without one, the best a salon's tools can do. */
+  speedBonusAt(site, type, at = null) { return 1 + Math.min(SPEED_CAP, at ? this.surroundings(at).speed[type] || 0 : this.#inSite(site).reduce((a, it) => { const f = FURNITURE[it.id]; return a + (f.speedFor === type ? f.speedBonus : 0); }, 0)); }
+  /** What a chair or booth standing at `at` has within reach (see Surroundings). */
+  surroundings(at) { return surroundingsOf(this.#inSite(siteOf(at.x)), at); }
   get staffRestRate() { return this.items.some(it => FURNITURE[it.id].staffRest) ? 2 : 1; }
   /** A salon always needs a reception desk and somewhere to cut hair; put back missing ones at their default spots. */
   #ensureEssentials() {

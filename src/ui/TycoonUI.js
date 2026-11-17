@@ -1,6 +1,7 @@
 import { NetworkPanel } from './NetworkPanel.js';
 import { DepartmentsPanel } from './DepartmentsPanel.js';
 import { FURNITURE, FURNITURE_IDS, CHAIR_PRICE, EXPANSIONS, CATEGORIES, categoryOf } from '../building/FurnitureCatalog.js';
+import { REACH, reachKind } from '../building/Surroundings.js';
 import { siteOf } from '../building/SalonLayout.js';
 import { nameColour, rankMark, RANK_COLOURS } from './nameStyle.js';
 import { portraitURL, crownURL } from './Portrait.js';
@@ -210,7 +211,7 @@ export class TycoonUI {
     // How many of a piece each salon has, against what it may have.
     const owned = id => { const f = FURNITURE[id]; return sites.map(s => `${l.branchOpen ? t('build.site' + s) + ' ' : ''}${l.countAt(id, s)}${f.max != null ? '/' + l.maxOf(id, s) : ''}`).join(' · '); };
     const shopRow = id => { const f = FURNITURE[id], locked = f.requires && !g.isUnlocked(f.requires), full = !sites.some(s => l.countAt(id, s) < l.maxOf(id, s) && (!f.chairs || l.chairsAt(s) + f.chairs.length <= l.maxChairsAt(s))), small = f.minTier > l.tier;
-      return `<div class="frow"><div class="fx"><b>${t('f.' + id)}</b> <span class="dim">${t('build.own', owned(id))}</span><div class="dim">${t('fd.' + id)}</div></div><button class="go" data-do="buy:${id}" ${locked || small || full || !g.economy.canAfford(f.price) ? 'disabled' : ''}>${locked ? t('build.lockedAt') : small ? t('build.size', f.minTier + 1) : full ? t('build.full') : '$' + f.price.toLocaleString()}</button></div>`; };
+      return `<div class="frow"><div class="fx"><b>${t('f.' + id)}</b> <span class="dim">${t('build.own', owned(id))}</span><div class="dim">${t('fd.' + id)}${reachKind(id) ? ' · ' + t('reach.' + reachKind(id), REACH[reachKind(id)]) : ''}</div></div><button class="go" data-do="buy:${id}" ${locked || small || full || !g.economy.canAfford(f.price) ? 'disabled' : ''}>${locked ? t('build.lockedAt') : small ? t('build.size', f.minTier + 1) : full ? t('build.full') : '$' + f.price.toLocaleString()}</button></div>`; };
     const ownedRow = (it, i) => `<div class="frow"><div class="fx"><b>${t('f.' + it.id)}</b> ${l.branchOpen ? siteTag(siteOf(it.x)) : ''}${has('fd.' + it.id) ? `<div class="dim">${t('fd.' + it.id)}</div>` : ''}</div>${this.hooks.isQueued(it) ? `<span class="gold">${t('build.moving')}</span>` : ''}<button data-do="move:${i}" ${this.hooks.canMove(it) ? '' : 'disabled'}>${t('build.move')}</button><button data-do="sell:${i}" ${FURNITURE[it.id].essential || !this.hooks.canSell(it) ? 'disabled' : ''}>${t('build.sell', Math.floor(FURNITURE[it.id].price / 2))}</button></div>`;
     const page = this.buildPage, cats = Object.keys(CATEGORIES), mine = l.items.map((it, i) => [it, i]);
     const tabs = `<div class="seg stabs">${[['space', t('bd.space')], ['shop', t('bd.shop')], ['owned', t('bd.owned', l.items.length)]].map(([k, v]) => `<button data-do="bdp:${k}" class="${page === k ? 'sel' : ''}">${v}</button>`).join('')}</div>`;
@@ -323,7 +324,7 @@ export class TycoonUI {
       <div class="brow"><span>${t('hours.closing')}</span><span class="sp"></span><span class="seg">${CLOSING.map(k => `<button data-do="closing:${k}" class="${g.closingPolicy === k ? 'sel' : ''}">${t('hours.cl.' + k)}</button>`).join('')}</span></div>
       <div class="dim">${t('hours.clNote.' + g.closingPolicy, Math.round(REBOOK_ACCEPT * 100))}</div>
       <div class="dim">${t('hours.desk', DESK_PLAN.minutesPerClient)}</div>
-      <div class="dim">${t('hours.lastCallNote', g.lastCall ? `${c - 1}:${String(60 - g.lastCall).padStart(2, '0')}` : `${c}:00`, Math.round(g.staff.payroll * 1.5 / 8))}</div>`;
+      <div class="dim">${t('hours.lastCallNote', g.lastCall ? `${c - 1}:${String(60 - g.lastCall).padStart(2, '0')}` : `${c}:00`, Math.round(g.staff.hired.reduce((n, e) => n + e.salary, 0) / Math.max(1, g.staff.hired.length) * 1.5 / 8))}</div>`;
   }
   /** The funding page: `part` is the salon's value, Shawn's investment or the bank. */
   #funding(part) {

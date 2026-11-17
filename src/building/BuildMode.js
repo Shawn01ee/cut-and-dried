@@ -55,7 +55,7 @@ export class BuildMode {
     }
     return best;
   }
-  hover(point) { this.active.point = point; const t = this.#target(point); this.active.reason = t ? t.reason : 'outside'; if (t) this.active.shown = t.rotation; if (!t) this.view.hideGhost(); else this.view.poseGhost(t.x, t.z, t.rotation, t.ok); }
+  hover(point) { this.active.point = point; const t = this.#target(point); this.active.reason = t ? t.reason : 'outside'; this.active.at = t ? { x: t.x, z: t.z } : null; if (t) this.active.shown = t.rotation; if (!t) this.view.hideGhost(); else this.view.poseGhost(t.x, t.z, t.rotation, t.ok); }
   /** Places the piece at `point`. Returns true when placed. */
   commit(point) {
     const t = this.#target(point); if (!t || !t.ok) return false;

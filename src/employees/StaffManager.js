@@ -252,7 +252,8 @@ export class StaffManager {
    * End-of-day staff upkeep: performance pay, then stress from the day's load.
    * Returns the stylists so stressed they want to quit.
    */
-  closeDay(day, restRate, hours = 8) {
+  /** `lateOf(e)` is how many hours `e` stayed past closing today. */
+  closeDay(day, restRate, hours = 8, lateOf = () => 0) {
     const rate = COMMISSION[this.commission], calm = COMMISSION_CALM[this.commission];
     const pay = Math.round(this.hired.reduce((sum, e) => sum + e.today.earn, 0) * rate);
     if (pay) this.economy.charge('commission', pay);
@@ -260,8 +261,8 @@ export class StaffManager {
     const welfare = this.welfareCostFor(at.length); if (welfare) this.economy.charge('welfare', welfare);
     this.grow(MGMT.day);
     for (const e of at) {
-      // Every hour past eight adds stress and leaves some tiredness for tomorrow. Yesterday's stress is kept by cause.
-      const overtime = Math.max(0, hours - 8);
+      // Every hour past eight (opening hours, then their own time past closing) adds stress and leaves some tiredness for tomorrow.
+      const overtime = Math.max(0, hours - 8) + lateOf(e);
       const k = calm * (e.hasPerk('calm') ? .6 : 1) / restRate * (this.has('breaks') ? W.breaks.load : 1) * (1 - Math.min(RAISE_MAX_EFFECT, e.raises || 0) * RAISE_CALM) * (TRAITS[e.trait]?.stress || 1) * (day <= (e.easyUntil || 0) ? BREAK_EASE : 1);
       // The people around them: friends steady them, rivals wear on them, a cheerful colleague lifts them; an earned promotion held back frets the ambitious.
       const team = at.filter(o => o !== e && (o.workSite ?? 0) === (e.workSite ?? 0)).reduce((n, o) => { const r = this.relation(e, o); return n + (r >= 60 ? -2 : r >= 25 ? -1 : r <= -60 ? 3 : r <= -25 ? 1 : 0) + (TRAITS[o.trait]?.teamStress || 0); }, 0) + (promotionStatus(e)?.ready ? TRAITS[e.trait]?.waitingStress || 0 : 0);
