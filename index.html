@@ -154,6 +154,18 @@ html[lang=ko] .hsec li,html[lang=ko] .hsec p{font-size:13px}
 @media (min-width:880px){html[lang=ko] #hud{font-size:13px}html[lang=ko] #hud h1{font-size:13px}}
 @media (max-width:420px){#hud{font-size:14px;min-width:0;max-width:calc(100vw - 172px);box-sizing:border-box}#hud h1{font-size:12px;flex-wrap:wrap;gap:0 8px}#ctrl{width:176px}.cgrp button{font-size:13px;height:26px}}
 body.closeup #hud,body.closeup #ctrl{display:none}
+/* the franchise monitor wall: tiles over the picture; the salon's own name tags and bubbles step aside */
+#wall{position:fixed;inset:0;pointer-events:none;z-index:3;display:none}
+body.wall #wall{display:block}
+body.wall.wallside #toasts{left:8px;top:var(--wt,400px);transform:none;align-items:stretch;width:var(--ww,280px);max-width:var(--ww,280px)}
+/* looking at the franchises (the wall or one shop): our salons' name tags, bubbles and payments wait off screen */
+body.away #pops{display:none}
+.wtile{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;pointer-events:auto;cursor:pointer;outline:2px solid #45404f;outline-offset:0}
+.wtile:hover{outline-color:#ffd98a}
+.wtile .wt-head,.wtile .wt-foot{display:flex;align-items:center;gap:6px;height:22px;padding:0 6px;box-sizing:border-box;background:rgba(13,11,20,.92);color:#f6f3ee;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wtile .wt-foot{height:20px;display:block;line-height:20px;color:#dcd9dc}
+.wtile .wt-head .sp{flex:1}.wtile .wt-head b{overflow:hidden;text-overflow:ellipsis}
+.wtile.shut .wt-head .chip{color:#ffd98a;border-color:#7d7884}
 #sites{display:none}
 #sites.show{display:grid}
 #sites button.sel{background:#45404f;border-color:#ffd98a;color:#ffd98a}
@@ -364,6 +376,7 @@ button.on:hover:not(:disabled){background:#a3384a}
   window.addEventListener('error',fail);setTimeout(fail,40000);requestAnimationFrame(tick);
 })();
 </script>
+<div id="wall"></div>
 <div id="pops"></div>
 <div id="hud" class="card"></div>
 <div id="ctrl">
