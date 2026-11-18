@@ -2,6 +2,15 @@ import { outletState } from './OutletView.js';
 
 /** A tile's text strips (CSS pixels): the name row above the picture and the numbers row below it; the gap between tiles. */
 export const WALL_TILE = { head: 22, foot: 20, gap: 8, aspect: 1.35 };
+/** At most `perFrame` tiles are drawn each frame, taking turns; the others keep their last picture meanwhile. */
+export const WALL_PACE = { perFrame: 4 };
+
+/** The tiles to draw this frame: from `turn` on, `k` of the `n` tiles (all of them while `all`), and where to go on next time. */
+export function wallTurn(n, turn, all, k = WALL_PACE.perFrame) {
+  if (!n) return { draw: [], next: 0 };
+  const m = all ? n : Math.min(n, k), from = all ? 0 : turn % n;
+  return { draw: Array.from({ length: m }, (_, j) => (from + j) % n), next: (from + m) % n };
+}
 
 /**
  * Tiles for `n` shops in a `w` × `h` area: the column count that shows each shop largest at `aspect` (picture width
@@ -27,7 +36,7 @@ export function wallGrid(n, w, h, { head, foot, gap, aspect } = WALL_TILE) {
  * picked opens that shop on its own (`onPick`). Built from the outlet view (people and framing) and the network.
  */
 export class OutletWall {
-  #tiles = []; #region = '';
+  #tiles = []; #region = ''; #turn = 0; #rt = null;
   /** `deps`: { THREE, el (the tiles' layer), view (OutletView), network, t (translate), region() → { x0, y0, x1, y1 } in CSS pixels, onPick(i) }. */
   constructor(deps) {
     this.deps = deps; this.on = false; this.cam = new deps.THREE.OrthographicCamera(-1, 1, 1, -1, .1, 80); this.fresh = true;
@@ -63,22 +72,30 @@ export class OutletWall {
   }
   /**
    * Draws every tile into the low-resolution picture `rt` (whose height is `rt.height`): a camera per shop at the game's
-   * angle (`az`, `elev`) and the sun moved over each shop so its shadows fall there too.
+   * angle (`az`, `elev`) and the sun moved over each shop so its shadows fall there too. The scene's matrices are
+   * brought up to date once for all the tiles; between tiles only the sun moves, so only its matrices are redone.
+   * A few tiles are drawn each frame in turn (see WALL_PACE); all of them on a fresh picture.
    */
   render(renderer, scene, rt, { az, elev, sun, background }) {
     const { THREE, view } = this.deps, cam = this.cam, H = rt.height, dir = new THREE.Vector3(Math.sin(az) * Math.cos(elev), Math.sin(elev), Math.cos(az) * Math.cos(elev));
+    if (rt !== this.#rt) { this.#rt = rt; this.fresh = true; } // a new picture (the window was resized)
+    const turn = wallTurn(this.#tiles.length, this.#turn, this.fresh); this.#turn = turn.next;
     if (this.fresh) { rt.scissorTest = false; rt.viewport.set(0, 0, rt.width, rt.height); renderer.setRenderTarget(rt); const c = renderer.getClearColor(new THREE.Color()), a = renderer.getClearAlpha(); renderer.setClearColor(background, 1); renderer.clear(); renderer.setClearColor(c, a); this.fresh = false; }
-    const sunAt = sun.position.clone(), aim = sun.target.position.clone();
+    const sunAt = sun.position.clone(), aim = sun.target.position.clone(), auto = scene.matrixWorldAutoUpdate, place = () => { sun.updateMatrixWorld(); sun.target.updateMatrixWorld(); };
+    scene.updateMatrixWorld(); scene.matrixWorldAutoUpdate = false;
     rt.scissorTest = true;
-    for (const T of this.#tiles) {
-      const v = T.view, home = view.home(T.i, true), a = v.w / v.h, vh = Math.max(8.4, 11.4 / a) * home.scale, target = new THREE.Vector3(home.x, .55, home.z);
-      rt.viewport.set(v.x, H - v.y - v.h, v.w, v.h); rt.scissor.copy(rt.viewport); renderer.setRenderTarget(rt);
-      Object.assign(cam, { left: -vh * a / 2, right: vh * a / 2, top: vh / 2, bottom: -vh / 2 }); cam.updateProjectionMatrix();
-      cam.position.copy(target).addScaledVector(dir, 40); cam.lookAt(target); cam.updateMatrixWorld();
-      sun.position.copy(sunAt).add(target).sub(aim); sun.target.position.copy(target);
-      renderer.render(scene, cam);
+    try {
+      for (const T of turn.draw.map(i => this.#tiles[i])) {
+        const v = T.view, home = view.home(T.i, true), a = v.w / v.h, vh = Math.max(8.4, 11.4 / a) * home.scale, target = new THREE.Vector3(home.x, .55, home.z);
+        rt.viewport.set(v.x, H - v.y - v.h, v.w, v.h); rt.scissor.copy(rt.viewport); renderer.setRenderTarget(rt);
+        Object.assign(cam, { left: -vh * a / 2, right: vh * a / 2, top: vh / 2, bottom: -vh / 2 }); cam.updateProjectionMatrix();
+        cam.position.copy(target).addScaledVector(dir, 40); cam.lookAt(target); cam.updateMatrixWorld();
+        sun.position.copy(sunAt).add(target).sub(aim); sun.target.position.copy(target); place();
+        renderer.render(scene, cam);
+      }
+    } finally {
+      sun.position.copy(sunAt); sun.target.position.copy(aim); place(); scene.matrixWorldAutoUpdate = auto;
+      rt.scissorTest = false; rt.viewport.set(0, 0, rt.width, rt.height); rt.scissor.set(0, 0, rt.width, rt.height);
     }
-    sun.position.copy(sunAt); sun.target.position.copy(aim);
-    rt.scissorTest = false; rt.viewport.set(0, 0, rt.width, rt.height); rt.scissor.set(0, 0, rt.width, rt.height);
   }
 }
