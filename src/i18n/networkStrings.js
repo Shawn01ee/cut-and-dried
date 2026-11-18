@@ -19,6 +19,7 @@ export const NETWORK_STRINGS = {
     'net.dir.title':'전무이사', 'net.dir.on':'배치', 'net.dir.off':'두지 않음', 'net.dir.target':'목표 가맹점 수', 'net.dir.format':'새로 열 형태', 'net.dir.today':'오늘 아침 한 일', 'net.dir.idle':'할 일이 없었어요',
     'net.dir.rules':'일급 ${0} (영업일마다). 매일 아침 운영 품질 {1} 미만 가맹점은 원장 교육(${2}), {3}일 연속 적자인 가맹점은 휴점했다가 품질 {4}이 되면 다시 열고, 적자 지점이 없으면 {5}일에 한 곳씩 목표 수까지 가맹점을 엽니다. 교육·개설 뒤에도 현금 ${6}은 남깁니다. 직접 휴점한 가맹점은 그대로 둡니다.',
     'net.dir.opened':'{0} 개설', 'net.dir.coached':'{0} 원장 교육', 'net.dir.rested':'{0} 휴점 (연속 적자)', 'net.dir.reopened':'{0} 영업 재개', 'net.news':'전무이사: {0}', 'led.director':'전무이사 급여',
+    'wall.state.open':'영업 중', 'wall.state.paused':'휴점', 'wall.state.new':'내일 개점', 'wall.state.sunday':'일요일 휴무', 'wall.state.closed':'영업 종료', 'wall.quality':'품질 {0}', 'wall.now':'방문 {0} · 시술 중 {1} · 대기 {2}', 'wall.last':'{0}일차 방문 {1} · 본사 기여 {2}', 'wall.look':'크게 보기',
   },
   en: {
     'net.tab':'Expansion',
@@ -40,5 +41,6 @@ export const NETWORK_STRINGS = {
     'net.dir.title':'Executive director', 'net.dir.on':'Appoint', 'net.dir.off':'None', 'net.dir.target':'Target outlets', 'net.dir.format':'Format to open', 'net.dir.today':'This morning', 'net.dir.idle':'nothing to do',
     'net.dir.rules':'Paid ${0} each open day. Every morning: outlets below quality {1} get director training (${2}); an outlet that lost money {3} days in a row is closed and reopened at quality {4}; while no outlet is losing money, one outlet opens every {5} days up to the target. At least ${6} stays in cash after training or opening. Outlets you closed yourself are left as they are.',
     'net.dir.opened':'opened {0}', 'net.dir.coached':'trained {0}', 'net.dir.rested':'closed {0} to recover (losses in a row)', 'net.dir.reopened':'reopened {0}', 'net.news':'Executive director: {0}', 'led.director':'Executive director',
+    'wall.state.open':'Open', 'wall.state.paused':'Closed', 'wall.state.new':'Opens tomorrow', 'wall.state.sunday':'Sunday', 'wall.state.closed':'Closed for the day', 'wall.quality':'Quality {0}', 'wall.now':'Visits {0} · in chairs {1} · waiting {2}', 'wall.last':'Day {0}: visits {1} · HQ {2}', 'wall.look':'Look closer',
   },
 };

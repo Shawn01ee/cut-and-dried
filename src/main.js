@@ -46,6 +46,7 @@ import { NavGrid } from './building/NavGrid.js';
 import { paintSign } from './rendering/pixelFont.js';
 import { BRANCH_X, siteOf } from './building/SalonLayout.js';
 import { OutletView } from './scene/OutletView.js';
+import { OutletWall } from './scene/OutletWall.js';
 import { ExecutiveDirector } from './tycoon/ExecutiveDirector.js';
 import { RESIGN_LEAVE, RAISE_RELIEF, RAISE_LOYALTY, RAISE_CALM, RAISE_MAX_EFFECT, COMMISSION, HOURS_RELIEF } from './employees/StaffManager.js';
 import { FURNITURE } from './building/FurnitureCatalog.js';
@@ -1347,20 +1348,35 @@ function outletShell(root,format,text){const copy=o=>{const c=o.clone();c.visibl
   copy(salonMesh);extras.forEach(copy);salonFloor(8,6,0,0,root);tiledSurface(9,3,'#b7a99a','#9a8f84',0,4.7,root);if(big)copy(backGroup);
   (big?[1,2,3,4,5,6]:[0,1,2,3]).map(i=>walls[i]).forEach(w=>{const full=copy(w.full),low=copy(w.low);full.traverse(o=>{if(o.isMesh&&o.material.map===signTex)o.material=new THREE.MeshBasicMaterial({map:sign});});full.children.filter(o=>o.userData.decor).forEach(o=>full.remove(o));walls.push({n:w.n,full,low,off:false,glass:w.glass});});}
 const outletView=new OutletView({THREE,world,network:game.network,clock:game.clock,shell:outletShell,furniture:furnitureView,makeFig:o=>new Fig(o),fade:setFade,later});
-/** Looks at franchise `i` down the street: its shop at work; the panel turns to the franchise page (left open or closed as it was). */
-function focusOutlet(i){outletView.sync();if(!game.network.outlets[i])return;outletAt=i;build.cancel();recenter();const h=outletView.home(i);camHome.set(h.x,.55,h.z);viewScale=h.scale;outletView.setFocus(i);
+/** The franchise monitor wall: every franchise live at once, in the free area between the corner cards. */
+const outletWall=new OutletWall({THREE,el:$('#wall'),view:outletView,network:game.network,t:tx,onPick:i=>focusOutlet(i),region:()=>{
+  const r=id=>$(id).getBoundingClientRect(),hud=r('#hud'),ctrl=r('#ctrl'),pan=r('#panel'),vw=innerWidth,vh=innerHeight;
+  let R={x0:hud.right+10,y0:10,x1:ctrl.left-10,y1:vh-10};const side=R.x1-R.x0>=320;
+  if(!side)R={x0:10,y0:Math.max(hud.bottom,ctrl.bottom)+10,x1:vw-10,y1:vh-10};
+  // with the tiles between the corner cards, the news goes down the free column under the salon card
+  const b=document.body;b.classList.toggle('wallside',side);b.style.setProperty('--wt',Math.round(hud.bottom+10)+'px');b.style.setProperty('--ww',Math.round(hud.width)+'px');
+  if(pan.width&&pan.left<R.x1&&pan.top<R.y1)R.y1=pan.top-8;return R;}});
+addEventListener('resize',()=>outletWall.layout(PIX));
+/** Whether the panel was open before the wall folded it away (it opens again back at our salon). */
+let panelBeforeWall=false;
+/** Opens the monitor wall: the panel folds away and turns to the franchise page. */
+function openWall(){if(!game.network.outlets.length)return;outletAt=null;build.cancel();sel='biz';ui.bizPage='network';
+  if(!$('#panel').classList.contains('min')){panelBeforeWall=true;panelView.toggleCollapsed();}renderPanel(true);document.body.classList.add('away');outletWall.open(PIX);renderSites();}
+/** Looks at franchise `i` down the street on its own: its shop at work (from the wall, or the network page). */
+function focusOutlet(i){outletView.sync();if(!game.network.outlets[i])return;outletWall.close();outletAt=i;document.body.classList.add('away');build.cancel();recenter();const h=outletView.home(i);camHome.set(h.x,.55,h.z);viewScale=h.scale;outletView.show([i]);
   sel='biz';ui.bizPage='network';renderPanel(true);renderSites();}
-function focusSite(i){outletAt=null;outletView.setFocus(null);site=i;build.cancel();recenter();if(i===0)syncChairs();else{camHome.set(BRANCH_X,.55,1.2);viewScale=1;}renderSites();renderPanel(true);}
+function focusSite(i){outletWall.close();outletAt=null;document.body.classList.remove('away');outletView.show([]);if(panelBeforeWall){panelBeforeWall=false;panelView.expand();}site=i;build.cancel();recenter();if(i===0)syncChairs();else{camHome.set(BRANCH_X,.55,1.2);viewScale=1;}renderSites();renderPanel(true);}
 /** The salon switch (the corner controls' fourth row): the first salon (or the flagship it became), the second salon,
- * and the franchises: each press of their button looks at the next one down the street. Shown once there is more than one. */
-function renderSites(){const N=game.network;salonIdentity.sync(N.flagship);outletView.sync();const el=$('#sites'),open=game.layout.branchOpen,outs=N.outlets.length,onNet=outletAt!=null;
+ * and the franchises, whose button opens the monitor wall of them all. Shown once there is more than one. */
+function renderSites(){const N=game.network;salonIdentity.sync(N.flagship);outletView.sync();const el=$('#sites'),open=game.layout.branchOpen,outs=N.outlets.length,onNet=outletAt!=null||outletWall.on;
   el.classList.toggle('show',open||outs>0||N.flagship);
   el.innerHTML=`<button data-site="0" class="${site===0&&!onNet?'sel':''}">${tx(N.flagship?'site.flagship':'site.main')}</button>`
     +(open?`<button data-site="1" class="${site===1&&!onNet?'sel':''}">${tx('site.branch')}</button>`:'')
-    +(outs?`<button data-net="1" class="${onNet?'sel':''}">${onNet?tx('site.outletAt',outletAt+1,outs):tx('site.outlets',outs)}</button>`:'');}
+    +(outs?`<button data-net="1" class="${onNet?'sel':''}">${tx('site.outlets',outs)}</button>`:'');
+  if(outletWall.on)outletWall.layout(PIX);}
 function updateBranchCard(){$('#branchCard').classList.remove('show');}
 $('#sites').addEventListener('click',e=>{const b=e.target.closest('[data-site]');if(b){if(sel==='biz'&&ui.bizPage==='network')sel=lastChair;focusSite(+b.dataset.site);}
-  if(e.target.closest('[data-net]'))focusOutlet(outletAt==null?0:(outletAt+1)%game.network.outlets.length);});
+  if(e.target.closest('[data-net]')&&!outletWall.on)openWall();});
 
 /**
  * Daily profit as bars around a zero line: profit rises in blue, a loss drops in orange, closed Sundays are hatched grey.
@@ -1444,19 +1460,19 @@ syncCtrl();
 resize();addEventListener('resize',resize);
 syncFurniture();syncChairs();renderPanel(true);updateHud();
 let lastT=performance.now(),hudT=0,clockT=0,realT=0,noRender=false;
-function frame(now){requestAnimationFrame(frame);if(outletAt!=null&&(sel==='build'||build.isActive||styling))focusSite(site);let dt=Math.min(.05,(now-lastT)/1000);lastT=now;realT+=dt;
+function frame(now){requestAnimationFrame(frame);if((outletAt!=null||outletWall.on)&&(sel==='build'||build.isActive||styling))focusSite(site);let dt=Math.min(.05,(now-lastT)/1000);lastT=now;realT+=dt;
   // Fast speeds run the simulation in small steps so walking and services stay smooth.
   if(started&&!paused){const total=dt*(styling?1:speed),steps=Math.ceil(total/.06);for(let i=0;i<steps;i++)simStep(total/steps);}else figs.forEach(f=>f.pose(0));
   stylingTick(dt);if(started&&!paused)incidents.update(dt);
   updateLights(dt);updatePrecip(dt);decorate();updateCam(dt);
   {const wet=started&&!game.dayOff&&['rain','storm','snow'].includes(game.weather);custs.forEach(c=>c.fig.setUmbrella(wet&&!indoors(c.fig.pos)));}envStep(dt,realT);updatePops(dt);toasts.update(dt);updateBubbles(dt);
-  if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();}
+  if((hudT+=dt)>.25){hudT=0;if(started){updateHud();renderPanel(false);updateBranchCard();if(outletWall.on)outletWall.layout(PIX);}
     // Difficult clients darken the music, more with each one; a busy salon livens it up, evenings calm it down.
     audio.setTension(started?custs.filter(c=>c.villain&&c.state!=='gone').length:0);
     {const waiting=queue.filter(q=>q.state==='wait').length,busyChairs=stations.filter(s=>s.cust).length;audio.setScene({busy:started&&game.clock.isOpen&&(waiting>=4||(stations.length>2&&busyChairs/stations.length>.8)),evening:started&&game.clock.hour>=18});}}
   if((clockT+=dt)>1){clockT=0;drawClock();if(started){alignToWalls();applyQueuedMoves();}}
   // `?debug` long runs can skip drawing to simulate faster (see __cd.norender)
-  if(!noRender){renderer.setRenderTarget(rt);renderer.render(scene,cam);
+  if(!noRender){if(outletWall.on){postMat.uniforms.off.value.set(0,0);outletWall.render(renderer,scene,rt,{az:camAz,elev:EL,sun,background:0x0d0b14});}else{renderer.setRenderTarget(rt);renderer.render(scene,cam);}
   renderer.setRenderTarget(null);renderer.render(post,postCam);}
   if(!booted){booted=true;boot();}}
 // A newer deploy: at start-up the game updates itself; while playing it offers a button, so the day is not cut short.
@@ -1464,7 +1480,7 @@ checkForUpdate({atStart:true});
 setInterval(async()=>{const b=await checkForUpdate();if(b){const el=$('#update');el.querySelector('span').textContent=tx('upd.ready');el.querySelector('button').textContent=tx('upd.reload');el.classList.add('show');el.querySelector('button').onclick=()=>refreshToLatest(b);}},10*60*1000);
 requestAnimationFrame(frame);
 // `?debug` exposes the simulation for automated play tests.
-if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,outlets:outletView,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,owner:()=>({floating:OWNER.floating,job:ownerRoutine.job?ownerRoutine.job.kind:null,pos:[+OWNER.fig.pos.x.toFixed(2),+OWNER.fig.pos.z.toFixed(2)]}),float:()=>{const st=stations.find(s=>s.sty===OWNER);if(st){st.sty=VAC;st.vacant=true;st.state='vacant';}OWNER.floating=true;},toasts:()=>toasts.items.map(t=>t.el.textContent),set norender(v){noRender=!!v;},bots:()=>[...bots.values()].map(b=>({state:b.state,pos:b.pos?[+b.pos.x.toFixed(2),+b.pos.z.toFixed(2)]:null,n:b.n})),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
+if(new URLSearchParams(location.search).has('debug'))window.__cd={game,build,audio,outlets:outletView,wall:outletWall,happeningCard:()=>happeningCard(),spawn:o=>spawnCustomer(o),next:()=>{closeMenu();beginDay();},hasOpenChair:()=>!!openChair(),referrals,decorTheme:()=>decorThemeOf(game.clock.day),overSalon:(d)=>overSalon(d,salonRects(),-Math.sin(camAz),-Math.cos(camAz)),indoors:p=>indoors(p),surprise:id=>surpriseCard(game.beginSurprise(id)),clip:(x,z)=>spawnClip(V(x,.6,z),{L:.3,a:0,b:0}),landed:()=>landedClips().length,owner:()=>({floating:OWNER.floating,job:ownerRoutine.job?ownerRoutine.job.kind:null,pos:[+OWNER.fig.pos.x.toFixed(2),+OWNER.fig.pos.z.toFixed(2)]}),float:()=>{const st=stations.find(s=>s.sty===OWNER);if(st){st.sty=VAC;st.vacant=true;st.state='vacant';}OWNER.floating=true;},toasts:()=>toasts.items.map(t=>t.el.textContent),set norender(v){noRender=!!v;},bots:()=>[...bots.values()].map(b=>({state:b.state,pos:b.pos?[+b.pos.x.toFixed(2),+b.pos.z.toFixed(2)]:null,n:b.n})),stations,custs,queue,incidents,nav,helpers,booths,sync:()=>{syncFurniture();syncChairs();},get speed(){return speed;},set speed(v){speed=v;},get view(){return {zoomGoal,pan:[panOff.x,panOff.z]};}};
 
 // Read-only state for browser checks; available only in debug mode.
 if(new URLSearchParams(location.search).has('debug'))window.render_game_to_text=()=>JSON.stringify({day:game.clock.day,open:game.clock.isOpen,dayOff:game.dayOff,company:{stage:game.network.stage,executive:game.network.executive,outlets:game.network.outlets},departments:game.departments.jobs,metrics:game.metrics.snapshot(),report:game.report&&{profit:game.report.profit,comparison:game.report.comparison,advice:game.report.advice}});
