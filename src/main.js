@@ -381,8 +381,9 @@ class Fig{
 }
 
 /* ================= hair ================= */
+/** A client's hair: boxes on the head (one instanced mesh), rebuilt when it changes; its bounds follow each rebuild, so a head out of view is not drawn. */
 class Hair{
-  constructor(head,fig){this.mesh=new THREE.InstancedMesh(BOX,HAIRMAT,CAP.length+NS*17);this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.mesh.frustumCulled=false;this.mesh.raycast=noRay;head.add(this.mesh);this.head=head;this.ends=STR.map(()=>V());this.dirty=true;
+  constructor(head,fig){this.mesh=new THREE.InstancedMesh(BOX,HAIRMAT,CAP.length+NS*17);this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.mesh.raycast=noRay;head.add(this.mesh);this.head=head;this.ends=STR.map(()=>V());this.dirty=true;
     this.var=[];for(let i=0;i<CAP.length+NS*17;i++)this.var.push(rand(-.06,.06));}
   build(h,tint,ta){
     const lab=ta>0?labMix(h.lab,tint,ta):h.lab,[r,g,b]=lab2lin(lab.L,lab.a,lab.b),w=h.wave,cs=.052,mm=this.mesh;let i=0;
@@ -396,7 +397,7 @@ class Hair{
         const out=.006*Math.min(k,5)+.012*w+(s.z===2?Math.min(k,4)*.01:0);
         const p=s.p.clone().addScaledVector(s.n,out+amp*Math.sin(ph)).addScaledVector(t,amp*Math.cos(ph)*(w>1.5?1:.25));p.y=s.p.y-cs*.88*k-cs*fr*.5;
         put(p,cs*(1+.1*w),cs*fr*1.04,cs*(1+.1*w),-k*.018);this.ends[j].copy(p);this.ends[j].y-=cs*fr*.5;}});
-    mm.count=i;mm.instanceMatrix.needsUpdate=true;if(mm.instanceColor)mm.instanceColor.needsUpdate=true;this.dirty=false;}
+    mm.count=i;mm.instanceMatrix.needsUpdate=true;if(mm.instanceColor)mm.instanceColor.needsUpdate=true;mm.computeBoundingSphere();this.dirty=false;}
   endWorld(j){this.head.updateMatrixWorld(true);return this.head.localToWorld(this.ends[j].clone());}
 }
 
